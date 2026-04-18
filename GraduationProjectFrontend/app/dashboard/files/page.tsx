@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -13,31 +13,45 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  FileText,
-  ImageIcon,
-  Video,
-  FileArchive,
-  File,
-  Upload,
-  Search,
-  Download,
-  Trash2,
-  FolderOpen,
-  Loader2,
   AlertTriangle,
+  Download,
+  File,
+  FileArchive,
+  FileText,
+  FolderOpen,
+  ImageIcon,
+  Loader2,
+  Search,
+  Trash2,
+  Upload,
   Users,
+  Video,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import {
-  getTeamDocuments,
-  getDocumentsForSupervisor,
-  deleteTeamDocument,
   createTeamDocument,
+  deleteTeamDocument,
+  getDocumentsForSupervisor,
+  getTeamDocuments,
 } from "@/lib/api/resources"
 import { ApiDocument } from "@/lib/api/types"
 import { toast } from "sonner"
+
+const DOCUMENT_FILE_ACCEPT = ".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt"
+const parseMaxUploadSizeInBytes = (value: string | undefined) => {
+  const normalized = String(value ?? "").trim()
+  if (!normalized) return null
+
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed <= 0) return null
+
+  return Math.floor(parsed * 1024 * 1024)
+}
+
+const DOCUMENT_FILE_MAX_SIZE = parseMaxUploadSizeInBytes(process.env.NEXT_PUBLIC_DOCUMENT_MAX_SIZE_MB)
+const allowedDocumentExtensions = new Set(["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "zip", "txt"])
 
 const fileIcons = {
   document: FileText,
@@ -58,16 +72,68 @@ const fileTypeColors = {
 }
 
 function formatFileSize(bytes: number): string {
-  if (!bytes || bytes === 0) return "0 B"
+  if (!bytes || bytes <= 0) return "0 B"
   const k = 1024
   const sizes = ["B", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
   return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+function getFileExtension(fileName?: string | null) {
+  const normalized = String(fileName ?? "").trim().toLowerCase()
+  if (!normalized.includes(".")) return ""
+  return normalized.split(".").pop() ?? ""
+}
+
+function getUploadLimitLabel(maxSizeBytes: number | null) {
+  if (!maxSizeBytes) return "No size limit"
+  return formatFileSize(maxSizeBytes)
+}
+
+function validateDocumentFile(file: File | null) {
+  if (!file) return "Please select a document file"
+
+  const extension = getFileExtension(file.name)
+  if (!allowedDocumentExtensions.has(extension)) {
+    return "Allowed document types: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, ZIP, and TXT."
+  }
+
+  if (DOCUMENT_FILE_MAX_SIZE && file.size > DOCUMENT_FILE_MAX_SIZE) {
+    return `Document max size is ${getUploadLimitLabel(DOCUMENT_FILE_MAX_SIZE)}.`
+  }
+
+  return null
+}
+
+function getDocumentVisualType(file: ApiDocument) {
+  const extension = getFileExtension(file.fileName || file.fileType)
+
+  if (["pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "txt"].includes(extension)) {
+    return "document"
+  }
+
+  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
+    return "image"
+  }
+
+  if (["mp4", "mov", "avi", "mkv", "webm"].includes(extension)) {
+    return "video"
+  }
+
+  if (["zip", "rar", "7z", "tar", "gz"].includes(extension)) {
+    return "archive"
+  }
+
+  if (["js", "ts", "tsx", "jsx", "py", "java", "c", "cpp", "cs", "php", "rb", "go", "rs"].includes(extension)) {
+    return "code"
+  }
+
+  return "other"
 }
 
 export default function FilesPage() {
   const { currentUser } = useAuthStore()
-  const { data: myTeamState, isLoading: teamLoading } = useMyTeamState()
+  const { data: myTeamState } = useMyTeamState()
 
   const isLeader = currentUser?.role === "leader"
   const isMember = currentUser?.role === "member" || currentUser?.role === "leader"
@@ -83,8 +149,7 @@ export default function FilesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
-  const [selectedSupervisedTeamId, setSelectedSupervisedTeamId] = useState<string>("")
-
+  const [selectedSupervisedTeamId, setSelectedSupervisedTeamId] = useState("")
   const [uploadForm, setUploadForm] = useState({
     title: "",
     description: "",
@@ -92,23 +157,21 @@ export default function FilesPage() {
     tags: "",
   })
 
-  // For team members, use their own team; for supervisors, use selected supervised team
   const memberTeamId = myTeamState?.team?.id
   const supervisedTeams = myTeamState?.supervisedTeams ?? []
   const effectiveTeamId = isSupervisor ? selectedSupervisedTeamId || undefined : memberTeamId
 
-  // Auto-select first supervised team
   useEffect(() => {
     if (isSupervisor && supervisedTeams.length > 0 && !selectedSupervisedTeamId) {
       setSelectedSupervisedTeamId(supervisedTeams[0].id)
     }
-  }, [isSupervisor, supervisedTeams, selectedSupervisedTeamId])
+  }, [isSupervisor, selectedSupervisedTeamId, supervisedTeams])
 
   useEffect(() => {
     const fetchDocuments = async () => {
       if (!effectiveTeamId) {
-        setLoading(false)
         setDocuments([])
+        setLoading(false)
         return
       }
 
@@ -133,12 +196,16 @@ export default function FilesPage() {
       }
     }
 
-    const timer = setTimeout(fetchDocuments, 300)
-    return () => clearTimeout(timer)
-  }, [effectiveTeamId, searchQuery, activeTab, isSupervisor])
+    const timer = window.setTimeout(() => {
+      void fetchDocuments()
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [activeTab, effectiveTeamId, isSupervisor, searchQuery])
 
   const refreshDocuments = async () => {
     if (!effectiveTeamId) return
+
     try {
       const data = isSupervisor
         ? await getDocumentsForSupervisor({
@@ -152,8 +219,14 @@ export default function FilesPage() {
           })
       setDocuments(data)
     } catch {
-      // Silently fail on refresh
+      // intentionally silent on background refresh
     }
+  }
+
+  const resetUploadForm = () => {
+    setUploadForm({ title: "", description: "", category: "deliverable", tags: "" })
+    setSelectedFile(null)
+    setFormErrors({})
   }
 
   const handleDelete = async () => {
@@ -163,30 +236,31 @@ export default function FilesPage() {
       setIsDeleting(true)
       await deleteTeamDocument(deleteId)
       toast.success("Document deleted successfully")
-      setDocuments(documents.filter((d) => d.id !== deleteId))
+      setDocuments((current) => current.filter((document) => document.id !== deleteId))
       setDeleteId(null)
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Failed to delete document:", error)
-      toast.error("Failed to delete document")
+      toast.error(error instanceof Error ? error.message : "Failed to delete document")
     } finally {
       setIsDeleting(false)
     }
   }
 
   const handleUpload = async () => {
-    setFormErrors({})
-
     const errors: Record<string, string> = {}
+
     if (!uploadForm.title.trim()) errors.title = "Title is required"
     else if (uploadForm.title.trim().length < 3) errors.title = "Title must be at least 3 characters"
 
     if (!uploadForm.description.trim()) errors.description = "Description is required"
     else if (uploadForm.description.trim().length < 8) errors.description = "Description must be at least 8 characters"
 
-    if (!selectedFile) errors.file = "Please select a document file"
+    const fileError = validateDocumentFile(selectedFile)
+    if (fileError) errors.file = fileError
+
+    setFormErrors(errors)
 
     if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
       toast.error("Please fix the validation errors")
       return
     }
@@ -195,29 +269,27 @@ export default function FilesPage() {
       setIsSubmitting(true)
       await createTeamDocument({
         ...uploadForm,
-        file: selectedFile!,
+        file: selectedFile as File,
         tags: uploadForm.tags
           .split(",")
-          .map((t) => t.trim())
+          .map((tag) => tag.trim())
           .filter(Boolean),
       })
       toast.success("Document uploaded successfully")
       setIsUploadOpen(false)
-      setSelectedFile(null)
-      setUploadForm({ title: "", description: "", category: "deliverable", tags: "" })
+      resetUploadForm()
       await refreshDocuments()
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to upload document:", error)
-      if (error?.status === 400 && error?.errors) setFormErrors(error.errors)
-      toast.error(error?.message || "Failed to upload document")
+      toast.error(error instanceof Error ? error.message : "Failed to upload document")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const deliverables = documents.filter((f) => f.category === "deliverable")
-  const documentation = documents.filter((f) => f.category === "documentation")
-  const totalSize = documents.reduce((acc, f) => acc + (f.fileSize || 0), 0)
+  const deliverables = documents.filter((file) => file.category === "deliverable")
+  const documentation = documents.filter((file) => file.category === "documentation")
+  const totalSize = documents.reduce((acc, file) => acc + (file.fileSize || 0), 0)
 
   return (
     <TeamRequiredGuard
@@ -230,12 +302,11 @@ export default function FilesPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">Documents</h1>
             <p className="text-muted-foreground mt-1">
-              Keep reports, deliverables, and supporting files organized in one place
+              Keep reports, deliverables, and supporting files organized in one place.
             </p>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Team selector for supervisors */}
             {isSupervisor && supervisedTeams.length > 0 && (
               <Select value={selectedSupervisedTeamId} onValueChange={setSelectedSupervisedTeamId}>
                 <SelectTrigger className="w-48">
@@ -243,18 +314,23 @@ export default function FilesPage() {
                   <SelectValue placeholder="Select a team" />
                 </SelectTrigger>
                 <SelectContent>
-                  {supervisedTeams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
+                  {supervisedTeams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
 
-            {/* Upload button for team members only */}
             {isMember && (
-              <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+              <Dialog
+                open={isUploadOpen}
+                onOpenChange={(open) => {
+                  setIsUploadOpen(open)
+                  if (!open) resetUploadForm()
+                }}
+              >
                 <DialogTrigger asChild>
                   <Button>
                     <Upload className="h-4 w-4 mr-2" />
@@ -266,28 +342,28 @@ export default function FilesPage() {
                     <DialogTitle>Upload Team Document</DialogTitle>
                   </DialogHeader>
                   <div className="space-y-4 pt-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className={formErrors.title ? "text-destructive" : ""}>Title</Label>
                         <Input
                           placeholder="e.g. SRS Document"
                           value={uploadForm.title}
-                          onChange={(e) => {
-                            setUploadForm({ ...uploadForm, title: e.target.value })
-                            if (formErrors.title) setFormErrors({ ...formErrors, title: "" })
+                          onChange={(event) => {
+                            setUploadForm((current) => ({ ...current, title: event.target.value }))
+                            if (formErrors.title) {
+                              setFormErrors((current) => ({ ...current, title: "" }))
+                            }
                           }}
                           className={formErrors.title ? "border-destructive focus-visible:ring-destructive" : ""}
                         />
-                        {formErrors.title && (
-                          <p className="text-[10px] font-medium text-destructive">{formErrors.title}</p>
-                        )}
+                        {formErrors.title && <p className="text-[10px] font-medium text-destructive">{formErrors.title}</p>}
                       </div>
                       <div className="space-y-2">
                         <Label>Category</Label>
                         <Select
                           value={uploadForm.category}
                           onValueChange={(value: "deliverable" | "documentation" | "other") =>
-                            setUploadForm({ ...uploadForm, category: value })
+                            setUploadForm((current) => ({ ...current, category: value }))
                           }
                         >
                           <SelectTrigger>
@@ -305,16 +381,16 @@ export default function FilesPage() {
                     <div className="space-y-2">
                       <Label className={formErrors.description ? "text-destructive" : ""}>Description</Label>
                       <Textarea
-                        placeholder="What is this document about?"
+                        placeholder="Briefly describe this document"
+                        rows={4}
                         value={uploadForm.description}
-                        onChange={(e) => {
-                          setUploadForm({ ...uploadForm, description: e.target.value })
-                          if (formErrors.description) setFormErrors({ ...formErrors, description: "" })
+                        onChange={(event) => {
+                          setUploadForm((current) => ({ ...current, description: event.target.value }))
+                          if (formErrors.description) {
+                            setFormErrors((current) => ({ ...current, description: "" }))
+                          }
                         }}
-                        rows={3}
-                        className={
-                          formErrors.description ? "border-destructive focus-visible:ring-destructive" : ""
-                        }
+                        className={formErrors.description ? "border-destructive focus-visible:ring-destructive" : ""}
                       />
                       {formErrors.description && (
                         <p className="text-[10px] font-medium text-destructive">{formErrors.description}</p>
@@ -325,22 +401,31 @@ export default function FilesPage() {
                       <Label className={formErrors.file ? "text-destructive" : ""}>Document File</Label>
                       <Input
                         type="file"
+                        accept={DOCUMENT_FILE_ACCEPT}
                         className={cn(
                           "cursor-pointer",
-                          formErrors.file ? "border-destructive focus-visible:ring-destructive" : ""
+                          formErrors.file ? "border-destructive focus-visible:ring-destructive" : "",
                         )}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (file) {
-                            setSelectedFile(file)
-                            if (formErrors.file) setFormErrors({ ...formErrors, file: "" })
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null
+                          setSelectedFile(file)
+
+                          const error = validateDocumentFile(file)
+                          setFormErrors((current) => ({
+                            ...current,
+                            file: error ?? "",
+                          }))
+
+                          if (error) {
+                            toast.error(error)
                           }
                         }}
                       />
-                      {formErrors.file && (
-                        <p className="text-[10px] font-medium text-destructive">{formErrors.file}</p>
-                      )}
-                      {selectedFile && (
+                      <p className="text-[10px] text-muted-foreground">
+                        Supported: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, ZIP, TXT. Max size: {getUploadLimitLabel(DOCUMENT_FILE_MAX_SIZE)}.
+                      </p>
+                      {formErrors.file && <p className="text-[10px] font-medium text-destructive">{formErrors.file}</p>}
+                      {selectedFile && !formErrors.file && (
                         <p className="text-[10px] text-muted-foreground">
                           Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
                         </p>
@@ -352,13 +437,13 @@ export default function FilesPage() {
                       <Input
                         placeholder="SRS, Frontend, Design"
                         value={uploadForm.tags}
-                        onChange={(e) => setUploadForm({ ...uploadForm, tags: e.target.value })}
+                        onChange={(event) => setUploadForm((current) => ({ ...current, tags: event.target.value }))}
                       />
                       {uploadForm.tags && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           {uploadForm.tags
                             .split(",")
-                            .map((t) => t.trim())
+                            .map((tag) => tag.trim())
                             .filter(Boolean)
                             .map((tag) => (
                               <Badge key={tag} variant="secondary" className="text-[10px] py-0">
@@ -369,13 +454,13 @@ export default function FilesPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 justify-end pt-4">
+                    <div className="flex justify-end gap-3 pt-4">
                       <Button variant="outline" onClick={() => setIsUploadOpen(false)} disabled={isSubmitting}>
                         Cancel
                       </Button>
                       <Button onClick={handleUpload} disabled={isSubmitting}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Upload
+                        Upload Document
                       </Button>
                     </div>
                   </div>
@@ -385,12 +470,9 @@ export default function FilesPage() {
           </div>
         </div>
 
-        {/* Supervisor no supervised teams notice */}
-        {isSupervisor && supervisedTeams.length === 0 && !teamLoading && (
-          <Card className="p-6 text-center border-dashed">
-            <Users className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
-            <p className="font-medium">No supervised teams</p>
-            <p className="text-sm text-muted-foreground mt-1">
+        {isSupervisor && supervisedTeams.length === 0 && !loading && (
+          <Card className="p-6 border-dashed">
+            <p className="text-sm text-muted-foreground text-center">
               You are not assigned as a supervisor to any team yet.
             </p>
           </Card>
@@ -435,7 +517,7 @@ export default function FilesPage() {
                 placeholder="Search documents..."
                 className="pl-9"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
               />
             </div>
           </div>
@@ -488,8 +570,8 @@ export default function FilesPage() {
             </DialogHeader>
             <div className="py-4">
               <p className="text-sm text-muted-foreground">
-                Are you sure you want to delete this document? This action cannot be undone and will remove
-                the file from the team&apos;s storage.
+                Are you sure you want to delete this document? This action cannot be undone and will remove the
+                file from the team&apos;s storage.
               </p>
             </div>
             <div className="flex justify-end gap-3">
@@ -545,8 +627,7 @@ function FileTable({
         </TableHeader>
         <TableBody>
           {files.map((file) => {
-            const rawType = (file.fileType || "other").toLowerCase()
-            const fileType = (rawType in fileIcons ? rawType : "other") as keyof typeof fileIcons
+            const fileType = getDocumentVisualType(file)
             const Icon = fileIcons[fileType]
             const colorClass = fileTypeColors[fileType]
 
@@ -556,18 +637,12 @@ function FileTable({
                   <div className="flex items-center gap-3">
                     <Icon className={`h-5 w-5 ${colorClass}`} />
                     <div className="flex flex-col min-w-0">
-                      <span className="font-medium text-sm truncate max-w-[150px] sm:max-w-none">
-                        {file.title}
-                      </span>
+                      <span className="font-medium text-sm truncate max-w-[150px] sm:max-w-none">{file.title}</span>
                       <span className="text-[10px] text-muted-foreground">{file.fileName}</span>
                     </div>
                   </div>
                 </TableCell>
-                {showTeam && (
-                  <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
-                    {file.teamName}
-                  </TableCell>
-                )}
+                {showTeam && <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">{file.teamName}</TableCell>}
                 <TableCell className="hidden sm:table-cell">
                   <Badge variant="outline" className="capitalize">
                     {file.fileType}
@@ -575,7 +650,7 @@ function FileTable({
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
                   <div className="flex flex-wrap gap-1">
-                    {file.tags && file.tags.length > 0 ? (
+                    {file.tags?.length ? (
                       file.tags.slice(0, 2).map((tag) => (
                         <Badge key={tag} variant="secondary" className="text-[9px] px-1.5 py-0">
                           {tag}
@@ -589,19 +664,15 @@ function FileTable({
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground hidden md:table-cell">
-                  {formatFileSize(file.fileSize)}
-                </TableCell>
-                <TableCell className="text-muted-foreground hidden md:table-cell text-xs">
-                  {file.uploadedByName}
-                </TableCell>
-                <TableCell className="text-muted-foreground hidden md:table-cell text-xs">
+                <TableCell className="hidden md:table-cell text-muted-foreground">{formatFileSize(file.fileSize)}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{file.uploadedByName}</TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
                   {new Date(file.uploadedAt).toLocaleDateString()}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
                     <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
-                      <a href={file.url} target="_blank" rel="noopener noreferrer">
+                      <a href={file.url} target="_blank" rel="noopener noreferrer" aria-label={`Download ${file.title}`}>
                         <Download className="h-4 w-4" />
                       </a>
                     </Button>

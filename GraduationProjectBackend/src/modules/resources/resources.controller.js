@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { AppError } from "../../common/errors/AppError.js";
+import { removeLocalUploadByUrl, removeUploadedMulterFile } from "../../common/utils/upload-files.js";
 import { createResourceService, deleteResourceService, listResourcesService, updateResourceService } from "./resources.service.js";
 import { parseUpsertResourceBody, resourceByIdSchema } from "./resources.schema.js";
+import { findResourceById } from "./resources.repository.js";
 
 function resolveBackendOrigin(req) {
   const apiUrl = process.env.API_URL?.trim();
@@ -33,6 +35,7 @@ export async function createResource(req, res) {
     const result = await createResourceService(req.user, payload);
     res.status(201).json({ ok: true, data: result });
   } catch (error) {
+    await removeUploadedMulterFile(req.file);
     mapZodToValidationError(error);
   }
 }
@@ -45,11 +48,19 @@ export async function updateResource(req, res) {
       body: req.body,
     });
 
+    const existingResource = await findResourceById(parsedRoute.params.id);
+    const hadNewFile = Boolean(req.file);
     const fileUrl = req.file ? `${resolveBackendOrigin(req)}/uploads/resources/${req.file.filename}` : "";
     const payload = parseUpsertResourceBody(req.body, { fileUrl, existingUrl: req.body?.existingUrl });
     const result = await updateResourceService(req.user, parsedRoute.params.id, payload);
+
+    if (hadNewFile && existingResource?.url && existingResource.url !== result.url) {
+      await removeLocalUploadByUrl(existingResource.url, "resources");
+    }
+
     res.json({ ok: true, data: result });
   } catch (error) {
+    await removeUploadedMulterFile(req.file);
     mapZodToValidationError(error);
   }
 }
@@ -61,7 +72,9 @@ export async function deleteResource(req, res) {
       query: req.query,
       body: req.body,
     });
+    const existingResource = await findResourceById(parsedRoute.params.id);
     const result = await deleteResourceService(req.user, parsedRoute.params.id);
+    await removeLocalUploadByUrl(existingResource?.url, "resources");
     res.json({ ok: true, data: result });
   } catch (error) {
     mapZodToValidationError(error);

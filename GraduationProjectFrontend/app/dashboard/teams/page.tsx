@@ -231,24 +231,27 @@ export default function TeamsPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6 xl:p-8">
       <motion.section
         {...getRevealMotion(reduceMotion)}
-        className="overflow-hidden rounded-[32px] border border-border/70 bg-[linear-gradient(135deg,oklch(var(--primary)/0.09),transparent_38%),linear-gradient(180deg,oklch(var(--background)),oklch(var(--background)))] shadow-sm"
+        className="relative overflow-hidden rounded-[32px] border border-border/50 bg-gradient-to-br from-primary/5 via-background to-background shadow-sm"
       >
-        <div className="px-5 py-6 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 px-6 py-8 sm:px-8 sm:py-10">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 lg:gap-12">
             {/* Title + CTAs */}
-            <div className="space-y-5">
+            <div className="space-y-5 max-w-2xl flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="border-primary/20 bg-background/80 text-primary">
+                <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary font-medium px-3 py-1">
                   Browse Teams
                 </Badge>
-                {isStudent && <Badge variant="secondary">Student</Badge>}
-                {isSupportRole && <Badge variant="secondary">Support View</Badge>}
+                {isStudent && <Badge variant="secondary" className="px-3 py-1">Student</Badge>}
+                {isSupportRole && <Badge variant="secondary" className="px-3 py-1 bg-amber-500/10 text-amber-600 border-0 hover:bg-amber-500/20">Support View</Badge>}
               </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              
+              <div className="space-y-3">
+                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">
                   {isSupportRole ? "Teams you supervise" : "Find your team"}
                 </h1>
-                <p className="max-w-xl text-base leading-7 text-muted-foreground">
+                <p className="text-base leading-relaxed text-muted-foreground/90">
                   {isStudent
                     ? "Compare project ideas, stages, and open seats. Send a request or use an invite code to join."
                     : isSupportRole
@@ -256,15 +259,16 @@ export default function TeamsPage() {
                       : "Explore teams, check availability, and connect with the right workspace."}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-3">
+
+              <div className="flex flex-wrap gap-3 pt-2">
                 {isStudent && (
-                  <Button className="h-11 rounded-2xl px-5 shadow-lg shadow-primary/15" onClick={() => setIsJoinCodeOpen(true)}>
+                  <Button className="h-11 rounded-2xl px-6 shadow-lg shadow-primary/15 font-semibold" onClick={() => setIsJoinCodeOpen(true)}>
                     <Hash className="mr-2 h-4 w-4" />
                     Join with Code
                   </Button>
                 )}
                 {!isSupportRole && (
-                  <Button variant="outline" className="h-11 rounded-2xl px-5 bg-background/75" asChild>
+                  <Button variant="outline" className="h-11 rounded-2xl px-6 bg-background border-border/60 shadow-sm hover:bg-muted/50" asChild>
                     <Link href="/dashboard/my-team">
                       My Invitations
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -272,7 +276,7 @@ export default function TeamsPage() {
                   </Button>
                 )}
                 {isSupportRole && (
-                  <Button variant="outline" className="h-11 rounded-2xl px-5 bg-background/75" onClick={() => setViewMode("supervised")}>
+                  <Button variant="outline" className="h-11 rounded-2xl px-6 bg-background border-border/60 shadow-sm hover:bg-muted/50" onClick={() => setViewMode("supervised")}>
                     <Briefcase className="mr-2 h-4 w-4" />
                     My Teams
                   </Button>
@@ -281,14 +285,16 @@ export default function TeamsPage() {
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-3 gap-3 self-start lg:grid-cols-1 lg:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
               <MetricCard label="Teams" value={String(displayedTeams.length)} helper="Visible results" />
               <MetricCard label="Open" value={String(openTeamsCount)} helper="Available seats" />
-              <MetricCard
-                label={isSupportRole ? "Requests" : "Pending"}
-                value={String(isSupportRole ? pendingSupervisionRequests.length : (pendingTeamsCount + invitationTeamsCount))}
-                helper={isSupportRole ? "Supervision" : "Activity"}
-              />
+              <div className="col-span-2 sm:col-span-1">
+                <MetricCard
+                  label={isSupportRole ? "Requests" : "Pending"}
+                  value={String(isSupportRole ? pendingSupervisionRequests.length : (pendingTeamsCount + invitationTeamsCount))}
+                  helper={isSupportRole ? "Supervision" : "Activity"}
+                />
+              </div>
             </div>
           </div>
         </div>

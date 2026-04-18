@@ -29,7 +29,25 @@ const allowedResourceMimeTypes = new Set([
   "application/octet-stream",
 ]);
 
-const upload = multer({
+const parseUploadLimitInMb = (value) => {
+  const normalized = String(value ?? "").trim();
+
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.floor(parsed * 1024 * 1024);
+};
+
+const resourceUploadLimitBytes = parseUploadLimitInMb(process.env.RESOURCE_MAX_SIZE_MB);
+const resourceUploadLimitLabel = resourceUploadLimitBytes
+  ? `${Number.parseFloat((resourceUploadLimitBytes / (1024 * 1024)).toFixed(2))}MB`
+  : "unlimited";
+
+const uploadConfig = {
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
       cb(null, resourcesUploadDir);
@@ -42,7 +60,6 @@ const upload = multer({
       cb(null, `${uniquePrefix}-${safeOriginalName}`);
     },
   }),
-  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const extension = path.extname(file.originalname || "").toLowerCase();
     const isAllowed = allowedResourceExtensions.has(extension) || allowedResourceMimeTypes.has(file.mimetype);
@@ -58,7 +75,13 @@ const upload = multer({
       isAllowed,
     );
   },
-});
+};
+
+if (resourceUploadLimitBytes) {
+  uploadConfig.limits = { fileSize: resourceUploadLimitBytes };
+}
+
+const upload = multer(uploadConfig);
 
 const uploadSingleResource = (req, res, next) => {
   upload.single("file")(req, res, (error) => {
@@ -67,7 +90,13 @@ const uploadSingleResource = (req, res, next) => {
     }
 
     if (error?.code === "LIMIT_FILE_SIZE") {
-      return next(new AppError("Max file size is 20MB.", 422, "RESOURCE_FILE_TOO_LARGE"));
+      return next(
+        new AppError(
+          `Max file size is ${resourceUploadLimitLabel}.`,
+          422,
+          "RESOURCE_FILE_TOO_LARGE",
+        ),
+      );
     }
 
     if (error instanceof AppError) {

@@ -12,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatDistanceToNow } from "date-fns"
-import { TeamRequiredGuard } from "@/components/team-required-guard"
 
 const discussions = [
   {
@@ -87,12 +86,7 @@ export default function DiscussionsPage() {
     })
 
   return (
-    <TeamRequiredGuard
-      pageName="Discussions"
-      pageDescription="Connect with peers and supervisors to discuss project topics."
-      icon={<MessageSquare className="h-10 w-10 text-primary" />}
-    >
-      <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-6">
           {/* Header */}
           <motion.div
@@ -315,6 +309,5 @@ export default function DiscussionsPage() {
           </motion.div>
         </div>
       </div>
-    </TeamRequiredGuard>
   )
 }
