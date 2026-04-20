@@ -1,8 +1,10 @@
 import path from "node:path";
 import { z } from "zod";
 import { AppError } from "../../common/errors/AppError.js";
+import { removeLocalUploadByUrl, removeUploadedMulterFile } from "../../common/utils/upload-files.js";
 import { createDocumentService, deleteDocumentService, listDocumentsService, updateDocumentService } from "./documents.service.js";
 import { documentByIdSchema, parseCreateDocumentBody, updateDocumentSchema } from "./documents.schema.js";
+import { findDocumentById } from "./documents.repository.js";
 
 function resolveBackendOrigin(req) {
   const apiUrl = process.env.API_URL?.trim();
@@ -57,6 +59,7 @@ export async function createDocument(req, res) {
 
     res.status(201).json({ ok: true, data: result });
   } catch (error) {
+    await removeUploadedMulterFile(req.file);
     mapZodToValidationError(error);
   }
 }
@@ -69,7 +72,9 @@ export async function deleteDocument(req, res) {
       body: req.body,
     });
 
+    const existingDocument = await findDocumentById(parsedRoute.params.id);
     const result = await deleteDocumentService(req.user, parsedRoute.params.id);
+    await removeLocalUploadByUrl(existingDocument?.url, "documents");
     res.json({ ok: true, data: result });
   } catch (error) {
     mapZodToValidationError(error);
@@ -84,6 +89,8 @@ export async function updateDocument(req, res) {
       body: req.body,
     });
 
+    const existingDocument = await findDocumentById(parsedRoute.params.id);
+    const hadNewFile = Boolean(req.file);
     const document = await updateDocumentService(req.user, parsedRoute.params.id, {
       ...parseCreateDocumentBody(req.body),
       fileName: req.file?.originalname,
@@ -92,8 +99,13 @@ export async function updateDocument(req, res) {
       url: req.file ? `${resolveBackendOrigin(req)}/uploads/documents/${req.file.filename}` : undefined,
     });
 
+    if (hadNewFile && existingDocument?.url && existingDocument.url !== document.url) {
+      await removeLocalUploadByUrl(existingDocument.url, "documents");
+    }
+
     res.json({ ok: true, data: document });
   } catch (error) {
+    await removeUploadedMulterFile(req.file);
     mapZodToValidationError(error);
   }
 }

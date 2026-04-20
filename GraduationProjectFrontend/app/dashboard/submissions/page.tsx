@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,6 +15,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
@@ -35,6 +45,7 @@ import {
   Eye,
   RotateCcw,
   FileText,
+  MessageSquare,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { motion } from "framer-motion"
@@ -114,15 +125,29 @@ function formatFileSize(bytes: number | null) {
 
 // ─── Submission Detail Dialog ────────────────────────────────────────────────
 function SubmissionDetailDialog({
-  submission,
+  submissions,
+  initialVersionId,
   canGrade,
+  canSubmit,
   onGraded,
+  onDeleted,
 }: {
-  submission: ApiSubmission
+  submissions: ApiSubmission[]
+  initialVersionId?: string
   canGrade: boolean
+  canSubmit?: boolean
   onGraded: (updated: ApiSubmission) => void
+  onDeleted?: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(initialVersionId || null)
+
+  useEffect(() => {
+    if (open) {
+      setSelectedVersionId(initialVersionId || submissions[0]?.id || null)
+    }
+  }, [open, initialVersionId, submissions])
+
   const [gradeDialogOpen, setGradeDialogOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [grade, setGrade] = useState("")
@@ -130,9 +155,39 @@ function SubmissionDetailDialog({
   const [revisionFeedback, setRevisionFeedback] = useState("")
   const [loading, setLoading] = useState(false)
 
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const submission = submissions.find(s => s.id === selectedVersionId) || submissions[0]
+
+  if (!submission) return null
+
   const meta = DELIVERABLE_META[submission.deliverableType]
   const statusInfo = STATUS_META[submission.status]
   const StatusIcon = statusInfo.icon
+
+  const isLatest = submission.id === submissions[0]?.id
+  const hasMultipleVersions = submissions.length > 1;
+
+  async function handleDeleteSingle() {
+    setIsDeleting(true)
+    try {
+      await submissionsApi.delete(submission.id)
+      if (onDeleted) onDeleted(submission.id)
+      setDeleteAlertOpen(false)
+      toast.success("Version deleted successfully")
+      if (submissions.length <= 1) {
+        setOpen(false)
+      } else {
+        const remaining = submissions.filter(s => s.id !== submission.id)
+        setSelectedVersionId(remaining[0]?.id || null)
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete submission")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   async function handleGrade() {
     const g = parseInt(grade)
@@ -187,116 +242,211 @@ function SubmissionDetailDialog({
             View Details
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{meta.label} — v{submission.version}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            {/* Status */}
-            <div className="flex items-center gap-2">
-              <Badge variant={statusInfo.variant} className="gap-1">
-                <StatusIcon className="h-3 w-3" />
-                {statusInfo.label}
-              </Badge>
-              {submission.late && <Badge variant="destructive">Late</Badge>}
-              {submission.grade !== null && (
-                <Badge variant="outline" className="gap-1">
-                  <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                  {submission.grade}%
-                </Badge>
-              )}
-            </div>
-
-            {/* Title & notes */}
-            {submission.title && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Title</p>
-                <p className="text-sm font-medium">{submission.title}</p>
+        <DialogContent className={hasMultipleVersions ? "sm:max-w-[1000px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden" : "sm:max-w-[700px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden"}>
+          <div className="flex h-full max-h-[85vh] bg-background">
+            {/* Version Sidebar */}
+            {hasMultipleVersions && (
+              <div className="w-[240px] md:w-[300px] shrink-0 border-r bg-muted/10 flex flex-col hidden md:flex">
+                <div className="p-5 border-b bg-muted/30 font-semibold text-sm flex items-center justify-between">
+                  <span>Version History</span>
+                  <Badge variant="outline" className="text-[10px] font-medium">{submissions.length} versions</Badge>
+                </div>
+                <div className="overflow-y-auto p-4 space-y-3 flex-1">
+                  {submissions.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => setSelectedVersionId(s.id)}
+                      className={`p-4 rounded-xl border text-sm cursor-pointer transition-all ${
+                        selectedVersionId === s.id
+                          ? "bg-primary/5 border-primary/50 shadow-sm ring-1 ring-primary/20"
+                          : "bg-background hover:bg-muted/50 border-border hover:border-border/80"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className={`font-semibold text-base ${selectedVersionId === s.id ? "text-primary" : ""}`}>v{s.version}</span>
+                        <Badge variant={STATUS_META[s.status].variant} className="text-[10px] px-1.5 py-0 font-medium">
+                          {STATUS_META[s.status].label}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 opacity-70" />
+                          {new Date(s.submittedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
-            {submission.notes && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
-                <p className="text-sm">{submission.notes}</p>
-              </div>
-            )}
 
-            {/* File */}
-            {submission.fileName && (
-              <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground" />
+            {/* Main Content */}
+             <div className="flex-1 flex flex-col overflow-y-auto min-w-0 p-6 md:p-8">
+              <DialogHeader className="pb-6 border-b flex flex-row flex-wrap items-start justify-between gap-4 mb-4">
+                <div className="space-y-2">
+                  <Badge variant="secondary" className="font-medium bg-secondary/50 text-secondary-foreground mb-1">Version {submission.version}</Badge>
+                  <DialogTitle className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">{meta.label}</DialogTitle>
+                </div>
+                
+                {canSubmit && submission.status !== "APPROVED" && (
                   <div>
-                    <p className="text-sm font-medium">{submission.fileName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {submission.fileType} · {formatFileSize(submission.fileSize)}
+                    <Button
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 px-2"
+                      onClick={() => setDeleteAlertOpen(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-1.5" />
+                      Delete Version
+                    </Button>
+
+                    <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                            <AlertTriangle className="h-5 w-5" />
+                            Delete Version
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete v{submission.version} of this submission? This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={(e) => { e.preventDefault(); handleDeleteSingle() }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={isDeleting}
+                          >
+                            {isDeleting ? "Deleting..." : "Delete"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                )}
+              </DialogHeader>
+
+              <div className="space-y-8">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge variant={statusInfo.variant} className="gap-1.5 py-1.5 px-3 text-sm font-medium">
+                    <StatusIcon className="h-4 w-4" />
+                    {statusInfo.label}
+                  </Badge>
+                  {submission.late && <Badge variant="destructive" className="py-1.5 px-3 text-sm font-medium">Late Submission</Badge>}
+                  {submission.grade !== null && (
+                    <Badge variant="outline" className="gap-1.5 py-1.5 px-3 text-sm font-medium border-yellow-200 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-500">
+                      <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                      Score: {submission.grade}%
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="grid gap-6 sm:grid-cols-2 bg-muted/20 p-5 rounded-2xl border">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Submitted By</p>
+                    <p className="text-sm font-medium">{submission.submittedBy?.fullName || "System"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Submitted On</p>
+                    <p className="text-sm font-medium">{new Date(submission.submittedAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{new Date(submission.submittedAt).toLocaleTimeString()}</p>
+                  </div>
+                  {submission.deadline && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Deadline</p>
+                      <p className="text-sm font-medium">{new Date(submission.deadline).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{new Date(submission.deadline).toLocaleTimeString()}</p>
+                    </div>
+                  )}
+                  {submission.reviewedBy && (
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Reviewed By</p>
+                      <p className="text-sm font-medium">{submission.reviewedBy.fullName}</p>
+                    </div>
+                  )}
+                </div>
+
+                {submission.title && (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-1">Title</h4>
+                    <p className="text-sm">{submission.title}</p>
+                  </div>
+                )}
+
+                {submission.notes && (
+                  <div>
+                    <h4 className="text-base font-semibold mb-3">Submission Notes</h4>
+                    <p className="text-sm text-foreground bg-muted/30 p-4 rounded-xl italic leading-relaxed border">
+                      "{submission.notes}"
                     </p>
                   </div>
-                </div>
-                {submission.fileUrl && (
-                  <Button size="sm" variant="ghost" asChild>
-                    <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                  </Button>
+               )}
+
+                {submission.fileName && (
+                  <div>
+                    <h4 className="text-base font-semibold mb-3 flex items-center gap-2">
+                       <FileUp className="h-4 w-4 text-muted-foreground" /> Deliverable File
+                    </h4>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-xl bg-card shadow-sm hover:border-primary/50 transition-all gap-4">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="p-3 bg-primary/10 rounded-lg shrink-0">
+                          <FileText className="h-6 w-6 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate">{submission.fileName}</p>
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                            <span className="uppercase font-medium tracking-wider">{submission.fileType.split('/')[1] || submission.fileType}</span>
+                            <span>•</span>
+                            <span>{formatFileSize(submission.fileSize)}</span>
+                          </p>
+                        </div>
+                      </div>
+                      {submission.fileUrl && (
+                        <Button size="sm" className="w-full sm:w-auto shrink-0 shadow-sm" variant="secondary" asChild>
+                          <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {submission.feedback && (
+                  <div className="p-5 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3 text-blue-700 dark:text-blue-400">
+                      <MessageSquare className="h-4 w-4" />
+                      <h4 className="text-sm font-semibold">Supervisor Feedback</h4>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{submission.feedback}</p>
+                  </div>
+                )}
+
+                {canGrade && submission.status !== "APPROVED" && isLatest && (
+                  <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-8">
+                    <Button
+                      size="lg"
+                      className="flex-1 shadow-sm font-semibold"
+                      onClick={() => { setOpen(false); setGradeDialogOpen(true) }}
+                    >
+                      <CheckCircle2 className="h-5 w-5 mr-2" />
+                      Grade Submission
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="flex-1 font-semibold border-destructive/20 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30"
+                      onClick={() => { setOpen(false); setRevisionDialogOpen(true) }}
+                    >
+                      <RotateCcw className="h-5 w-5 mr-2" />
+                      Request Revision
+                    </Button>
+                  </div>
                 )}
               </div>
-            )}
-
-            {/* Dates */}
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Submitted</p>
-                <p>{new Date(submission.submittedAt).toLocaleDateString()}</p>
-              </div>
-              {submission.deadline && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Deadline</p>
-                  <p>{new Date(submission.deadline).toLocaleDateString()}</p>
-                </div>
-              )}
-              {submission.submittedBy && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Submitted by</p>
-                  <p>{submission.submittedBy.fullName}</p>
-                </div>
-              )}
-              {submission.reviewedBy && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Reviewed by</p>
-                  <p>{submission.reviewedBy.fullName}</p>
-                </div>
-              )}
             </div>
-
-            {/* Feedback */}
-            {submission.feedback && (
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs font-medium text-muted-foreground mb-1">Feedback</p>
-                <p className="text-sm">{submission.feedback}</p>
-              </div>
-            )}
-
-            {/* Supervisor actions */}
-            {canGrade && submission.status !== "APPROVED" && (
-              <div className="flex gap-2 pt-2 border-t">
-                <Button
-                  className="flex-1"
-                  onClick={() => { setOpen(false); setGradeDialogOpen(true) }}
-                >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Grade
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => { setOpen(false); setRevisionDialogOpen(true) }}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Request Revision
-                </Button>
-              </div>
-            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -393,9 +543,9 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
   const [deliverableType, setDeliverableType] = useState<ApiDeliverableType | "">("")
   const [title, setTitle] = useState("")
   const [notes, setNotes] = useState("")
-  const [deadline, setDeadline] = useState("")
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [formErrors, setFormErrors] = useState<{ type?: string; file?: string }>({})
   const fileRef = useRef<HTMLInputElement>(null)
 
   const selectedPhase = deliverableType
@@ -406,15 +556,22 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
     setDeliverableType("")
     setTitle("")
     setNotes("")
-    setDeadline("")
     setFile(null)
+    setFormErrors({})
     if (fileRef.current) fileRef.current.value = ""
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!deliverableType) { toast.error("Select a deliverable type"); return }
-    if (!file) { toast.error("Upload a file"); return }
+    
+    const errors: { type?: string; file?: string } = {}
+    if (!deliverableType) errors.type = "Please select a deliverable type."
+    if (!file) errors.file = "Please upload a file."
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
 
     setLoading(true)
     try {
@@ -424,7 +581,6 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
           sdlcPhase: DELIVERABLE_META[deliverableType as ApiDeliverableType].phase,
           title: title || undefined,
           notes: notes || undefined,
-          deadline: deadline || undefined,
         },
         file,
       )
@@ -453,12 +609,15 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div>
-            <Label>Deliverable Type *</Label>
+            <Label className={formErrors.type ? "text-destructive" : ""}>Deliverable Type *</Label>
             <Select
               value={deliverableType}
-              onValueChange={(v) => setDeliverableType(v as ApiDeliverableType)}
+              onValueChange={(v) => {
+                setDeliverableType(v as ApiDeliverableType)
+                if (formErrors.type) setFormErrors((prev) => ({ ...prev, type: undefined }))
+              }}
             >
-              <SelectTrigger className="mt-1.5">
+              <SelectTrigger className={`mt-1.5 ${formErrors.type ? "border-destructive focus:ring-destructive" : ""}`}>
                 <SelectValue placeholder="Select deliverable..." />
               </SelectTrigger>
               <SelectContent>
@@ -475,6 +634,7 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
                 SDLC phase: <strong>{PHASE_META[selectedPhase].label}</strong>
               </p>
             )}
+            {formErrors.type && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.type}</p>}
           </div>
 
           <div>
@@ -497,21 +657,12 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
               className="mt-1.5 resize-none"
             />
           </div>
-
           <div>
-            <Label>Deadline (optional)</Label>
-            <Input
-              type="date"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              className="mt-1.5"
-            />
-          </div>
-
-          <div>
-            <Label>File *</Label>
+            <Label className={formErrors.file ? "text-destructive" : ""}>File *</Label>
             <div
-              className="mt-1.5 border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer"
+              className={`mt-1.5 border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                formErrors.file ? "border-destructive bg-destructive/5 hover:border-destructive" : "border-border hover:border-primary"
+              }`}
               onClick={() => fileRef.current?.click()}
             >
               {file ? (
@@ -537,8 +688,12 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
               type="file"
               className="hidden"
               accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.png,.jpg,.jpeg"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                setFile(e.target.files?.[0] ?? null)
+                if (formErrors.file) setFormErrors((prev) => ({ ...prev, file: undefined }))
+              }}
             />
+            {formErrors.file && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.file}</p>}
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -584,14 +739,20 @@ function DeliverableRow({
   const isApproved = latest?.status === "APPROVED"
   const needsRevision = latest?.status === "REVISION_REQUIRED"
 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   async function handleDelete(id: string) {
-    if (!confirm("Delete this submission?")) return
+    setIsDeleting(true)
     try {
       await submissionsApi.delete(id)
       onDeleted(id)
+      setIsDeleteDialogOpen(false)
       toast.success("Submission deleted")
     } catch (e: any) {
       toast.error(e.message || "Failed to delete")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -658,20 +819,45 @@ function DeliverableRow({
         <div className="flex items-center gap-2 shrink-0">
           {latest && (
             <SubmissionDetailDialog
-              submission={latest}
+              submissions={submissions}
               canGrade={canGrade}
+              canSubmit={canSubmit}
               onGraded={onUpdated}
+              onDeleted={onDeleted}
             />
           )}
           {latest && (canSubmit || canGrade) && !isApproved && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={() => handleDelete(latest.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+              <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-5 w-5" />
+                      Delete Submission
+                    </DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Are you sure you want to delete this submission? This action cannot be undone.
+                  </p>
+                  <div className="flex gap-2 justify-end mt-4">
+                    <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+                      Cancel
+                    </Button>
+                    <Button variant="destructive" onClick={() => handleDelete(latest.id)} disabled={isDeleting}>
+                      {isDeleting ? "Deleting..." : "Delete"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
         </div>
       </div>
@@ -705,10 +891,12 @@ export default function SubmissionsPage() {
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedTeamId, setSelectedTeamId] = useState<string>("")
 
-  const isLeader = currentUser?.role === "LEADER"
-  const isSupervisor = currentUser?.role === "DOCTOR" || currentUser?.role === "TA"
-  const isAdmin = currentUser?.role === "ADMIN"
+  const userRole = currentUser?.role?.toUpperCase() || ""
+  const isLeader = userRole === "LEADER"
+  const isSupervisor = userRole === "DOCTOR" || userRole === "TA"
+  const isAdmin = userRole === "ADMIN"
 
   useEffect(() => {
     loadSubmissions()
@@ -739,11 +927,29 @@ export default function SubmissionsPage() {
     setSubmissions((prev) => prev.filter((x) => x.id !== id))
   }
 
+  const uniqueTeams = useMemo(() => {
+    const teams = new Map<string, {id: string, name: string}>()
+    submissions.forEach(s => {
+      if (s.team) teams.set(s.teamId, s.team)
+    })
+    return Array.from(teams.values())
+  }, [submissions])
+
+  useEffect(() => {
+    if ((isSupervisor || isAdmin) && uniqueTeams.length > 0 && !selectedTeamId) {
+      setSelectedTeamId(uniqueTeams[0].id)
+    }
+  }, [uniqueTeams, selectedTeamId, isSupervisor, isAdmin])
+
+  const displaySubmissions = (isSupervisor || isAdmin) && selectedTeamId
+    ? submissions.filter(s => s.teamId === selectedTeamId)
+    : submissions
+
   // Group by deliverable type (keep latest first within each type)
   const byDeliverable = Object.keys(DELIVERABLE_META).reduce(
     (acc, key) => {
       const dt = key as ApiDeliverableType
-      acc[dt] = submissions
+      acc[dt] = displaySubmissions
         .filter((s) => s.deliverableType === dt)
         .sort((a, b) => b.version - a.version)
       return acc
@@ -860,7 +1066,12 @@ export default function SubmissionsPage() {
                         {s.late && <span className="text-destructive">Late</span>}
                       </p>
                     </div>
-                    <SubmissionDetailDialog submission={s} canGrade={true} onGraded={handleUpdated} />
+                    <SubmissionDetailDialog 
+                      submissions={submissions.filter(x => x.deliverableType === s.deliverableType && x.teamId === s.teamId).sort((a,b)=>b.version - a.version)} 
+                      initialVersionId={s.id}
+                      canGrade={true} 
+                      onGraded={handleUpdated} 
+                    />
                   </div>
                 )
               })}
@@ -869,6 +1080,33 @@ export default function SubmissionsPage() {
         )}
 
         {/* Deliverables by phase */}
+        <div className="flex items-center justify-between mt-8 mb-4 border-t pt-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <FileUp className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Team SDLC Progress</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Track deliverables phase by phase</p>
+            </div>
+          </div>
+          {(isSupervisor || isAdmin) && uniqueTeams.length > 0 && (
+            <div className="flex items-center gap-3 bg-muted/40 p-2 rounded-lg border">
+               <span className="text-sm font-medium text-muted-foreground whitespace-nowrap px-2">View Team:</span>
+               <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                 <SelectTrigger className="w-[240px] bg-background">
+                   <SelectValue placeholder="Select team..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {uniqueTeams.map(t => (
+                     <SelectItem key={t.id} value={t.id} className="font-medium">{t.name}</SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+            </div>
+          )}
+        </div>
+        
         {loading ? (
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (

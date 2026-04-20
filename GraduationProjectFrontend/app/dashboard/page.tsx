@@ -1328,16 +1328,21 @@ function DoctorDashboard() {
     return () => clearInterval(timer)
   }, [])
 
-  const supervisedTeams = teams.filter((t) => t.doctorId === currentUser?.id)
-  const healthyTeams = supervisedTeams.filter((t) => t.health === "healthy").length
-  const atRiskTeams = supervisedTeams.filter((t) => t.health === "at-risk").length
-  const criticalTeams = supervisedTeams.filter((t) => t.health === "critical").length
-  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberIds.length, 0)
-  const avgProgress = supervisedTeams.reduce((sum, t) => sum + t.progress, 0) / (supervisedTeams.length || 1)
+  const { data: myTeamState } = useMyTeamState()
+  const supervisedTeams = myTeamState?.supervisedTeams || []
+  
+  // Calculate analytics securely from real API data
+  const healthyTeams = supervisedTeams.filter((t) => !t.isFull).length // Fallback heuristic
+  const atRiskTeams = supervisedTeams.filter((t) => t.isFull && t.stage === "REQUIREMENTS").length
+  const criticalTeams = 0
+  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberCount, 0)
+  const avgProgress = supervisedTeams.reduce((sum, t) => sum + getTeamProgressFallback(t), 0) / (supervisedTeams.length || 1)
 
-  const pendingProposals = proposals.filter(
-    (p) => p.status === "submitted" && supervisedTeams.some((t) => t.id === p.teamId),
+  const pendingProposals = (myTeamState?.supervisorRequestsReceived || []).filter(
+    (r) => r.status === "PENDING"
   )
+  
+  // Fake meetings using empty array context
   const upcomingMeetings = meetings
     .filter((m) => supervisedTeams.some((t) => t.id === m.teamId) && new Date(m.date) > new Date())
     .slice(0, 5)
@@ -1611,7 +1616,8 @@ function DoctorDashboard() {
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-4">
                 {supervisedTeams.map((team, index) => {
-                  const leader = getUserById(team.leaderId)
+                  const leader = team.leader
+                  const progress = getTeamProgressFallback(team)
                   return (
                     <motion.div
                       key={team.id}
@@ -1623,35 +1629,35 @@ function DoctorDashboard() {
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10">
-                            <AvatarImage src={leader?.avatar || "/placeholder.svg"} />
+                            <AvatarImage src={leader?.avatarUrl || "/placeholder.svg"} />
                             <AvatarFallback>{team.name.charAt(0)}</AvatarFallback>
                           </Avatar>
                           <div>
                             <h4 className="font-medium">{team.name}</h4>
-                            <p className="text-xs text-muted-foreground">Led by {leader?.name}</p>
+                            <p className="text-xs text-muted-foreground">Led by {leader?.fullName}</p>
                           </div>
                         </div>
                         <Badge
                           variant={
-                            team.health === "healthy"
+                            !team.isFull
                               ? "default"
-                              : team.health === "at-risk"
+                              : team.stage === "REQUIREMENTS"
                                 ? "secondary"
                                 : "destructive"
                           }
                         >
-                          {team.health}
+                          {!team.isFull ? "healthy" : "at-risk"}
                         </Badge>
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Progress</span>
-                          <span className="font-medium">{team.progress}%</span>
+                          <span className="font-medium">{progress}%</span>
                         </div>
-                        <Progress value={team.progress} className="h-2" />
+                        <Progress value={progress} className="h-2" />
                       </div>
                       <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                        <span>{team.memberIds.length} members</span>
+                        <span>{team.memberCount} members</span>
                         <Badge variant="outline" className="capitalize">
                           {team.stage}
                         </Badge>
@@ -1758,10 +1764,14 @@ function TADashboard() {
     return () => clearInterval(timer)
   }, [])
 
-  const supervisedTeams = teams.filter((t) => t.taId === currentUser?.id)
-  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberIds.length, 0)
-  const healthyTeams = supervisedTeams.filter((t) => t.health === "healthy").length
-  const avgProgress = supervisedTeams.reduce((sum, t) => sum + t.progress, 0) / (supervisedTeams.length || 1)
+  const { data: myTeamState } = useMyTeamState()
+  const supervisedTeams = myTeamState?.supervisedTeams || []
+  
+  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberCount, 0)
+  const healthyTeams = supervisedTeams.filter((t) => !t.isFull).length // Fallback heuristic
+  const avgProgress = supervisedTeams.reduce((sum, t) => sum + getTeamProgressFallback(t), 0) / (supervisedTeams.length || 1)
+  
+  // Fake meetings using empty array context
   const upcomingMeetings = meetings
     .filter((m) => supervisedTeams.some((t) => t.id === m.teamId) && new Date(m.date) > new Date())
     .slice(0, 5)
@@ -1994,8 +2004,9 @@ function TADashboard() {
 
             <div className="space-y-4">
               {supervisedTeams.map((team, index) => {
-                const leader = getUserById(team.leaderId)
-                const doctor = getUserById(team.doctorId || "")
+                const leader = team.leader
+                const doctor = team.doctor
+                const progress = getTeamProgressFallback(team)
                 return (
                   <motion.div
                     key={team.id}
@@ -2007,37 +2018,37 @@ function TADashboard() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={leader?.avatar || "/placeholder.svg"} />
+                          <AvatarImage src={leader?.avatarUrl || "/placeholder.svg"} />
                           <AvatarFallback>{team.name.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div>
                           <h4 className="font-medium">{team.name}</h4>
                           <p className="text-xs text-muted-foreground">
-                            Supervisor: Dr. {doctor?.name?.split(" ").slice(1).join(" ")}
+                            Supervisor: Dr. {doctor?.fullName?.split(" ").slice(1).join(" ")}
                           </p>
                         </div>
                       </div>
                       <Badge
                         variant={
-                          team.health === "healthy"
+                          !team.isFull
                             ? "default"
-                            : team.health === "at-risk"
+                            : team.stage === "REQUIREMENTS"
                               ? "secondary"
                               : "destructive"
                         }
                       >
-                        {team.health}
+                        {!team.isFull ? "healthy" : "at-risk"}
                       </Badge>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Progress</span>
-                        <span className="font-medium">{team.progress}%</span>
+                        <span className="font-medium">{progress}%</span>
                       </div>
-                      <Progress value={team.progress} className="h-2" />
+                      <Progress value={progress} className="h-2" />
                     </div>
                     <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                      <span>{team.memberIds.length} members</span>
+                      <span>{team.memberCount} members</span>
                       <Badge variant="outline" className="capitalize">
                         {team.stage}
                       </Badge>

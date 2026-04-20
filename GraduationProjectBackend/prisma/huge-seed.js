@@ -35,6 +35,16 @@ const TEAM_STAGES = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEP
 const TASK_STATUSES = ["BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "APPROVED", "DONE"];
 const TASK_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const TASK_TYPES = ["CODE", "DOCUMENTATION", "DESIGN", "RESEARCH", "MEETING", "PRESENTATION", "OTHER"];
+const DELIVERABLE_TO_PHASE = {
+  SRS: "REQUIREMENTS",
+  UML: "DESIGN",
+  PROTOTYPE: "IMPLEMENTATION",
+  CODE: "IMPLEMENTATION",
+  TEST_PLAN: "TESTING",
+  FINAL_REPORT: "DEPLOYMENT",
+  PRESENTATION: "DEPLOYMENT",
+};
+
 
 async function main() {
   const password = "demo123";
@@ -237,6 +247,7 @@ async function main() {
                 data: {
                     teamId: team.id,
                     deliverableType: type,
+                    sdlcPhase: DELIVERABLE_TO_PHASE[type],
                     artifactUrl: faker.internet.url(),
                     grade: faker.number.int({ min: 60, max: 100 }),
                     feedback: faker.lorem.sentence(),

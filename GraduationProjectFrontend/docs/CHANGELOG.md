@@ -2,6 +2,24 @@
 
 All notable changes to ProjectHub will be documented in this file.
 
+## [2.0.2] - 2026-04-18 - Upload Size Limit Controls
+
+### Changed
+- Team document uploads now support configurable size limits through `DOCUMENT_MAX_SIZE_MB` and `NEXT_PUBLIC_DOCUMENT_MAX_SIZE_MB`
+- Learning resource file uploads now support configurable size limits through `RESOURCE_MAX_SIZE_MB` and `NEXT_PUBLIC_RESOURCE_MAX_SIZE_MB`
+- Setting any of those values to `0` disables the size cap entirely
+- Upload UI messages now reflect the configured limit instead of hard-coded 20MB or 25MB text
+
+## [2.0.1] - 2026-04-18 - Upload Stability Fixes
+
+### Fixed
+- Learning resources upload UI now matches the backend contract for `file`, `video`, `link`, and `github` resource types
+- Removed broken upload path for admins on the resources screen so the UI matches backend permissions
+- Fixed resource ownership checks and author rendering so delete actions appear for the correct doctor or TA
+- Added client-side validation for document and resource file types and size limits before requests are sent
+- Failed uploads are now cleaned up on the backend to avoid orphan files on disk
+- Replaced and deleted document/resource uploads now remove the old local file when applicable
+
 ## [2.0.0] - 2025-01-XX - Major Enhancement Release
 
 ### Added

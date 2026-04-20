@@ -29,7 +29,25 @@ const allowedDocumentMimeTypes = new Set([
   "application/octet-stream",
 ]);
 
-const upload = multer({
+const parseUploadLimitInMb = (value) => {
+  const normalized = String(value ?? "").trim();
+
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.floor(parsed * 1024 * 1024);
+};
+
+const documentUploadLimitBytes = parseUploadLimitInMb(process.env.DOCUMENT_MAX_SIZE_MB);
+const documentUploadLimitLabel = documentUploadLimitBytes
+  ? `${Number.parseFloat((documentUploadLimitBytes / (1024 * 1024)).toFixed(2))}MB`
+  : "unlimited";
+
+const uploadConfig = {
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
       cb(null, documentsUploadDir);
@@ -42,7 +60,6 @@ const upload = multer({
       cb(null, `${uniquePrefix}-${safeOriginalName}`);
     },
   }),
-  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const extension = path.extname(file.originalname || "").toLowerCase();
     const isAllowed = allowedDocumentExtensions.has(extension) || allowedDocumentMimeTypes.has(file.mimetype);
@@ -58,7 +75,13 @@ const upload = multer({
       isAllowed,
     );
   },
-});
+};
+
+if (documentUploadLimitBytes) {
+  uploadConfig.limits = { fileSize: documentUploadLimitBytes };
+}
+
+const upload = multer(uploadConfig);
 
 const uploadSingleDocument = (req, res, next) => {
   upload.single("file")(req, res, (error) => {
@@ -67,7 +90,13 @@ const uploadSingleDocument = (req, res, next) => {
     }
 
     if (error?.code === "LIMIT_FILE_SIZE") {
-      return next(new AppError("Document max size is 25MB.", 422, "DOCUMENT_FILE_TOO_LARGE"));
+      return next(
+        new AppError(
+          `Document max size is ${documentUploadLimitLabel}.`,
+          422,
+          "DOCUMENT_FILE_TOO_LARGE",
+        ),
+      );
     }
 
     if (error instanceof AppError) {
