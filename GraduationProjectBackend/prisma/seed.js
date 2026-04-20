@@ -438,6 +438,7 @@ async function main() {
     data: {
       teamId: smartCampus.id,
       deliverableType: "SRS",
+      sdlcPhase: "REQUIREMENTS",
       sourceType: "MANUAL_UPLOAD",
       artifactUrl: "https://example.com/docs/smart-campus-srs.pdf",
       version: 1,
@@ -453,6 +454,7 @@ async function main() {
     data: {
       teamId: smartCampus.id,
       deliverableType: "UML",
+      sdlcPhase: "DESIGN",
       sourceType: "MANUAL_UPLOAD",
       artifactUrl: "https://example.com/docs/smart-campus-uml.pdf",
       version: 1,

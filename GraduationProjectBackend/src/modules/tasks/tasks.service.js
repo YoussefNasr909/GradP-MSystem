@@ -15,6 +15,7 @@ import {
   listTasksByTeam,
   updateTaskById,
 } from "./tasks.repository.js";
+import { notify } from "../../common/utils/notify.js";
 
 const VISIBLE_STATUS_ORDER = {
   TODO: 0,
@@ -568,6 +569,17 @@ export async function createTaskService(actor, payload) {
     githubCommitCount: 0,
   });
 
+  // Notify the assignee they have a new task (skip if leader assigned to themselves)
+  if (assignee.id !== actor.id) {
+    await notify({
+      userId: assignee.id,
+      type: "TASK_ASSIGNED",
+      title: "New Task Assigned",
+      message: `You have been assigned the task "${normalizeText(payload.title)}" in team "${team.name}".`,
+      actionUrl: "/dashboard/tasks",
+    });
+  }
+
   return toTaskResponse(task, actor);
 }
 
@@ -683,6 +695,17 @@ export async function submitTaskForReviewService(actor, taskId) {
     reviewDecision: null,
   });
 
+  // Notify the team leader a task needs review
+  if (task.team?.leader?.id && task.team.leader.id !== actor.id) {
+    await notify({
+      userId: task.team.leader.id,
+      type: "TASK_REVIEWED",
+      title: "Task Ready for Review",
+      message: `"${task.title}" has been submitted for review by ${buildFullName(actor)}.`,
+      actionUrl: "/dashboard/tasks",
+    });
+  }
+
   return toTaskResponse(updated, actor);
 }
 
@@ -738,6 +761,17 @@ export async function approveTaskService(actor, taskId, payload = {}) {
     }),
   });
 
+  // Notify the assignee their task was approved
+  if (task.assigneeUserId && task.assigneeUserId !== actor.id) {
+    await notify({
+      userId: task.assigneeUserId,
+      type: "TASK_APPROVED",
+      title: "Task Approved",
+      message: `Your task "${task.title}" has been approved${reviewComment ? `: "${reviewComment}"` : "."}`,
+      actionUrl: "/dashboard/tasks",
+    });
+  }
+
   return toTaskResponse(updated, actor);
 }
 
@@ -779,6 +813,17 @@ export async function rejectTaskService(actor, taskId, payload) {
       requestedChanges: true,
     }),
   });
+
+  // Notify the assignee that changes were requested
+  if (task.assigneeUserId && task.assigneeUserId !== actor.id) {
+    await notify({
+      userId: task.assigneeUserId,
+      type: "TASK_CHANGES_REQUESTED",
+      title: "Changes Requested",
+      message: `Changes requested on your task "${task.title}": "${reviewComment}".`,
+      actionUrl: "/dashboard/tasks",
+    });
+  }
 
   return toTaskResponse(updated, actor);
 }

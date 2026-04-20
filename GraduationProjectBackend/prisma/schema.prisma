@@ -173,6 +173,23 @@ enum ResourceType {
   GITHUB
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_REVIEWED
+  TASK_APPROVED
+  TASK_CHANGES_REQUESTED
+  TEAM_INVITE_RECEIVED
+  TEAM_JOIN_REQUEST_RECEIVED
+  TEAM_JOIN_REQUEST_APPROVED
+  TEAM_JOIN_REQUEST_REJECTED
+  SUPERVISOR_REQUEST_RECEIVED
+  SUPERVISOR_REQUEST_ACCEPTED
+  SUPERVISOR_REQUEST_DECLINED
+  SUBMISSION_GRADED
+  SUBMISSION_FEEDBACK
+  SYSTEM
+}
+
 enum Department {
   COMPUTER_SCIENCE
   SOFTWARE_ENGINEERING
@@ -262,6 +279,7 @@ model User {
   reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
   uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
   createdResources        TeamResource[]     @relation("ResourceCreator")
+  notifications           Notification[]     @relation("UserNotifications")
 }
 
 model Team {
@@ -615,4 +633,21 @@ model TeamResource {
 
   @@index([createdByUserId])
   @@index([category])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  actionUrl String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user User @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }
