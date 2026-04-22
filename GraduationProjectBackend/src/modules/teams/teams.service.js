@@ -1,4 +1,4 @@
-﻿import crypto from "node:crypto";
+import crypto from "node:crypto";
 import { AppError } from "../../common/errors/AppError.js";
 import { prisma } from "../../loaders/dbLoader.js";
 import { ACCOUNT_STATUSES } from "../../common/constants/accountStatuses.js";
@@ -42,6 +42,7 @@ import {
 } from "./teams.repository.js";
 import { findUserByAcademicId, findUserByEmail, findUserById } from "../users/users.repository.js";
 import { sendTeamInvitationEmail } from "../../common/utils/mailer.js";
+import { notify } from "../../common/utils/notify.js";
 
 function normalizeEmail(email) {
   return String(email ?? "").trim().toLowerCase();
@@ -725,6 +726,15 @@ export async function createJoinRequestService(actor, teamId, payload) {
     message: normalizeText(payload.message) || null,
   });
 
+  // Notify the team leader that someone wants to join
+  await notify({
+    userId: team.leader.id,
+    type: "TEAM_JOIN_REQUEST_RECEIVED",
+    title: "New Join Request",
+    message: `${buildFullName(joinRequest.user)} wants to join your team "${team.name}".`,
+    actionUrl: "/dashboard/my-team",
+  });
+
   return toJoinRequestResponse(joinRequest, actor);
 }
 
@@ -763,6 +773,15 @@ export async function approveJoinRequestService(actor, joinRequestId) {
       cleanupAfterMembershipJoin(joinRequest.user.id, joinRequest.team.id, tx),
     ]);
 
+    // Notify the student their join request was approved
+    await notify({
+      userId: joinRequest.user.id,
+      type: "TEAM_JOIN_REQUEST_APPROVED",
+      title: "Join Request Approved",
+      message: `Your request to join "${joinRequest.team.name}" has been approved. Welcome to the team!`,
+      actionUrl: "/dashboard/my-team",
+    });
+
     return toJoinRequestResponse(updatedRequest, actor);
   });
 }
@@ -781,6 +800,15 @@ export async function rejectJoinRequestService(actor, joinRequestId) {
 
   const updated = await updateTeamJoinRequestById(joinRequest.id, {
     status: TEAM_JOIN_REQUEST_STATUSES.REJECTED,
+  });
+
+  // Notify the student their join request was rejected
+  await notify({
+    userId: joinRequest.user.id,
+    type: "TEAM_JOIN_REQUEST_REJECTED",
+    title: "Join Request Declined",
+    message: `Your request to join "${joinRequest.team.name}" was not approved.`,
+    actionUrl: "/dashboard/teams",
   });
 
   return toJoinRequestResponse(updated, actor);
@@ -825,6 +853,15 @@ export async function createInvitationService(actor, teamId, payload) {
   } catch (error) {
     console.error("SEND_TEAM_INVITATION_EMAIL_FAILED:", error?.message ?? error);
   }
+
+  // Notify the invited student in-app
+  await notify({
+    userId: inviteTarget.id,
+    type: "TEAM_INVITE_RECEIVED",
+    title: "Team Invitation",
+    message: `You have been invited to join "${team.name}" by ${buildFullName(team.leader)}.`,
+    actionUrl: "/dashboard/my-team",
+  });
 
   return toInvitationResponse(invitation, actor, {
     includeInviteCode: true,
@@ -884,6 +921,15 @@ export async function createSupervisorRequestService(actor, teamId, payload) {
     projectName: normalizeText(payload.projectName),
     projectDescription: normalizeText(payload.projectDescription),
     technologies: normalizeStack(payload.technologies),
+  });
+
+  // Notify the supervisor they received a supervision request
+  await notify({
+    userId: supervisor.id,
+    type: "SUPERVISOR_REQUEST_RECEIVED",
+    title: "New Supervision Request",
+    message: `Team "${team.name}" is requesting you as their ${getSupervisorRoleLabel(supervisorRole)}.`,
+    actionUrl: "/dashboard/my-team",
   });
 
   return toSupervisorRequestResponse(supervisorRequest, actor);
@@ -1039,6 +1085,15 @@ export async function approveSupervisorRequestService(actor, supervisorRequestId
       tx,
     );
 
+    // Notify the team leader the supervisor accepted
+    await notify({
+      userId: supervisorRequest.team.leader.id,
+      type: "SUPERVISOR_REQUEST_ACCEPTED",
+      title: "Supervisor Request Accepted",
+      message: `${buildFullName(supervisorRequest.supervisor)} has accepted your supervision request for "${supervisorRequest.team.name}".`,
+      actionUrl: "/dashboard/my-team",
+    });
+
     return toSupervisorRequestResponse(updatedRequest, actor);
   });
 }
@@ -1070,6 +1125,15 @@ export async function declineSupervisorRequestService(actor, supervisorRequestId
     respondedAt: new Date(),
   });
 
+  // Notify the team leader the supervisor declined
+  await notify({
+    userId: supervisorRequest.team.leader.id,
+    type: "SUPERVISOR_REQUEST_DECLINED",
+    title: "Supervisor Request Declined",
+    message: `${buildFullName(supervisorRequest.supervisor)} has declined your supervision request for "${supervisorRequest.team.name}".`,
+    actionUrl: "/dashboard/my-team",
+  });
+
   return toSupervisorRequestResponse(updatedRequest, actor);
 }
 
@@ -1081,7 +1145,22 @@ export async function leaveTeamService(actor, teamId) {
     throw new AppError("You are not a member of this team.", 404, "TEAM_MEMBERSHIP_NOT_FOUND");
   }
 
+  const teamName = membership.team.name;
+  const leaderId = membership.team.leader?.id;
+
   const deleted = await deleteTeamMemberByUserId(actor.id);
+
+  // Notify the team leader that a member left
+  if (leaderId && leaderId !== actor.id) {
+    await notify({
+      userId: leaderId,
+      type: "SYSTEM",
+      title: "Member Left Team",
+      message: `${buildFullName(deleted.user)} has left your team "${teamName}".`,
+      actionUrl: "/dashboard/my-team",
+    });
+  }
+
   return {
     teamId,
     leftAt: new Date().toISOString(),
@@ -1103,6 +1182,16 @@ export async function removeTeamMemberService(actor, teamId, userId) {
   }
 
   const deleted = await deleteTeamMemberByUserId(userId);
+
+  // Notify the removed member
+  await notify({
+    userId,
+    type: "SYSTEM",
+    title: "Removed from Team",
+    message: `You have been removed from team "${team.name}" by ${buildFullName(team.leader)}.`,
+    actionUrl: "/dashboard/teams",
+  });
+
   return {
     teamId,
     removedAt: new Date().toISOString(),
