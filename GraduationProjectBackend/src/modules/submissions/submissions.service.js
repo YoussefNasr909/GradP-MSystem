@@ -83,6 +83,55 @@ function buildFullName(user) {
   return `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim();
 }
 
+function getDeliverableLabel(deliverableType) {
+  return (
+    {
+      SRS: "SRS Document",
+      UML: "UML Diagrams",
+      PROTOTYPE: "Prototype",
+      CODE: "Source Code",
+      TEST_PLAN: "Test Plan",
+      FINAL_REPORT: "Final Report",
+      PRESENTATION: "Presentation",
+    }[deliverableType] ?? deliverableType
+  );
+}
+
+export function getLatestPhaseSubmission(phaseSubmissions) {
+  return phaseSubmissions[0] ?? null;
+}
+
+export function assertPhaseSubmissionGate(phaseSubmissions, deliverableType, sdlcPhase) {
+  const latestPhaseSubmission = getLatestPhaseSubmission(phaseSubmissions);
+  if (!latestPhaseSubmission) {
+    return;
+  }
+
+  const latestDeliverableLabel = getDeliverableLabel(latestPhaseSubmission.deliverableType);
+
+  if (
+    latestPhaseSubmission.status === "PENDING" ||
+    latestPhaseSubmission.status === "UNDER_REVIEW"
+  ) {
+    throw new AppError(
+      `You already have ${latestDeliverableLabel} waiting for review in the ${sdlcPhase} phase. Wait for the review result before creating another submission in this phase.`,
+      409,
+      "SUBMISSION_PHASE_REVIEW_PENDING",
+    );
+  }
+
+  if (
+    latestPhaseSubmission.status === "REVISION_REQUIRED" &&
+    latestPhaseSubmission.deliverableType !== deliverableType
+  ) {
+    throw new AppError(
+      `Finish the requested revision for ${latestDeliverableLabel} before starting a different submission in the ${sdlcPhase} phase.`,
+      409,
+      "SUBMISSION_PHASE_LOCKED_BY_REVISION",
+    );
+  }
+}
+
 function toSubmissionResponse(submission) {
   return {
     ...submission,
@@ -172,6 +221,9 @@ export async function createSubmissionService(actor, payload, file) {
       "SUBMISSION_PHASE_MISMATCH",
     );
   }
+
+  const phaseSubmissions = await listSubmissionsByTeamAndPhase(team.id, sdlcPhase);
+  assertPhaseSubmissionGate(phaseSubmissions, deliverableType, sdlcPhase);
 
   const latestVersion = await getLatestVersionForDeliverable(team.id, deliverableType);
   const version = latestVersion + 1;
