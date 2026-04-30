@@ -257,6 +257,49 @@
   .glow-lg {
     box-shadow: 0 0 50px -12px oklch(var(--primary) / 0.5);
   }
+  .app-high-contrast {
+    --background: oklch(0.99 0 0);
+    --foreground: oklch(0.12 0 0);
+    --card: oklch(1 0 0);
+    --muted: oklch(0.94 0 0);
+    --muted-foreground: oklch(0.31 0 0);
+    --border: oklch(0.38 0 0);
+    --input: oklch(0.38 0 0);
+    --ring: oklch(0.38 0.14 255);
+  }
+  .dark.app-high-contrast {
+    --background: oklch(0.09 0 0);
+    --foreground: oklch(0.98 0 0);
+    --card: oklch(0.13 0 0);
+    --muted: oklch(0.2 0 0);
+    --muted-foreground: oklch(0.86 0 0);
+    --border: oklch(0.7 0 0);
+    --input: oklch(0.7 0 0);
+    --ring: oklch(0.78 0.14 255);
+  }
+  .app-reduced-motion *,
+  .app-reduced-motion *::before,
+  .app-reduced-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+  .app-compact [data-slot="card"] {
+    gap: 0.75rem;
+  }
+  .app-compact [data-slot="card-header"],
+  .app-compact [data-slot="card-content"],
+  .app-compact [data-slot="card-footer"] {
+    padding-inline: 1rem;
+  }
+  .app-compact [data-slot="card-header"] {
+    padding-block-start: 1rem;
+  }
+  .app-compact [data-slot="card-content"],
+  .app-compact [data-slot="card-footer"] {
+    padding-block-end: 1rem;
+  }
   .trusted-marquee-track {
     animation: trusted-marquee 80s linear infinite;
     will-change: transform;

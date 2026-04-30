@@ -328,8 +328,8 @@ export default function SDLCPage() {
   const [expandedPhase, setExpandedPhase] = useState<ApiTeamStage | null>(null)
   const [advancing, setAdvancing] = useState(false)
 
-  const isLeader = currentUser?.role === "LEADER"
-  const isSupervisor = currentUser?.role === "DOCTOR" || currentUser?.role === "TA"
+  const isLeader = currentUser?.role === "leader"
+  const isSupervisor = currentUser?.role === "doctor" || currentUser?.role === "ta"
 
   useEffect(() => {
     loadSummary()

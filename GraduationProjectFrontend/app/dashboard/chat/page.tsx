@@ -27,6 +27,9 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
+import { usersApi } from "@/lib/api/users"
+import type { ApiDirectoryUser } from "@/lib/api/types"
+import { formatRoleLabel, getAvatarInitial, getFullName } from "@/lib/team-display"
 
 interface Message {
   id: string
@@ -164,6 +167,11 @@ export default function ChatPage() {
   const [channelFilter, setChannelFilter] = useState<"all" | "teams" | "direct">("all")
   const [showChannelList, setShowChannelList] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false)
+  const [directoryUsers, setDirectoryUsers] = useState<ApiDirectoryUser[]>([])
+  const [directorySearch, setDirectorySearch] = useState("")
+  const [isDirectoryLoading, setIsDirectoryLoading] = useState(false)
+  const [directoryError, setDirectoryError] = useState("")
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
@@ -181,6 +189,32 @@ export default function ChatPage() {
     }
   }, [selectedChannel, isMobile])
 
+  useEffect(() => {
+    if (!isNewChatOpen) return
+
+    let cancelled = false
+    setIsDirectoryLoading(true)
+    setDirectoryError("")
+
+    usersApi
+      .directory({ search: directorySearch || undefined, limit: 20, page: 1 })
+      .then((result) => {
+        if (cancelled) return
+        setDirectoryUsers(result.items.filter((user) => user.id !== currentUser?.id))
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setDirectoryError(error instanceof Error ? error.message : "Could not load people right now.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsDirectoryLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.id, directorySearch, isNewChatOpen])
+
   const handleSelectChannel = (channel: Channel) => {
     setSelectedChannel(channel)
     if (isMobile) {
@@ -191,6 +225,33 @@ export default function ChatPage() {
   const handleBackToChannels = () => {
     setShowChannelList(true)
     setSelectedChannel(null)
+  }
+
+  const startDirectConversation = (user: ApiDirectoryUser) => {
+    const existing = channels.find((channel) => channel.type === "direct" && channel.memberIds.includes(user.id))
+    const channel =
+      existing ??
+      ({
+        id: `direct-${user.id}`,
+        name: getFullName(user),
+        type: "direct",
+        memberIds: [currentUser?.id, user.id].filter(Boolean) as string[],
+        unreadCount: 0,
+        avatar: user.avatarUrl ?? undefined,
+        lastMessage: {
+          id: `direct-${user.id}-system`,
+          senderId: "system",
+          content: "Conversation started",
+          timestamp: new Date().toISOString(),
+          isRead: true,
+          type: "system",
+        },
+      } satisfies Channel)
+
+    if (!existing) setChannels((current) => [channel, ...current])
+    setSelectedChannel(channel)
+    setIsNewChatOpen(false)
+    setDirectorySearch("")
   }
 
   const filteredChannels = channels.filter((channel) => {
@@ -261,7 +322,7 @@ export default function ChatPage() {
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold gradient-text">Chat & Q/A</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">Communicate with your team</p>
         </div>
-        <Dialog>
+        <Dialog open={isNewChatOpen} onOpenChange={setIsNewChatOpen}>
           <DialogTrigger asChild>
             <Button size="sm" className="gap-1.5 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm">
               <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -274,25 +335,43 @@ export default function ChatPage() {
               <DialogDescription>Search and select a user to start a direct conversation.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <Input placeholder="Search users..." className="h-10" />
+              <Input
+                placeholder="Search users..."
+                value={directorySearch}
+                onChange={(event) => setDirectorySearch(event.target.value)}
+                className="h-10"
+              />
               <ScrollArea className="h-[200px] sm:h-[300px]">
-                {users
-                  .filter((u) => u.id !== currentUser?.id)
-                  .map((user) => (
+                {isDirectoryLoading ? (
+                  <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+                    Loading people...
+                  </div>
+                ) : directoryError ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                    {directoryError}
+                  </div>
+                ) : directoryUsers.length === 0 ? (
+                  <div className="flex h-32 items-center justify-center text-center text-sm text-muted-foreground">
+                    No visible users found.
+                  </div>
+                ) : (
+                  directoryUsers.map((user) => (
                     <div
                       key={user.id}
+                      onClick={() => startDirectConversation(user)}
                       className="flex items-center gap-3 p-2 sm:p-3 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
                     >
                       <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-                        <AvatarImage src={user.avatar || "/placeholder.svg"} />
-                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                        <AvatarImage src={user.avatarUrl || "/placeholder.svg"} />
+                        <AvatarFallback>{getAvatarInitial(user)}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate">{user.name}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
+                        <p className="font-medium text-sm truncate">{getFullName(user)}</p>
+                        <p className="text-xs text-muted-foreground">{formatRoleLabel(user.role)}</p>
                       </div>
                     </div>
-                  ))}
+                  ))
+                )}
               </ScrollArea>
             </div>
           </DialogContent>
