@@ -315,7 +315,7 @@ export type ApiDirectoryUser = {
   firstName: string
   lastName: string
   fullName: string
-  email: string
+  email: string | null
   role: Role
   academicId: string | null
   department: Department | null
@@ -326,6 +326,13 @@ export type ApiDirectoryUser = {
   linkedinUrl: string | null
   githubUsername: string | null
   currentTeam: ApiCurrentTeamSummary | null
+  privacy?: {
+    profileVisibility: "PUBLIC" | "TEAM_ONLY" | "PRIVATE"
+    showEmail: boolean
+    showActivity: boolean
+    showTeam: boolean
+    showOnlineStatus: boolean
+  }
   createdAt: string
   updatedAt: string
 }
@@ -780,8 +787,64 @@ export type AuthResponse = {
   user: ApiUser
 }
 
+export type TwoFactorLoginChallenge = {
+  requiresTwoFactor: true
+  challengeToken: string
+  user: {
+    id: string
+    email: string
+    fullName: string
+  }
+}
+
+export type LoginResponse = AuthResponse | TwoFactorLoginChallenge
+
 export type RegisterResponse = AuthResponse & {
   emailSent: boolean
+}
+
+export type UserSettings = {
+  notifications: {
+    emailNotifications: boolean
+    websiteNotifications: boolean
+    soundNotifications: boolean
+    taskReminders: boolean
+    meetingReminders: boolean
+    submissionAlerts: boolean
+    teamUpdates: boolean
+    mentionNotifications: boolean
+    deadlineWarnings: boolean
+    gradeNotifications: boolean
+    weeklyDigest: boolean
+  }
+  appearance: {
+    theme: "light" | "dark" | "system"
+    fontSize: number
+    compactMode: boolean
+    reducedMotion: boolean
+    highContrast: boolean
+    sidebarCollapsed: boolean
+  }
+  privacy: {
+    profileVisibility: "PUBLIC" | "TEAM_ONLY" | "PRIVATE"
+    showEmail: boolean
+    showActivity: boolean
+    showTeam: boolean
+    showOnlineStatus: boolean
+  }
+  security: {
+    loginAlerts: boolean
+    sessionTimeout: number
+    twoFactorEnabled: boolean
+  }
+  updatedAt?: string
+}
+
+export type UserSettingsPatch = {
+  notifications?: Partial<UserSettings["notifications"]>
+  appearance?: Partial<UserSettings["appearance"]>
+  privacy?: Partial<UserSettings["privacy"]>
+  security?: Partial<Pick<UserSettings["security"], "loginAlerts" | "sessionTimeout">>
 }
 
 export type Paginated<T> = {
@@ -789,3 +852,19 @@ export type Paginated<T> = {
   items: T[]
 }
 
+
+
+export type ApiCalendarProvider = "GOOGLE" | "OUTLOOK"
+export type ApiMeetingMode = "VIRTUAL" | "IN_PERSON" | "HYBRID"
+export type ApiMeetingStatus = "PENDING_APPROVAL" | "CONFIRMED" | "DECLINED" | "CANCELLED" | "COMPLETED"
+export type ApiMeetingProvider = "GOOGLE_MEET" | "MICROSOFT_TEAMS" | "MANUAL"
+export type ApiMeetingParticipantRole = "ORGANIZER" | "LEADER" | "DOCTOR" | "TA" | "MEMBER" | "EXTERNAL"
+export type ApiMeetingResponseStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "TENTATIVE"
+export type ApiMeetingApprovalStatus = "PENDING" | "APPROVED" | "DECLINED" | "PROPOSED_NEW_TIME"
+export type ApiExternalSyncStatus = "NOT_CONNECTED" | "PENDING" | "SYNCED" | "ERROR" | "DISCONNECTED"
+
+export type ApiMeetingParticipant = { id: string; userId: string | null; email: string | null; displayName: string | null; participantRole: ApiMeetingParticipantRole; responseStatus: ApiMeetingResponseStatus; canApprove: boolean; isExternalGuest: boolean; user: ApiTeamUser | null }
+export type ApiMeetingApproval = { id: string; approverRole: Role; status: ApiMeetingApprovalStatus; proposedStartAt: string | null; proposedEndAt: string | null; note: string | null; respondedAt: string | null; approver: ApiTeamUser | null }
+export type ApiMeeting = { id: string; title: string; description: string | null; agenda: string | null; startAt: string; endAt: string; timezone: string; mode: ApiMeetingMode; status: ApiMeetingStatus; provider: ApiMeetingProvider; location: string | null; joinUrl: string | null; requiresApproval: boolean; approvalRequestedAt: string | null; confirmedAt: string | null; cancelledAt: string | null; externalProvider: ApiCalendarProvider | null; externalEventId: string | null; externalSyncStatus: ApiExternalSyncStatus; externalSyncError: string | null; externalSyncedAt: string | null; createdAt: string; updatedAt: string; team: { id: string; name: string; leader: ApiTeamUser | null; doctor: ApiTeamUser | null; ta: ApiTeamUser | null }; organizer: ApiTeamUser; participants: ApiMeetingParticipant[]; approvals: ApiMeetingApproval[]; permissions: { canManage: boolean; canApprove: boolean; canRespond: boolean; isOrganizer: boolean } }
+export type ApiCalendarIntegration = { id: string; provider: ApiCalendarProvider; email: string | null; displayName: string | null; syncEnabled: boolean; lastSyncedAt: string | null; lastSyncStatus: ApiExternalSyncStatus; lastSyncError: string | null; createdAt: string; updatedAt: string }
+export type ApiCalendarEvent = { id: string; sourceType: "MEETING" | "TASK_DEADLINE"; sourceId: string; title: string; description?: string | null; startAt: string; endAt: string; allDay?: boolean; status: string; mode?: ApiMeetingMode; provider?: ApiMeetingProvider; externalProvider?: ApiCalendarProvider | null; location?: string | null; joinUrl?: string | null; team: { id: string; name: string }; organizer?: { id: string; fullName: string; email: string; role: Role }; participants?: Array<{ id: string; userId: string | null; email: string | null; displayName: string | null; participantRole: ApiMeetingParticipantRole; responseStatus: ApiMeetingResponseStatus; canApprove: boolean; isExternalGuest: boolean }>; approvals?: Array<{ id: string; approverUserId: string; approverRole: Role; status: ApiMeetingApprovalStatus; proposedStartAt: string | null; proposedEndAt: string | null; note: string | null; respondedAt: string | null; approverName: string | null }>; permissions?: { isOrganizer: boolean; canManage: boolean; canApprove: boolean; canRespond: boolean }; externalSyncStatus?: ApiExternalSyncStatus; externalSyncError?: string | null; confirmedAt?: string | null; updatedAt?: string; priority?: ApiTaskPriority; assignee?: { id: string; fullName: string; email: string; role: Role } | null }

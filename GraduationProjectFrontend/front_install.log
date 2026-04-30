@@ -1,0 +1,6 @@
+npm error code ENOTEMPTY
+npm error syscall rmdir
+npm error path /mnt/data/work_fix/frontend/GraduationProjectFrontend/node_modules/@swc/helpers/_
+npm error errno -39
+npm error ENOTEMPTY: directory not empty, rmdir '/mnt/data/work_fix/frontend/GraduationProjectFrontend/node_modules/@swc/helpers/_'
+npm error A complete log of this run can be found in: /home/oai/.npm/_logs/2026-04-23T16_55_32_227Z-debug-0.log

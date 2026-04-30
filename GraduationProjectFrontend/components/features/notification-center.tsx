@@ -25,8 +25,55 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { notificationsApi, type ApiNotification } from "@/lib/api/notifications"
+import { getSocket } from "@/lib/socket"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { useSettingsStore } from "@/lib/stores/settings-store"
+import { useUIStore } from "@/lib/stores/ui-store"
+import type { UserSettings } from "@/lib/api/types"
+import { cn } from "@/lib/utils"
 
 const POLL_INTERVAL_MS = 30_000 // poll unread count every 30s
+type NotificationPreferenceKey = keyof UserSettings["notifications"]
+
+function getNotificationPreferenceKey(notification: ApiNotification): NotificationPreferenceKey | null {
+  const type = String(notification.type ?? "")
+  const text = `${notification.title ?? ""} ${notification.actionUrl ?? ""}`.toLowerCase()
+
+  if (type.startsWith("TASK")) return "taskReminders"
+  if (type.startsWith("SUBMISSION")) return "submissionAlerts"
+  if (type.startsWith("TEAM") || type.startsWith("SUPERVISOR")) return "teamUpdates"
+  if (type.startsWith("MESSAGE") || type.includes("MENTION")) return "mentionNotifications"
+  if (text.includes("deadline")) return "deadlineWarnings"
+  if (text.includes("grade")) return "gradeNotifications"
+  if (text.includes("meeting") || text.includes("calendar")) return "meetingReminders"
+  return null
+}
+
+function shouldUseOptionalNotification(settings: UserSettings["notifications"] | undefined, notification: ApiNotification) {
+  if (!settings) return true
+  const key = getNotificationPreferenceKey(notification)
+  return !key || settings[key] !== false
+}
+
+function playNotificationSound() {
+  if (typeof window === "undefined") return
+  const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }
+  const AudioContextCtor = audioWindow.AudioContext ?? audioWindow.webkitAudioContext
+  if (!AudioContextCtor) return
+
+  const context = new AudioContextCtor()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.type = "sine"
+  oscillator.frequency.value = 760
+  gain.gain.setValueAtTime(0.0001, context.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.06, context.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2)
+  oscillator.connect(gain)
+  gain.connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.22)
+}
 
 export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false)
@@ -36,6 +83,9 @@ export function NotificationCenter() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const accessToken = useAuthStore((state) => state.accessToken)
+  const notificationSettings = useSettingsStore((state) => state.settings?.notifications)
+  const bellEnabled = useUIStore((state) => state.inAppNotifications)
 
   // ─── Fetch unread count (lightweight, used for badge polling) ────────────
   const fetchUnreadCount = useCallback(async () => {
@@ -69,6 +119,45 @@ export function NotificationCenter() {
       if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [fetchUnreadCount])
+
+  useEffect(() => {
+    const socket = getSocket(accessToken)
+    if (!socket) return
+
+    const handleCreated = (notification: ApiNotification) => {
+      if (!bellEnabled) return
+
+      setUnreadCount((prev) => prev + 1)
+      setNotifications((prev) => [notification, ...prev.filter((item) => item.id !== notification.id)].slice(0, 20))
+
+      if (!shouldUseOptionalNotification(notificationSettings, notification)) return
+
+      if (notificationSettings?.soundNotifications !== false) {
+        playNotificationSound()
+      }
+
+      if (
+        notificationSettings?.websiteNotifications !== false &&
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        const browserNotification = new Notification(notification.title, {
+          body: notification.message,
+          tag: notification.id,
+        })
+        browserNotification.onclick = () => {
+          window.focus()
+          if (notification.actionUrl) router.push(notification.actionUrl)
+        }
+      }
+    }
+
+    socket.on("notification.created", handleCreated)
+    return () => {
+      socket.off("notification.created", handleCreated)
+    }
+  }, [accessToken, notificationSettings, bellEnabled, router])
 
   // ─── Fetch full list whenever the panel opens ────────────────────────────
   useEffect(() => {
@@ -161,7 +250,8 @@ export function NotificationCenter() {
   }
 
   // ─── Icon & badge helpers ─────────────────────────────────────────────────
-  const getIcon = (type: string) => {
+  const getIcon = (notification: ApiNotification) => {
+    const type = notification.type
     const iconClass = "h-4 w-4 sm:h-5 sm:w-5"
     if (type.startsWith("TASK_ASSIGNED"))       return <CheckCircle className={`${iconClass} text-emerald-500`} />
     if (type.startsWith("TASK_APPROVED"))        return <CheckCircle className={`${iconClass} text-green-500`} />
@@ -171,11 +261,17 @@ export function NotificationCenter() {
     if (type.startsWith("TEAM_JOIN"))            return <Award       className={`${iconClass} text-purple-500`} />
     if (type.startsWith("SUPERVISOR"))           return <Calendar    className={`${iconClass} text-amber-500`} />
     if (type.startsWith("SUBMISSION"))           return <FileText    className={`${iconClass} text-indigo-500`} />
-    if (type === "SYSTEM")                       return <AlertCircle className={`${iconClass} text-red-500`} />
+    if (type === "SYSTEM") {
+      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
+        return <Calendar className={`${iconClass} text-teal-500`} />
+      }
+      return <AlertCircle className={`${iconClass} text-red-500`} />
+    }
     return <Info className={`${iconClass} text-slate-500`} />
   }
 
-  const getTypeBadge = (type: string) => {
+  const getTypeBadge = (notification: ApiNotification) => {
+    const type = notification.type
     let label = "Info"
     let variant = "bg-slate-500/10 text-slate-700 dark:text-slate-400"
 
@@ -184,7 +280,15 @@ export function NotificationCenter() {
     if (type.startsWith("TEAM_JOIN"))  { label = "Team";       variant = "bg-purple-500/10 text-purple-700 dark:text-purple-400" }
     if (type.startsWith("SUPERVISOR")) { label = "Supervisor"; variant = "bg-amber-500/10 text-amber-700 dark:text-amber-400" }
     if (type.startsWith("SUBMISSION")) { label = "Submission"; variant = "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400" }
-    if (type === "SYSTEM")             { label = "System";     variant = "bg-red-500/10 text-red-700 dark:text-red-400" }
+    if (type === "SYSTEM") {
+      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
+        label = "Meetings"
+        variant = "bg-teal-500/10 text-teal-700 dark:text-teal-400"
+      } else {
+        label = "System"
+        variant = "bg-red-500/10 text-red-700 dark:text-red-400"
+      }
+    }
 
     return <span className={`text-xs px-2 py-0.5 rounded-full ${variant} font-medium`}>{label}</span>
   }
@@ -197,11 +301,12 @@ export function NotificationCenter() {
           data-notification-trigger
           variant="ghost"
           size="icon"
-          className="relative rounded-xl h-9 w-9 sm:h-10 sm:w-10"
+          className={cn("relative rounded-xl h-9 w-9 sm:h-10 sm:w-10", !bellEnabled && "opacity-50")}
           onClick={() => setIsOpen(!isOpen)}
+          title={bellEnabled ? undefined : "In-app notifications are disabled"}
         >
           <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-          {unreadCount > 0 && (
+          {bellEnabled && unreadCount > 0 && (
             <motion.span
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -212,7 +317,7 @@ export function NotificationCenter() {
               </span>
             </motion.span>
           )}
-          {unreadCount > 0 && (
+          {bellEnabled && unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 h-4 w-4 sm:h-5 sm:w-5 rounded-full bg-destructive animate-ping opacity-75" />
           )}
         </Button>
@@ -292,7 +397,7 @@ export function NotificationCenter() {
                         }`}
                       >
                         <div className="flex gap-3">
-                          <div className="p-2 rounded-lg bg-muted shrink-0">{getIcon(notification.type)}</div>
+                          <div className="p-2 rounded-lg bg-muted shrink-0">{getIcon(notification)}</div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <p className={`text-xs sm:text-sm ${!notification.read ? "font-semibold text-foreground" : "text-foreground/90"} line-clamp-2`}>
@@ -301,7 +406,7 @@ export function NotificationCenter() {
                               {!notification.read && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />}
                             </div>
                             <div className="flex items-center gap-2 mt-1.5">
-                              {getTypeBadge(notification.type)}
+                              {getTypeBadge(notification)}
                               <span className="text-[10px] sm:text-xs text-muted-foreground">
                                 {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                               </span>

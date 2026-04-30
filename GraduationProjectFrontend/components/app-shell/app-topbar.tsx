@@ -61,7 +61,7 @@ type SearchSuggestion = {
 export function AppTopbar() {
   const { toggleSidebar, isMobileSidebarOpen, toggleMobileSidebar } = useUIStore()
   const { currentUser, logout } = useAuthStore()
-  const { theme, setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -90,6 +90,7 @@ export function AppTopbar() {
     .trim()
     .charAt(0)
     .toUpperCase()
+  const currentAvatarUrl = currentUser?.avatar || currentUser?.avatarUrl
 
   const queryFromUrl = searchParams.get("q") ?? ""
   const typeFromUrl = searchParams.get("type")
@@ -183,7 +184,7 @@ export function AppTopbar() {
       href: `/dashboard/users/${user.id}`,
       kind: "user" as const,
       title: getFullName(user),
-      subtitle: user.academicId ? `Academic ID ${user.academicId}` : user.email,
+      subtitle: user.academicId ? `Academic ID ${user.academicId}` : (user.email ?? "Email hidden"),
       tertiary: user.currentTeam
         ? `Team ${user.currentTeam.name}`
         : user.bio?.trim() || formatRoleLabel(user.role),
@@ -518,7 +519,7 @@ export function AppTopbar() {
             <DropdownMenuTrigger asChild>
               <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="hidden sm:block">
                 <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
-                  {theme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+                  {resolvedTheme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
                 </Button>
               </motion.div>
             </DropdownMenuTrigger>
@@ -546,6 +547,7 @@ export function AppTopbar() {
                 className="flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border/50 px-1.5 py-1.5 transition-all glass-card hover:border-primary/50 xs:px-2 sm:gap-2 sm:px-3 sm:py-2"
               >
                 <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
+                  <AvatarImage src={currentAvatarUrl || undefined} alt={displayName} />
                   <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary sm:text-sm">
                     {avatarInitial}
                   </AvatarFallback>
@@ -577,11 +579,11 @@ export function AppTopbar() {
               </DropdownMenuItem>
               <DropdownMenuSeparator className="sm:hidden" />
               <DropdownMenuItem
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
                 className="rounded-lg py-2.5 text-sm sm:hidden"
               >
-                {theme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

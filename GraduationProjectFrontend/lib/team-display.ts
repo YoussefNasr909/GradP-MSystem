@@ -1,4 +1,4 @@
-import type { ApiDirectoryUser, ApiTeamDetail, ApiTeamStage, ApiTeamUser, ApiTeamVisibility, Role } from "@/lib/api/types"
+import type { ApiDirectoryUser, ApiTeamStage, ApiTeamUser, ApiTeamVisibility, Role } from "@/lib/api/types"
 
 function humanizeEnum(value: string) {
   return value
@@ -32,15 +32,17 @@ export function formatRoleLabel(role: Role) {
   }
 }
 
-export function getFullName(user: Pick<ApiTeamUser, "fullName" | "firstName" | "lastName" | "email"> | ApiDirectoryUser) {
-  return user.fullName || `${user.firstName} ${user.lastName}`.trim() || user.email
+export function getFullName(
+  user: Pick<ApiTeamUser, "fullName" | "firstName" | "lastName" | "email"> | ApiDirectoryUser,
+) {
+  return user.fullName || `${user.firstName} ${user.lastName}`.trim() || user.email || "User"
 }
 
 export function getAvatarInitial(user: Pick<ApiTeamUser, "fullName" | "firstName" | "lastName" | "email"> | ApiDirectoryUser) {
   return getFullName(user).trim().charAt(0).toUpperCase()
 }
 
-export function getTeamProgressFallback(team: ApiTeamDetail) {
+export function getTeamProgressFallback(team: { stage: ApiTeamStage }) {
   const stageScores: Record<ApiTeamStage, number> = {
     REQUIREMENTS: 15,
     DESIGN: 30,
