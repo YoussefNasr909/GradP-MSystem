@@ -9,7 +9,6 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect } from "react"
 import { useUIStore } from "@/lib/stores/ui-store"
-import { isUserProfileIncomplete } from "@/lib/auth/profile-completion"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
 const { currentUser, accessToken, hasHydrated } = useAuthStore()
@@ -27,9 +26,23 @@ useEffect(() => {
   if (!accessToken) return
   if (!currentUser) return
 
-  if (isUserProfileIncomplete(currentUser)) {
-    router.replace("/complete-profile?reason=incomplete")
-  }
+  const isBlank = (v: any) => v === null || v === undefined || String(v).trim() === ""
+  const u = currentUser as any
+
+  const academicId = String(u.academicId ?? u.studentCode ?? "")
+  const preferredTrack = u.preferredTrackRaw ?? u.preferredTrack
+  const academicYear = u.academicYearRaw ?? u.academicYear
+  const department = u.departmentRaw ?? u.department
+
+  const incomplete =
+    isBlank(u.phone) ||
+    isBlank(department) ||
+    isBlank(academicYear) ||
+    isBlank(preferredTrack) ||
+    isBlank(academicId) ||
+    academicId.startsWith("OAUTH-")
+
+  if (incomplete) router.replace("/complete-profile?reason=incomplete")
 }, [hasHydrated, accessToken, currentUser, router])
 
 
@@ -49,11 +62,25 @@ useEffect(() => {
     }
   }, [isMobileSidebarOpen])
 
-if (!hasHydrated) return null
+  if (!hasHydrated) return null
 if (!accessToken) return null // redirect effect will run
 if (!currentUser) return null // waiting for /me from AuthBootstrap
 
-const incomplete = isUserProfileIncomplete(currentUser)
+const isBlank = (v: any) => v === null || v === undefined || String(v).trim() === ""
+const u = currentUser as any
+
+const academicId = String(u.academicId ?? u.studentCode ?? "")
+const preferredTrack = u.preferredTrackRaw ?? u.preferredTrack
+const academicYear = u.academicYearRaw ?? u.academicYear
+const department = u.departmentRaw ?? u.department
+
+const incomplete =
+  isBlank(u.phone) ||
+  isBlank(department) ||
+  isBlank(academicYear) ||
+  isBlank(preferredTrack) ||
+  isBlank(academicId) ||
+  academicId.startsWith("OAUTH-")
 
 // ✅ BLOCK DASHBOARD UI (no flash)
 if (incomplete) {
@@ -112,12 +139,12 @@ if (incomplete) {
           <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
             <Breadcrumbs />
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               <motion.div
                 key={pathname}
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="min-w-0"
               >

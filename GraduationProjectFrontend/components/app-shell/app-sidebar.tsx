@@ -123,7 +123,7 @@ const navigationGroups = [
         name: "Discussions",
         href: "/dashboard/discussions",
         icon: MessageCircle,
-        roles: ["doctor", "ta", "leader", "member"],
+        roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       {
         name: "Chat & Q/A",
