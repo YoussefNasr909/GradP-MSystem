@@ -714,12 +714,7 @@ export function TasksBoardPage() {
       pageDescription="Manage your team's tasks, GitHub-backed work, and leader review flow in one place."
       icon={<ClipboardList className="h-10 w-10 text-primary" />}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-        className="space-y-4 sm:space-y-5"
-      >
+      <div className="space-y-4 sm:space-y-5">
 
         {/* ── Hero Header ───────────────────────────────────── */}
         <div className="overflow-hidden rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.03]">
@@ -1650,7 +1645,7 @@ export function TasksBoardPage() {
           ) : null}
         </AlertDialog>
 
-      </motion.div>
+      </div>
     </TeamRequiredGuard>
   )
 }

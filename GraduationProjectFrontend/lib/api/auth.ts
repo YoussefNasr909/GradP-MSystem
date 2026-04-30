@@ -5,6 +5,7 @@ import type {
   Track,
   Role,
   AuthResponse,
+  LoginResponse,
   RegisterResponse,
   ApiUser,
 } from "./types"
@@ -26,9 +27,27 @@ export const authApi = {
   }) => apiRequest<RegisterResponse>("/auth/register", { method: "POST", body: payload, auth: false }),
 
   login: (payload: { email: string; password: string; rememberMe?: boolean }) =>
-    apiRequest<AuthResponse>("/auth/login", { method: "POST", body: payload, auth: false }),
+    apiRequest<LoginResponse>("/auth/login", { method: "POST", body: payload, auth: false }),
+
+  verifyTwoFactorLogin: (payload: { challengeToken: string; code?: string; recoveryCode?: string }) =>
+    apiRequest<AuthResponse>("/auth/2fa/login", { method: "POST", body: payload, auth: false }),
 
   me: () => apiRequest<ApiUser>("/auth/me"),
+
+  changePassword: (payload: { currentPassword: string; newPassword: string; confirmPassword: string }) =>
+    apiRequest<{ changed: boolean }>("/auth/change-password", { method: "POST", body: payload }),
+
+  setupTwoFactor: (payload: { password: string }) =>
+    apiRequest<{ otpauthUrl: string; qrCodeDataUrl: string; manualEntryKey: string }>("/auth/2fa/setup", {
+      method: "POST",
+      body: payload,
+    }),
+
+  confirmTwoFactor: (payload: { code: string }) =>
+    apiRequest<{ enabled: boolean; recoveryCodes: string[] }>("/auth/2fa/confirm", { method: "POST", body: payload }),
+
+  disableTwoFactor: (payload: { password: string; code?: string; recoveryCode?: string }) =>
+    apiRequest<{ enabled: boolean }>("/auth/2fa/disable", { method: "POST", body: payload }),
 
   sendVerification: (payload: { email: string }) =>
     apiRequest<{ sent: boolean; message?: string }>("/auth/send-verification", {
@@ -69,8 +88,8 @@ oauthComplete: (payload: {
   phone: string
   academicId: string
   department: any
-  academicYear?: any
-  preferredTrack?: any
+  academicYear: any
+  preferredTrack: any
   password: string
   confirmPassword: string
 }) =>

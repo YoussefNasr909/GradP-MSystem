@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { authApi } from "@/lib/api/auth"
 import { mapApiUserToUiUser } from "@/lib/api/mappers"
+import type { TwoFactorLoginChallenge } from "@/lib/api/types"
 import {
   authSocialButtonBaseClass,
   authSocialButtonClasses,
@@ -106,6 +107,10 @@ const [verifyLoading, setVerifyLoading] = useState(false)
 const [verifyResendTimer, setVerifyResendTimer] = useState(0)
 const [alertMsg, setAlertMsg] = useState<string | null>(null)
 const [loginCooldown, setLoginCooldown] = useState(0)
+const [twoFactorChallenge, setTwoFactorChallenge] = useState<TwoFactorLoginChallenge | null>(null)
+const [twoFactorCode, setTwoFactorCode] = useState("")
+const [twoFactorRecoveryCode, setTwoFactorRecoveryCode] = useState("")
+const [useRecoveryCode, setUseRecoveryCode] = useState(false)
 
 const formatSec = (s: number) => {
   const m = Math.floor(s / 60)
@@ -222,6 +227,17 @@ const submitVerifyEmail = async () => {
     // 2) auto login after verification
     const result = await authApi.login({ email: trimmedEmail, password, rememberMe })
 
+    if ("requiresTwoFactor" in result) {
+      setTwoFactorChallenge(result)
+      setTwoFactorCode("")
+      setTwoFactorRecoveryCode("")
+      setUseRecoveryCode(false)
+      setNeedsEmailVerification(false)
+      setError("")
+      setShowVerifyEmailDialog(false)
+      return
+    }
+
     setAuth({
       accessToken: result.token,
       user: mapApiUserToUiUser(result.user),
@@ -300,6 +316,46 @@ useEffect(() => {
 
  const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault()
+  if (twoFactorChallenge) {
+    const code = twoFactorCode.trim()
+    const recoveryCode = twoFactorRecoveryCode.trim()
+
+    if (!useRecoveryCode && code.length !== 6) {
+      setError("Enter the 6-digit authenticator code.")
+      return
+    }
+    if (useRecoveryCode && !recoveryCode) {
+      setError("Enter a recovery code.")
+      return
+    }
+
+    setIsLoading(true)
+    setError("")
+    try {
+      const result = await authApi.verifyTwoFactorLogin({
+        challengeToken: twoFactorChallenge.challengeToken,
+        code: useRecoveryCode ? undefined : code,
+        recoveryCode: useRecoveryCode ? recoveryCode : undefined,
+      })
+
+      setAuth({
+        accessToken: result.token,
+        user: mapApiUserToUiUser(result.user),
+        rememberSession: rememberMe,
+      })
+
+      setTwoFactorChallenge(null)
+      setTwoFactorCode("")
+      setTwoFactorRecoveryCode("")
+      setLoginSuccess(true)
+      setTimeout(() => router.push("/dashboard"), 1000)
+    } catch (err: any) {
+      setError(err?.message ?? "Invalid authenticator or recovery code.")
+    } finally {
+      setIsLoading(false)
+    }
+    return
+  }
   // ✅ hard-block requests while rate-limited (prevents Enter key bypass)
 if (loginCooldown > 0) {
   setAlertMsg(`Please wait ${formatSec(loginCooldown)} before trying again.`)
@@ -324,6 +380,15 @@ if (loginCooldown > 0) {
       password,
       rememberMe,
     })
+
+    if ("requiresTwoFactor" in result) {
+      setTwoFactorChallenge(result)
+      setTwoFactorCode("")
+      setTwoFactorRecoveryCode("")
+      setUseRecoveryCode(false)
+      setError("")
+      return
+    }
 
     setAuth({
       accessToken: result.token,
@@ -760,6 +825,79 @@ if (rl) {
                     </Label>
                   </div>
                 </div>
+
+                {twoFactorChallenge && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <ShieldCheck className="mt-0.5 h-5 w-5 text-primary" />
+                      <div>
+                        <p className="text-sm font-semibold">Two-factor verification</p>
+                        <p className="text-xs text-muted-foreground">
+                          Enter the code for {twoFactorChallenge.user.email}.
+                        </p>
+                      </div>
+                    </div>
+
+                    {!useRecoveryCode ? (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="two-factor-code" className="text-xs sm:text-sm">
+                          Authenticator code
+                        </Label>
+                        <Input
+                          id="two-factor-code"
+                          value={twoFactorCode}
+                          onChange={(event) => setTwoFactorCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          className="h-10 rounded-xl text-center tracking-[0.35em]"
+                        />
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="two-factor-recovery" className="text-xs sm:text-sm">
+                          Recovery code
+                        </Label>
+                        <Input
+                          id="two-factor-recovery"
+                          value={twoFactorRecoveryCode}
+                          onChange={(event) => setTwoFactorRecoveryCode(event.target.value)}
+                          className="h-10 rounded-xl"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => setUseRecoveryCode((value) => !value)}
+                      >
+                        {useRecoveryCode ? "Use authenticator code" : "Use recovery code"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-xs"
+                        onClick={() => {
+                          setTwoFactorChallenge(null)
+                          setTwoFactorCode("")
+                          setTwoFactorRecoveryCode("")
+                          setError("")
+                        }}
+                      >
+                        Back
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
 {alertMsg && <FormAlert type="error" title="Please slow down" message={alertMsg} />}
 
                <AnimatePresence mode="wait">
@@ -805,12 +943,21 @@ if (rl) {
                  <Button
   type="submit"
   className="w-full h-10 sm:h-11 md:h-12 rounded-lg sm:rounded-xl font-semibold text-sm sm:text-base transition-all"
-  disabled={isLoading || loginCooldown > 0}
+  disabled={
+    isLoading ||
+    loginCooldown > 0 ||
+    Boolean(twoFactorChallenge && (useRecoveryCode ? !twoFactorRecoveryCode.trim() : twoFactorCode.trim().length !== 6))
+  }
 >
   {isLoading ? (
     <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
   ) : loginCooldown > 0 ? (
     <>Try again in {formatSec(loginCooldown)}</>
+  ) : twoFactorChallenge ? (
+    <>
+      Verify code
+      <ShieldCheck className="ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+    </>
   ) : (
     <>
       Sign In
