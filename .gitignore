@@ -14,3 +14,15 @@ docs/
 
 # Logs
 *.log
+
+# Environment files
+.env
+.env.*
+env.local
+!.env.example
+
+# Generated and upload directories
+uploads/
+node_modules/
+dist/
+build/
