@@ -13,6 +13,7 @@ import notificationsRouter from "../modules/notifications/notifications.routes.j
 import meetingsRouter from "../modules/meetings/meetings.routes.js";
 import calendarRouter from "../modules/calendar/calendar.routes.js";
 import settingsRouter from "../modules/settings/settings.routes.js";
+import discussionsRouter from "../modules/discussions/discussions.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -31,4 +32,5 @@ router.use("/notifications", notificationsRouter);
 router.use("/meetings", meetingsRouter);
 router.use("/calendar", calendarRouter);
 router.use("/settings", settingsRouter);
+router.use("/discussions", discussionsRouter);
 export default router;
