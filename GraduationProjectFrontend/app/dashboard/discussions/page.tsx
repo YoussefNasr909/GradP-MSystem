@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns"
 import { motion } from "framer-motion"
 import {
   AlertTriangle,
+  ChevronDown,
   CornerDownRight,
   Eye,
   MessageCircle,
@@ -18,10 +19,19 @@ import {
   ShieldAlert,
   ThumbsUp,
   Trash2,
-  X,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -90,6 +100,12 @@ const emptyCreateForm = {
   tags: "",
 }
 
+const createTitleMinLength = 3
+const createContentMinLength = 10
+const createContentMaxLength = 4000
+const createTagMaxLength = 40
+const createTagMaxCount = 12
+
 const defaultDiscussionPagination = {
   page: 1,
   limit: 5,
@@ -117,6 +133,45 @@ function parseTags(rawValue: string) {
         .filter(Boolean),
     ),
   ).slice(0, 12)
+}
+
+type CreateDiscussionForm = typeof emptyCreateForm
+type CreateDiscussionErrors = Partial<Record<"title" | "content" | "tags", string>>
+
+function getCreateDiscussionErrors(form: CreateDiscussionForm): CreateDiscussionErrors {
+  const title = form.title.trim()
+  const content = form.content.trim()
+  const tags = form.tags
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+
+  const errors: CreateDiscussionErrors = {}
+
+  if (!title) {
+    errors.title = "Enter a title."
+  } else if (title.length < createTitleMinLength) {
+    errors.title = `Use at least ${createTitleMinLength} characters.`
+  }
+
+  if (!content) {
+    errors.content = "Enter the discussion content."
+  } else if (content.length < createContentMinLength) {
+    errors.content = `Use at least ${createContentMinLength} characters.`
+  } else if (content.length > createContentMaxLength) {
+    errors.content = `Keep it under ${createContentMaxLength} characters.`
+  }
+
+  if (tags.length > createTagMaxCount) {
+    errors.tags = `Use ${createTagMaxCount} tags or fewer.`
+  } else {
+    const longTag = tags.find((tag) => tag.length > createTagMaxLength)
+    if (longTag) {
+      errors.tags = `Keep each tag under ${createTagMaxLength} characters.`
+    }
+  }
+
+  return errors
 }
 
 function formatCategory(category: ApiDiscussionCategory) {
@@ -208,23 +263,6 @@ function appendCommentToTree(comments: ApiDiscussionComment[], nextComment: ApiD
   return inserted ? nextComments : [...comments, nextComment]
 }
 
-function findCommentById(comments: ApiDiscussionComment[], commentId: string | null): ApiDiscussionComment | null {
-  if (!commentId) return null
-
-  for (const comment of comments) {
-    if (comment.id === commentId) {
-      return comment
-    }
-
-    const nestedComment = findCommentById(comment.replies, commentId)
-    if (nestedComment) {
-      return nestedComment
-    }
-  }
-
-  return null
-}
-
 function upsertDiscussion(items: ApiDiscussionSummary[], nextDiscussion: ApiDiscussionSummary) {
   const hasExisting = items.some((item) => item.id === nextDiscussion.id)
 
@@ -262,6 +300,7 @@ export default function DiscussionsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [createForm, setCreateForm] = useState(emptyCreateForm)
   const [isCreating, setIsCreating] = useState(false)
+  const [createSubmitAttempted, setCreateSubmitAttempted] = useState(false)
 
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [selectedDiscussion, setSelectedDiscussion] = useState<ApiDiscussionDetail | null>(null)
@@ -271,11 +310,16 @@ export default function DiscussionsPage() {
 
   const [commentContent, setCommentContent] = useState("")
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null)
+  const [isReplyComposerOpen, setIsReplyComposerOpen] = useState(false)
+  const [expandedReplyIds, setExpandedReplyIds] = useState<string[]>([])
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [likePendingIds, setLikePendingIds] = useState<string[]>([])
   const [deleteDiscussionPendingIds, setDeleteDiscussionPendingIds] = useState<string[]>([])
   const [deleteCommentPendingIds, setDeleteCommentPendingIds] = useState<string[]>([])
+  const [discussionDeleteTarget, setDiscussionDeleteTarget] = useState<ApiDiscussionSummary | ApiDiscussionDetail | null>(null)
+  const [commentDeleteTarget, setCommentDeleteTarget] = useState<ApiDiscussionComment | null>(null)
   const hasLoadedFeedRef = useRef(false)
+  const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -348,17 +392,27 @@ export default function DiscussionsPage() {
     }
   }, [accessToken, categoryFilter, currentPage, currentUser?.role, debouncedSearch, hasHydrated, refreshSeed])
 
+  useEffect(() => {
+    if (!isReplyComposerOpen) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      replyTextareaRef.current?.focus()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [isReplyComposerOpen, replyTargetId])
+
   const selectedDiscussionSummary = useMemo(() => {
     if (!selectedDiscussionId) return null
     return feed?.items.find((item) => item.id === selectedDiscussionId) ?? null
   }, [feed?.items, selectedDiscussionId])
 
-  const selectedReplyTarget = useMemo(() => {
-    if (!selectedDiscussion) return null
-    return findCommentById(selectedDiscussion.comments, replyTargetId)
-  }, [replyTargetId, selectedDiscussion])
-
   const feedMeta = feed?.meta ?? defaultDiscussionPagination
+  const createErrors = useMemo(() => getCreateDiscussionErrors(createForm), [createForm])
+  const hasCreateErrors = Object.keys(createErrors).length > 0
+  const showCreateErrors = createSubmitAttempted && hasCreateErrors
 
   const paginationItems = useMemo(() => {
     return buildDiscussionPageItems(feedMeta.totalPages, feedMeta.page)
@@ -396,6 +450,8 @@ export default function DiscussionsPage() {
     setSelectedDiscussion((currentDiscussion) => (currentDiscussion?.id === discussionId ? currentDiscussion : null))
     setDetailError(null)
     setReplyTargetId(null)
+    setIsReplyComposerOpen(false)
+    setExpandedReplyIds([])
     setCommentContent("")
     setIsDetailLoading(true)
 
@@ -421,11 +477,13 @@ export default function DiscussionsPage() {
     const content = createForm.content.trim()
     const tags = parseTags(createForm.tags)
 
-    if (!title || !content) {
+    setCreateSubmitAttempted(true)
+
+    if (hasCreateErrors) {
       toast({
         variant: "destructive",
-        title: "Missing fields",
-        description: "Add a title and content before creating the discussion.",
+        title: "Check the discussion details",
+        description: createErrors.title ?? createErrors.content ?? createErrors.tags ?? "Please review the form.",
       })
       return
     }
@@ -442,6 +500,7 @@ export default function DiscussionsPage() {
 
       setIsCreateOpen(false)
       setCreateForm(emptyCreateForm)
+      setCreateSubmitAttempted(false)
       setCurrentPage(1)
       setRefreshSeed((currentValue) => currentValue + 1)
 
@@ -503,6 +562,12 @@ export default function DiscussionsPage() {
 
       setCommentContent("")
       setReplyTargetId(null)
+      setIsReplyComposerOpen(false)
+      if (parentCommentId) {
+        setExpandedReplyIds((currentIds) =>
+          currentIds.includes(parentCommentId) ? currentIds : [...currentIds, parentCommentId],
+        )
+      }
       toast({
         title: parentCommentId ? "Reply added" : "Comment added",
         description: parentCommentId
@@ -562,6 +627,9 @@ export default function DiscussionsPage() {
         setSelectedDiscussionId(null)
         setCommentContent("")
         setReplyTargetId(null)
+        setIsReplyComposerOpen(false)
+        setExpandedReplyIds([])
+        setDiscussionDeleteTarget(null)
         setDetailError(null)
       }
 
@@ -586,6 +654,32 @@ export default function DiscussionsPage() {
     }
   }
 
+  function requestDeleteDiscussion(discussion: ApiDiscussionSummary | ApiDiscussionDetail) {
+    setDiscussionDeleteTarget(discussion)
+  }
+
+  function requestDeleteComment(comment: ApiDiscussionComment) {
+    setCommentDeleteTarget(comment)
+  }
+
+  async function confirmDeleteDiscussion() {
+    if (!discussionDeleteTarget) {
+      return
+    }
+
+    await handleDeleteDiscussion(discussionDeleteTarget.id)
+    setDiscussionDeleteTarget(null)
+  }
+
+  async function confirmDeleteComment() {
+    if (!commentDeleteTarget) {
+      return
+    }
+
+    await handleDeleteComment(commentDeleteTarget)
+    setCommentDeleteTarget(null)
+  }
+
   async function handleDeleteComment(comment: ApiDiscussionComment) {
     const activeDiscussion = selectedDiscussion
 
@@ -602,7 +696,10 @@ export default function DiscussionsPage() {
 
       if (replyTargetId === comment.id) {
         setReplyTargetId(null)
+        setIsReplyComposerOpen(false)
+        setCommentContent("")
       }
+      setExpandedReplyIds((currentIds) => currentIds.filter((id) => id !== comment.id))
 
       toast({
         title: "Comment deleted",
@@ -619,63 +716,164 @@ export default function DiscussionsPage() {
     }
   }
 
+  function openRootReplyComposer() {
+    if (replyTargetId !== null || !isReplyComposerOpen) {
+      setCommentContent("")
+    }
+    setReplyTargetId(null)
+    setIsReplyComposerOpen(true)
+  }
+
+  function openCommentReplyComposer(commentId: string) {
+    if (replyTargetId !== commentId || !isReplyComposerOpen) {
+      setCommentContent("")
+    }
+    setReplyTargetId(commentId)
+    setIsReplyComposerOpen(true)
+  }
+
+  function closeReplyComposer() {
+    setIsReplyComposerOpen(false)
+    setReplyTargetId(null)
+    setCommentContent("")
+  }
+
+  function toggleCommentReplies(commentId: string) {
+    setExpandedReplyIds((currentIds) =>
+      currentIds.includes(commentId) ? currentIds.filter((id) => id !== commentId) : [...currentIds, commentId],
+    )
+  }
+
+  function renderInlineReplyComposer(targetComment: ApiDiscussionComment | null) {
+    const isNestedReply = Boolean(targetComment)
+
+    return (
+      <div
+        className={cn(
+          "rounded-lg border border-primary/25 bg-primary/[0.035] p-3 sm:p-4",
+          isNestedReply && "ml-12 sm:ml-[52px]",
+        )}
+      >
+        {targetComment ? (
+          <div className="mb-3 flex items-start gap-2 rounded-md border border-primary/20 bg-background/80 px-3 py-2 text-sm">
+            <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="font-medium text-foreground">Replying to {targetComment.author.fullName}</p>
+              <p className="line-clamp-2 break-words text-muted-foreground [overflow-wrap:anywhere]">
+                {targetComment.content}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex gap-3">
+          <Avatar className="h-9 w-9 shrink-0 border border-border/70">
+            <AvatarImage src={currentUser?.avatar} alt={currentUser?.name ?? "You"} />
+            <AvatarFallback>{getInitials(currentUser?.name ?? "You")}</AvatarFallback>
+          </Avatar>
+
+          <div className="min-w-0 flex-1 space-y-3">
+            <Textarea
+              ref={replyTextareaRef}
+              id={isNestedReply ? `discussion-comment-${targetComment?.id}` : "discussion-comment"}
+              rows={3}
+              value={commentContent}
+              placeholder={targetComment ? `Reply to ${targetComment.author.fullName}...` : "Write a reply..."}
+              className="min-h-[96px] resize-y rounded-lg border-border/80 bg-background text-[15px] leading-7 shadow-none"
+              onChange={(event) => setCommentContent(event.target.value)}
+              onKeyDown={handleCommentComposerKeyDown}
+            />
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-xs text-muted-foreground">{commentCharacterCount}/2000</span>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={closeReplyComposer} disabled={isSubmittingComment}>
+                  Cancel
+                </Button>
+                <Button size="sm" className="gap-2" onClick={handleCommentSubmit} disabled={!canSubmitComment}>
+                  {isSubmittingComment ? (
+                    <>
+                      <Spinner className="size-4" />
+                      Posting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Reply
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   function renderCommentThread(comment: ApiDiscussionComment, depth = 0) {
     const isOwnComment = comment.author.id === currentUser?.id
     const isDeletingComment = deleteCommentPendingIds.includes(comment.id)
+    const isReplyTarget = isReplyComposerOpen && replyTargetId === comment.id
+    const hasReplies = comment.replies.length > 0
+    const replyTotal = Math.max(comment.replyCount, comment.replies.length)
+    const areRepliesExpanded = expandedReplyIds.includes(comment.id)
 
     return (
-      <div key={comment.id} className={cn("space-y-3", depth > 0 && "ml-4 border-l border-border/60 pl-4 sm:ml-6 sm:pl-5")}>
-        <div
+      <div key={comment.id} className={cn("space-y-2.5", depth > 0 && "ml-6 border-l border-border/70 pl-4 sm:ml-10 sm:pl-6")}>
+        <article
           className={cn(
-            "rounded-[24px] border p-4 shadow-sm transition-colors",
-            isOwnComment ? "border-primary/25 bg-primary/[0.045]" : "border-border/70 bg-background/90",
+            "group relative py-1 transition-colors",
+            isReplyTarget && "rounded-xl bg-primary/[0.035] px-2",
           )}
         >
           <div className="flex gap-3">
-            <Avatar className="h-10 w-10 shrink-0">
+            <Avatar className="h-9 w-9 shrink-0 border border-border/70">
               <AvatarImage src={comment.author.avatarUrl ?? undefined} alt={comment.author.fullName} />
               <AvatarFallback>{getInitials(comment.author.fullName)}</AvatarFallback>
             </Avatar>
 
-            <div className="min-w-0 flex-1 space-y-3">
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">{comment.author.fullName}</span>
-                <span>|</span>
-                <span>{comment.author.roleLabel}</span>
-                <span>|</span>
-                <span>{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
-                {isOwnComment ? (
-                  <Badge variant="outline" className="rounded-full border-primary/20 bg-primary/10">
-                    You
-                  </Badge>
-                ) : null}
-                {comment.replyCount ? (
-                  <Badge variant="outline" className="rounded-full px-2.5 py-0.5">
-                    {comment.replyCount} {comment.replyCount === 1 ? "reply" : "replies"}
-                  </Badge>
-                ) : null}
+            <div className="min-w-0 flex-1 space-y-2">
+              <div
+                className={cn(
+                  "max-w-3xl rounded-2xl border px-4 py-3 shadow-xs",
+                  isOwnComment ? "border-primary/20 bg-primary/[0.04]" : "border-border/70 bg-muted/35",
+                  isReplyTarget && "border-primary/45 bg-background",
+                )}
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">{comment.author.fullName}</span>
+                  <span>{comment.author.roleLabel}</span>
+                  <span className="text-border">/</span>
+                  <span>{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
+                  {isOwnComment ? (
+                    <Badge variant="outline" className="h-6 rounded-full border-primary/20 bg-primary/10 px-2">
+                      You
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] leading-7 text-foreground">
+                  {comment.content}
+                </p>
               </div>
 
-              <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-foreground">
-                {comment.content}
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 pl-1">
                 <Button
-                  variant={replyTargetId === comment.id ? "secondary" : "ghost"}
+                  variant={isReplyTarget ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-8 gap-2 rounded-full px-3 text-xs"
-                  onClick={() => setReplyTargetId(comment.id)}
+                  className="h-8 gap-2 px-2.5 text-xs"
+                  onClick={() => openCommentReplyComposer(comment.id)}
                 >
                   <Reply className="h-3.5 w-3.5" />
-                  Reply
+                  {isReplyTarget ? "Replying" : "Reply"}
                 </Button>
                 {isOwnComment ? (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 gap-2 rounded-full px-3 text-xs text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteComment(comment)}
+                    className="h-8 gap-2 px-2.5 text-xs text-destructive hover:text-destructive"
+                    onClick={() => requestDeleteComment(comment)}
                     disabled={isDeletingComment}
                   >
                     {isDeletingComment ? <Spinner className="size-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -685,11 +883,30 @@ export default function DiscussionsPage() {
               </div>
             </div>
           </div>
-        </div>
+        </article>
 
-        {comment.replies.length ? (
-          <div className="space-y-3">
-            {comment.replies.map((reply) => renderCommentThread(reply, depth + 1))}
+        {isReplyTarget ? renderInlineReplyComposer(comment) : null}
+
+        {hasReplies ? (
+          <div className="ml-12 space-y-2 sm:ml-[52px]">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-2 px-2 text-xs font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              onClick={() => toggleCommentReplies(comment.id)}
+              aria-expanded={areRepliesExpanded}
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !areRepliesExpanded && "-rotate-90")} />
+              {areRepliesExpanded
+                ? "Hide replies"
+                : `View ${replyTotal} ${replyTotal === 1 ? "reply" : "replies"}`}
+            </Button>
+
+            {areRepliesExpanded ? (
+              <div className="space-y-3">
+                {comment.replies.map((reply) => renderCommentThread(reply, depth + 1))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -765,7 +982,15 @@ export default function DiscussionsPage() {
             </div>
           </div>
 
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={(open) => {
+              setIsCreateOpen(open)
+              if (!open) {
+                setCreateSubmitAttempted(false)
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -784,8 +1009,17 @@ export default function DiscussionsPage() {
                     id="discussion-title"
                     value={createForm.title}
                     placeholder="What would you like to discuss?"
+                    maxLength={160}
+                    aria-invalid={Boolean(createSubmitAttempted && createErrors.title)}
+                    className={cn(createSubmitAttempted && createErrors.title && "border-destructive focus-visible:ring-destructive")}
                     onChange={(event) => setCreateForm((current) => ({ ...current, title: event.target.value }))}
                   />
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className={cn("text-muted-foreground", createSubmitAttempted && createErrors.title && "text-destructive")}>
+                      {createSubmitAttempted && createErrors.title ? createErrors.title : `Minimum ${createTitleMinLength} characters.`}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{createForm.title.trim().length}/160</span>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -816,8 +1050,19 @@ export default function DiscussionsPage() {
                     rows={7}
                     value={createForm.content}
                     placeholder="Describe your question or topic..."
+                    maxLength={createContentMaxLength}
+                    aria-invalid={Boolean(createSubmitAttempted && createErrors.content)}
+                    className={cn(createSubmitAttempted && createErrors.content && "border-destructive focus-visible:ring-destructive")}
                     onChange={(event) => setCreateForm((current) => ({ ...current, content: event.target.value }))}
                   />
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className={cn("text-muted-foreground", createSubmitAttempted && createErrors.content && "text-destructive")}>
+                      {createSubmitAttempted && createErrors.content
+                        ? createErrors.content
+                        : `Minimum ${createContentMinLength} characters.`}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{createForm.content.trim().length}/{createContentMaxLength}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -826,9 +1071,24 @@ export default function DiscussionsPage() {
                     id="discussion-tags"
                     value={createForm.tags}
                     placeholder="e.g. React, Performance, Design"
+                    aria-invalid={Boolean(createSubmitAttempted && createErrors.tags)}
+                    className={cn(createSubmitAttempted && createErrors.tags && "border-destructive focus-visible:ring-destructive")}
                     onChange={(event) => setCreateForm((current) => ({ ...current, tags: event.target.value }))}
                   />
+                  <p className={cn("text-xs text-muted-foreground", createSubmitAttempted && createErrors.tags && "text-destructive")}>
+                    {createSubmitAttempted && createErrors.tags
+                      ? createErrors.tags
+                      : `Optional. Up to ${createTagMaxCount} tags, ${createTagMaxLength} characters each.`}
+                  </p>
                 </div>
+
+                {showCreateErrors ? (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Discussion is not ready yet</AlertTitle>
+                    <AlertDescription>{createErrors.title ?? createErrors.content ?? createErrors.tags}</AlertDescription>
+                  </Alert>
+                ) : null}
 
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>
@@ -992,7 +1252,7 @@ export default function DiscussionsPage() {
                                 <Button
                                   variant="ghost"
                                   className="text-destructive hover:text-destructive"
-                                  onClick={() => handleDeleteDiscussion(discussion.id)}
+                                  onClick={() => requestDeleteDiscussion(discussion)}
                                   disabled={isDeletingDiscussion}
                                 >
                                   {isDeletingDiscussion ? <Spinner className="size-4" /> : <Trash2 className="h-4 w-4" />}
@@ -1016,15 +1276,26 @@ export default function DiscussionsPage() {
                               {discussion.viewCount}
                             </span>
                             <Button
-                              variant={discussion.viewerHasLiked ? "secondary" : "ghost"}
+                              variant="outline"
                               size="sm"
-                              className="gap-2 px-2"
+                              className={cn(
+                                "h-8 gap-2 rounded-md px-2.5 text-xs font-medium",
+                                discussion.viewerHasLiked &&
+                                  "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                              )}
+                              aria-label={
+                                discussion.viewerHasLiked
+                                  ? `Remove your like. ${discussion.likeCount} likes`
+                                  : `Like this discussion. ${discussion.likeCount} likes`
+                              }
+                              title={discussion.viewerHasLiked ? "Click to remove your like" : "Like this discussion"}
                               onClick={() => handleLikeDiscussion(discussion.id)}
                               disabled={isLikePending}
                             >
                               {isLikePending ? <Spinner className="size-4" /> : <ThumbsUp className="h-4 w-4" />}
-                              {discussion.likeCount}
-                              {discussion.viewerHasLiked ? "Unlike" : "Like"}
+                              <span className="tabular-nums">{discussion.likeCount}</span>
+                              <span className="text-muted-foreground">|</span>
+                              <span>{discussion.viewerHasLiked ? "Liked" : "Like"}</span>
                             </Button>
                           </div>
 
@@ -1127,24 +1398,94 @@ export default function DiscussionsPage() {
             setDetailError(null)
             setCommentContent("")
             setReplyTargetId(null)
+            setIsReplyComposerOpen(false)
+            setExpandedReplyIds([])
           }
         }}
       >
-        <DialogContent className="h-[min(92vh,860px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 sm:max-w-5xl">
-          <DialogHeader className="shrink-0 border-b border-border/70 bg-gradient-to-r from-primary/12 via-background to-background px-6 py-5 pr-14">
-            <div className="flex items-start gap-3">
-              <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3">
-                <MessageSquare className="h-5 w-5 text-primary" />
-              </div>
-              <div className="space-y-1">
-                <DialogTitle className="break-words pr-6 text-xl [overflow-wrap:anywhere]">
+        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border border-border/80 bg-background p-0 shadow-2xl ring-1 ring-primary/10 sm:max-w-[min(1280px,96vw)]">
+          <DialogHeader className="relative border-b border-border/80 bg-gradient-to-r from-primary/[0.055] via-background to-background px-5 py-4 pr-14 shadow-sm sm:px-7">
+            <div className="absolute inset-x-0 top-0 h-1 bg-primary/70" aria-hidden="true" />
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  <span>{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
+                  {selectedDiscussion ? (
+                    <>
+                      <span className="text-border">/</span>
+                      <span>{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
+                    </>
+                  ) : null}
+                </div>
+                <DialogTitle className="max-w-4xl break-words pr-2 text-2xl font-semibold leading-tight [overflow-wrap:anywhere]">
                   {selectedDiscussion?.title ?? selectedDiscussionSummary?.title ?? "Discussion details"}
                 </DialogTitle>
-                <DialogDescription className="max-w-2xl">
-                  Follow the thread on the left and keep your reply ready on the right. The reply box stays visible so
-                  you can comment without fighting the modal.
-                </DialogDescription>
+                {selectedDiscussion ? (
+                  <DialogDescription className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span>{selectedDiscussion.author.fullName}</span>
+                    <span className="text-border">/</span>
+                    <span>{selectedDiscussion.author.roleLabel}</span>
+                  </DialogDescription>
+                ) : (
+                  <DialogDescription>Loading discussion details...</DialogDescription>
+                )}
               </div>
+
+              {selectedDiscussion ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2 lg:pr-1">
+                  <Badge variant="secondary" className="h-9 gap-1.5 rounded-md px-3">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {selectedDiscussion.commentCount}
+                  </Badge>
+                  <Badge variant="outline" className="h-9 gap-1.5 rounded-md px-3">
+                    <Eye className="h-3.5 w-3.5" />
+                    {selectedDiscussion.viewCount}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "h-9 gap-2 rounded-md px-3 font-medium",
+                      selectedDiscussion.viewerHasLiked &&
+                        "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                    )}
+                    aria-label={
+                      selectedDiscussion.viewerHasLiked
+                        ? `Remove your like. ${selectedDiscussion.likeCount} likes`
+                        : `Like this discussion. ${selectedDiscussion.likeCount} likes`
+                    }
+                    title={selectedDiscussion.viewerHasLiked ? "Click to remove your like" : "Like this discussion"}
+                    onClick={() => handleLikeDiscussion(selectedDiscussion.id)}
+                    disabled={likePendingIds.includes(selectedDiscussion.id)}
+                  >
+                    {likePendingIds.includes(selectedDiscussion.id) ? (
+                      <Spinner className="size-4" />
+                    ) : (
+                      <ThumbsUp className="h-4 w-4" />
+                    )}
+                    <span className="tabular-nums">{selectedDiscussion.likeCount}</span>
+                    <span className="text-muted-foreground">|</span>
+                    <span>{selectedDiscussion.viewerHasLiked ? "Liked" : "Like"}</span>
+                  </Button>
+                  {selectedDiscussion.author.id === currentUser?.id ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 gap-2 rounded-md text-destructive hover:text-destructive"
+                      onClick={() => requestDeleteDiscussion(selectedDiscussion)}
+                      disabled={deleteDiscussionPendingIds.includes(selectedDiscussion.id)}
+                    >
+                      {deleteDiscussionPendingIds.includes(selectedDiscussion.id) ? (
+                        <Spinner className="size-4" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </DialogHeader>
 
@@ -1164,13 +1505,25 @@ export default function DiscussionsPage() {
               </Alert>
             </div>
           ) : selectedDiscussion ? (
-            <div className="flex min-h-0 flex-col lg:flex-row">
-              <ScrollArea className="min-h-[280px] flex-1">
-                <div className="space-y-6 p-6">
-                  <div className="overflow-hidden rounded-[28px] border border-border/70 bg-gradient-to-br from-background via-background to-primary/[0.05] shadow-sm">
-                    <div className="space-y-5 p-5 sm:p-6">
-                      <div className="flex flex-col gap-4 sm:flex-row">
-                        <Avatar className="h-12 w-12 shrink-0 ring-4 ring-primary/10">
+            <div className="h-full min-h-0 bg-background">
+              <ScrollArea className="h-full min-h-0 bg-background">
+                <main className="mx-auto max-w-5xl space-y-7 px-5 py-6 sm:px-7 lg:py-8">
+                  <article className="overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] via-background to-background shadow-sm ring-1 ring-primary/10">
+                    <div className="border-b border-primary/15 bg-primary/[0.055] px-4 py-3 sm:px-5">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Badge variant="outline" className="h-7 gap-1.5 rounded-md border-primary/25 bg-background/80 px-2.5 text-primary">
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          Original post
+                        </Badge>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Started {formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5">
+                      <div className="flex gap-4">
+                        <Avatar className="h-12 w-12 shrink-0 border border-primary/20 bg-background shadow-sm">
                           <AvatarImage
                             src={selectedDiscussion.author.avatarUrl ?? undefined}
                             alt={selectedDiscussion.author.fullName}
@@ -1179,72 +1532,21 @@ export default function DiscussionsPage() {
                         </Avatar>
 
                         <div className="min-w-0 flex-1 space-y-4">
-                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            <span className="font-medium text-foreground">{selectedDiscussion.author.fullName}</span>
-                            <span>|</span>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                            <span className="font-semibold text-foreground">{selectedDiscussion.author.fullName}</span>
                             <span>{selectedDiscussion.author.roleLabel}</span>
-                            <span>|</span>
-                            <Badge variant="outline" className="rounded-full border-primary/20 bg-primary/5 px-3 py-1">
-                              {formatCategory(selectedDiscussion.category)}
-                            </Badge>
-                            <span>|</span>
-                            <span>{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
                           </div>
 
-                          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[15px] leading-7 text-foreground">
-                            {selectedDiscussion.content}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-muted-foreground">
-                              <MessageCircle className="h-4 w-4 text-foreground" />
-                              <span className="font-medium text-foreground">{selectedDiscussion.commentCount}</span>
-                              <span>Replies</span>
-                            </div>
-                            <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/90 px-4 py-2 text-sm text-muted-foreground">
-                              <Eye className="h-4 w-4 text-foreground" />
-                              <span className="font-medium text-foreground">{selectedDiscussion.viewCount}</span>
-                              <span>Views</span>
-                            </div>
-                      <Button
-                        variant={selectedDiscussion.viewerHasLiked ? "secondary" : "outline"}
-                        className="rounded-full px-4"
-                        onClick={() => handleLikeDiscussion(selectedDiscussion.id)}
-                        disabled={likePendingIds.includes(selectedDiscussion.id)}
-                      >
-                        {likePendingIds.includes(selectedDiscussion.id) ? (
-                          <Spinner className="size-4" />
-                        ) : (
-                          <ThumbsUp className="h-4 w-4" />
-                        )}
-                        <span className="font-medium">{selectedDiscussion.likeCount}</span>
-                        {selectedDiscussion.viewerHasLiked ? "Unlike" : "Like"}
-                      </Button>
-                      {selectedDiscussion.author.id === currentUser?.id ? (
-                        <Button
-                          variant="ghost"
-                          className="rounded-full px-4 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteDiscussion(selectedDiscussion.id)}
-                          disabled={deleteDiscussionPendingIds.includes(selectedDiscussion.id)}
-                        >
-                          {deleteDiscussionPendingIds.includes(selectedDiscussion.id) ? (
-                            <Spinner className="size-4" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                          Delete
-                        </Button>
-                      ) : null}
+                          <div className="rounded-lg border border-border/70 bg-background px-4 py-3 shadow-xs">
+                            <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-base leading-8 text-foreground">
+                              {selectedDiscussion.content}
+                            </p>
                           </div>
 
                           {selectedDiscussion.tags.length ? (
                             <div className="flex flex-wrap gap-2">
                               {selectedDiscussion.tags.map((tag) => (
-                                <Badge
-                                  key={`${selectedDiscussion.id}-detail-${tag}`}
-                                  variant="secondary"
-                                  className="rounded-full px-3 py-1"
-                                >
+                                <Badge key={`${selectedDiscussion.id}-detail-${tag}`} variant="secondary" className="rounded-md">
                                   {tag}
                                 </Badge>
                               ))}
@@ -1253,133 +1555,47 @@ export default function DiscussionsPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </article>
 
-                  <section className="space-y-4">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div className="space-y-1">
-                        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                          Comments
-                        </h3>
-                        <p className="text-sm text-muted-foreground">Recent replies from teammates and supervisors.</p>
+                  <section className="space-y-4 border-t border-border/70 pt-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold">Replies</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {selectedDiscussion.commentCount
+                            ? `${selectedDiscussion.commentCount} ${selectedDiscussion.commentCount === 1 ? "reply" : "replies"} in this thread`
+                            : "No replies yet"}
+                        </p>
                       </div>
-                      <Badge variant="outline" className="rounded-full px-3 py-1.5">
-                        {selectedDiscussion.commentCount} replies
-                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={openRootReplyComposer}
+                      >
+                        <Reply className="h-4 w-4" />
+                        Add reply
+                      </Button>
                     </div>
+
+                    {isReplyComposerOpen && !replyTargetId ? renderInlineReplyComposer(null) : null}
 
                     <div className="space-y-3">
                       {selectedDiscussion.comments.length ? (
                         selectedDiscussion.comments.map((comment) => renderCommentThread(comment))
                       ) : (
-                        <div className="rounded-[24px] border border-dashed border-border/80 bg-muted/20 p-8 text-center">
+                        <div className="rounded-lg border border-dashed border-border/80 bg-muted/30 p-8 text-center">
                           <MessageCircle className="mx-auto h-8 w-8 text-muted-foreground" />
-                          <h4 className="mt-3 text-base font-semibold">No comments yet</h4>
+                          <h4 className="mt-3 text-base font-semibold">No replies yet</h4>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            Start the conversation with a clear reply or a useful suggestion.
+                            Be the first to respond to this discussion.
                           </p>
                         </div>
                       )}
                     </div>
                   </section>
-                </div>
+                </main>
               </ScrollArea>
-
-              <aside className="flex min-h-0 w-full shrink-0 flex-col border-t border-border/70 bg-muted/25 lg:w-[360px] lg:border-t-0 lg:border-l">
-                <div className="border-b border-border/70 px-5 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-base font-semibold">Write a reply</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Ask, explain, or share the next step for the team.
-                      </p>
-                    </div>
-                    {selectedReplyTarget ? (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 rounded-full" onClick={() => setReplyTargetId(null)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
-                  <div className="rounded-[22px] border border-border/70 bg-background/85 p-4 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={currentUser?.avatar} alt={currentUser?.name ?? "You"} />
-                        <AvatarFallback>{getInitials(currentUser?.name ?? "You")}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{currentUser?.name ?? "You"}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedReplyTarget ? `Replying to ${selectedReplyTarget.author.fullName}` : "Replying to this discussion"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedReplyTarget ? (
-                    <div className="rounded-[22px] border border-primary/20 bg-primary/[0.05] p-4 shadow-sm">
-                      <div className="flex items-start gap-3">
-                        <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        <div className="min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <span className="font-medium text-foreground">{selectedReplyTarget.author.fullName}</span>
-                            <span>|</span>
-                            <span>{selectedReplyTarget.author.roleLabel}</span>
-                          </div>
-                          <p className="line-clamp-3 break-words [overflow-wrap:anywhere] text-sm leading-6 text-foreground">
-                            {selectedReplyTarget.content}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="flex flex-1 flex-col gap-3">
-                    <Label htmlFor="discussion-comment" className="text-sm font-medium">
-                      {selectedReplyTarget ? "Your reply" : "Your comment"}
-                    </Label>
-                    <Textarea
-                      id="discussion-comment"
-                      rows={7}
-                      value={commentContent}
-                      placeholder={
-                        selectedReplyTarget
-                          ? `Reply to ${selectedReplyTarget.author.fullName}...`
-                          : "Share your reply with the discussion..."
-                      }
-                      className="min-h-[190px] flex-1 resize-none rounded-[24px] border-border/70 bg-background shadow-sm"
-                      onChange={(event) => setCommentContent(event.target.value)}
-                      onKeyDown={handleCommentComposerKeyDown}
-                    />
-                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                      <span>Press Ctrl+Enter to post quickly</span>
-                      <span>{commentCharacterCount}/2000</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-auto space-y-3 border-t border-border/60 bg-muted/25 pt-3">
-                    <div className="rounded-[22px] border border-dashed border-border/80 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">
-                      Keep it specific and useful so students, doctors, and TAs can act on your reply quickly.
-                    </div>
-
-                    <Button className="h-11 w-full gap-2 rounded-xl" onClick={handleCommentSubmit} disabled={!canSubmitComment}>
-                      {isSubmittingComment ? (
-                        <>
-                          <Spinner className="size-4" />
-                          Posting...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4" />
-                          {selectedReplyTarget ? "Post Reply" : "Post Comment"}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </aside>
             </div>
           ) : (
             <div className="flex min-h-[320px] items-center justify-center p-6 text-sm text-muted-foreground">
@@ -1388,6 +1604,83 @@ export default function DiscussionsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={Boolean(discussionDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setDiscussionDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this discussion?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {discussionDeleteTarget?.title ?? "this discussion"} and all replies under it. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(discussionDeleteTarget && deleteDiscussionPendingIds.includes(discussionDeleteTarget.id))}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={Boolean(discussionDeleteTarget && deleteDiscussionPendingIds.includes(discussionDeleteTarget.id))}
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDeleteDiscussion()
+              }}
+            >
+              {discussionDeleteTarget && deleteDiscussionPendingIds.includes(discussionDeleteTarget.id) ? (
+                <>
+                  <Spinner className="size-4" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete discussion"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(commentDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) setCommentDeleteTarget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this reply?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This reply will be removed from the discussion. You cannot undo this action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(commentDeleteTarget && deleteCommentPendingIds.includes(commentDeleteTarget.id))}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="gap-2 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={Boolean(commentDeleteTarget && deleteCommentPendingIds.includes(commentDeleteTarget.id))}
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDeleteComment()
+              }}
+            >
+              {commentDeleteTarget && deleteCommentPendingIds.includes(commentDeleteTarget.id) ? (
+                <>
+                  <Spinner className="size-4" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete reply"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
