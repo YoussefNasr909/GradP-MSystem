@@ -1,2 +1,16 @@
-# Documentation
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation (generated/local)
 docs/
+
+# Logs
+*.log
