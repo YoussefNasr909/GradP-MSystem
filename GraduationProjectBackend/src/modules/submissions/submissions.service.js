@@ -95,6 +95,45 @@ function toSubmissionResponse(submission) {
   };
 }
 
+export function getLatestPhaseSubmission(submissions = []) {
+  if (!Array.isArray(submissions) || submissions.length === 0) {
+    return null;
+  }
+
+  return [...submissions].sort((a, b) => {
+    const aTime = new Date(a.submittedAt ?? a.createdAt ?? 0).getTime();
+    const bTime = new Date(b.submittedAt ?? b.createdAt ?? 0).getTime();
+    return bTime - aTime;
+  })[0];
+}
+
+export function assertPhaseSubmissionGate(phaseSubmissions = [], deliverableType, sdlcPhase) {
+  const latestSubmission = getLatestPhaseSubmission(phaseSubmissions);
+
+  if (!latestSubmission) {
+    return;
+  }
+
+  if (latestSubmission.status === "PENDING") {
+    throw new AppError(
+      `A ${sdlcPhase} deliverable is still pending review. Wait for approval before submitting another deliverable in this phase.`,
+      409,
+      "SUBMISSION_PHASE_REVIEW_PENDING",
+    );
+  }
+
+  if (
+    latestSubmission.status === "REVISION_REQUIRED" &&
+    latestSubmission.deliverableType !== deliverableType
+  ) {
+    throw new AppError(
+      `Revise the ${latestSubmission.deliverableType} deliverable before submitting another deliverable in this phase.`,
+      409,
+      "SUBMISSION_PHASE_LOCKED_BY_REVISION",
+    );
+  }
+}
+
 async function resolveActorTeam(actor) {
   if (actor.role === ROLES.LEADER) {
     return findTeamByLeaderId(actor.id);
@@ -172,6 +211,9 @@ export async function createSubmissionService(actor, payload, file) {
       "SUBMISSION_PHASE_MISMATCH",
     );
   }
+
+  const phaseSubmissions = await listSubmissionsByTeamAndPhase(team.id, sdlcPhase);
+  assertPhaseSubmissionGate(phaseSubmissions, deliverableType, sdlcPhase);
 
   const latestVersion = await getLatestVersionForDeliverable(team.id, deliverableType);
   const version = latestVersion + 1;

@@ -1,1239 +1,1390 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { motion } from "framer-motion"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import type React from "react"
 import {
-  Plus,
+  addDays,
+  addMonths,
+  addWeeks,
+  endOfDay,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  isToday,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns"
+import {
+  AlertCircle,
+  CalendarClock,
+  CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ClipboardCopy,
+  ExternalLink,
   Filter,
-  CalendarIcon,
+  Link2,
+  Loader2,
   MapPin,
-  Clock,
+  RefreshCcw,
+  Search,
+  Trash2,
   Users,
   Video,
-  Link2,
-  Bell,
-  Edit,
-  Trash2,
-  ExternalLink,
-  Download,
-  Share2,
-  Search,
-  Grid3X3,
-  List,
-  LayoutGrid,
-  CalendarPlusIcon as CalendarLucide,
-  AlertCircle,
-  CheckCircle2,
-  MoreHorizontal,
-  Palette,
-  Globe,
-  Lock,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
+import { motion, useReducedMotion } from "framer-motion"
+import { useSearchParams } from "next/navigation"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { useAuthStore } from "@/lib/stores/auth-store"
-import { meetings } from "@/data/meetings"
-import { tasks } from "@/data/tasks"
-import { users } from "@/data/users"
-import { toast } from "sonner"
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import {
-  format,
-  addDays,
-  startOfWeek,
-  endOfWeek,
-  isSameDay,
-  isToday,
-  addMonths,
-  subMonths,
-  addWeeks,
-  subWeeks,
-} from "date-fns"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner"
+import { calendarApi } from "@/lib/api/calendar"
+import { meetingsApi } from "@/lib/api/meetings"
+import type { ApiCalendarEvent, ApiCalendarIntegration, ApiCalendarProvider } from "@/lib/api/types"
+import { getSocket } from "@/lib/socket"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { cn } from "@/lib/utils"
 
-const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-const daysOfWeekShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-const daysOfWeekMobile = ["S", "M", "T", "W", "T", "F", "S"]
-const months = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-]
+type CalendarView = "month" | "week" | "day" | "agenda"
+type SourceFilter = "ALL" | "MEETING" | "TASK_DEADLINE"
+type ProviderAction = "connect" | "sync" | "disconnect"
 
-type CalendarEvent = {
-  id: string
+type PendingAction = {
   title: string
-  description?: string
-  date: string
-  startTime: string
-  endTime: string
-  type: "meeting" | "virtual-meeting" | "deadline" | "reminder" | "milestone" | "presentation" | "review"
-  priority?: "low" | "medium" | "high" | "critical"
-  location?: string
-  meetingLink?: string
-  attendees?: { id: string; name: string; avatar?: string; status: "accepted" | "declined" | "pending" }[]
-  organizer?: { id: string; name: string; avatar?: string }
-  recurring?: { type: "daily" | "weekly" | "monthly"; interval: number; endDate?: string }
-  reminders?: { type: "email" | "push" | "sms"; minutes: number }[]
-  color?: string
-  isAllDay?: boolean
-  status?: "scheduled" | "in-progress" | "completed" | "cancelled"
-  attachments?: { name: string; url: string }[]
-  notes?: string
-  tags?: string[]
-  visibility?: "public" | "private" | "team"
+  description: string
+  confirmLabel: string
+  confirmVariant?: "default" | "destructive"
+  details?: Array<{ label: string; value: string }>
+  action: () => Promise<void>
 }
 
-const generateMockEvents = (currentUser: any): CalendarEvent[] => {
-  const events: CalendarEvent[] = []
+const weekStartsOn = 6 as const
+const viewLabels: Record<CalendarView, string> = {
+  month: "Month",
+  week: "Week",
+  day: "Day",
+  agenda: "Agenda",
+}
 
-  // Convert meetings to calendar events
-  meetings
-    .filter((m) => m.attendeeIds?.includes(currentUser?.id || ""))
-    .forEach((meeting) => {
-      const startDate = new Date(meeting.startTime)
-      const endDate = new Date(meeting.endTime)
-      events.push({
-        id: meeting.id,
-        title: meeting.title,
-        description: meeting.description,
-        date: format(startDate, "yyyy-MM-dd"),
-        startTime: format(startDate, "HH:mm"),
-        endTime: format(endDate, "HH:mm"),
-        type: meeting.isVirtual ? "virtual-meeting" : "meeting",
-        location: meeting.location,
-        meetingLink: meeting.meetingLink,
-        attendees: meeting.attendeeIds?.map((id) => {
-          const user = users.find((u) => u.id === id)
-          return { id, name: user?.name || "Unknown", avatar: user?.avatar, status: "accepted" as const }
-        }),
-        organizer: users.find((u) => u.id === meeting.organizerId)
-          ? { id: meeting.organizerId, name: users.find((u) => u.id === meeting.organizerId)!.name }
-          : undefined,
-        status: "scheduled",
-        color: meeting.isVirtual ? "#8b5cf6" : "#3b82f6",
-        visibility: "team",
-      })
-    })
+const sourceLabel: Record<ApiCalendarEvent["sourceType"], string> = {
+  MEETING: "Meeting",
+  TASK_DEADLINE: "Task deadline",
+}
 
-  // Convert task deadlines to calendar events
-  tasks
-    .filter((t) => t.assigneeId === currentUser?.id && t.dueDate)
-    .forEach((task) => {
-      events.push({
-        id: `task-${task.id}`,
-        title: `Deadline: ${task.title}`,
-        description: task.description,
-        date: task.dueDate!,
-        startTime: "23:59",
-        endTime: "23:59",
-        type: "deadline",
-        priority: task.priority,
-        status: task.status === "done" ? "completed" : "scheduled",
-        color: task.priority === "critical" ? "#ef4444" : task.priority === "high" ? "#f97316" : "#eab308",
-        tags: task.tags,
-        visibility: "private",
-      })
-    })
+const sourceBadgeClass: Record<ApiCalendarEvent["sourceType"], string> = {
+  MEETING: "border-primary/30 bg-primary/10 text-primary",
+  TASK_DEADLINE: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200",
+}
 
-  // Add some additional mock events for demonstration
-  const additionalEvents: CalendarEvent[] = [
-    {
-      id: "ev1",
-      title: "Project Presentation",
-      description: "Final presentation to the evaluation committee",
-      date: "2025-01-25",
-      startTime: "10:00",
-      endTime: "12:00",
-      type: "presentation",
-      location: "Conference Hall A",
-      attendees: [
-        { id: "u1", name: "Dr. Ahmed Hassan", status: "accepted" },
-        { id: "u2", name: "Dr. Sara Ali", status: "pending" },
-      ],
-      priority: "critical",
-      status: "scheduled",
-      color: "#ec4899",
-      reminders: [
-        { type: "email", minutes: 1440 },
-        { type: "push", minutes: 60 },
-      ],
-      visibility: "public",
-    },
-    {
-      id: "ev2",
-      title: "Code Review Session",
-      description: "Weekly code review with the team",
-      date: "2025-01-20",
-      startTime: "14:00",
-      endTime: "15:30",
-      type: "review",
-      meetingLink: "https://meet.google.com/abc-defg-hij",
-      attendees: [
-        { id: "u3", name: "Ahmed Mohamed", status: "accepted" },
-        { id: "u4", name: "Fatima Hassan", status: "accepted" },
-      ],
-      recurring: { type: "weekly", interval: 1 },
-      status: "scheduled",
-      color: "#10b981",
-      visibility: "team",
-    },
-    {
-      id: "ev3",
-      title: "Sprint Planning",
-      description: "Plan tasks for the upcoming sprint",
-      date: "2025-01-21",
-      startTime: "09:00",
-      endTime: "10:30",
-      type: "meeting",
-      location: "Room 301",
-      status: "scheduled",
-      color: "#6366f1",
-      visibility: "team",
-    },
-    {
-      id: "ev4",
-      title: "Milestone: Alpha Release",
-      description: "Complete alpha version of the application",
-      date: "2025-01-28",
-      startTime: "00:00",
-      endTime: "23:59",
-      type: "milestone",
-      isAllDay: true,
-      priority: "high",
-      status: "scheduled",
-      color: "#f59e0b",
-      visibility: "public",
-    },
-    {
-      id: "ev5",
-      title: "Team Standup",
-      description: "Daily standup meeting",
-      date: "2025-01-15",
-      startTime: "09:00",
-      endTime: "09:15",
-      type: "virtual-meeting",
-      meetingLink: "https://zoom.us/j/123456789",
-      recurring: { type: "daily", interval: 1, endDate: "2025-06-30" },
-      status: "scheduled",
-      color: "#8b5cf6",
-      visibility: "team",
-    },
-  ]
+const sourceBorderColor: Record<ApiCalendarEvent["sourceType"], string> = {
+  MEETING: "border-l-primary",
+  TASK_DEADLINE: "border-l-amber-400",
+}
 
-  return [...events, ...additionalEvents]
+const statusClass: Record<string, string> = {
+  PENDING_APPROVAL: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200",
+  CONFIRMED: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200",
+  COMPLETED: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200",
+  CANCELLED: "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300",
+  DECLINED: "border-orange-300 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200",
+  NOT_STARTED: "border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300",
+  IN_PROGRESS: "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200",
+  DONE: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200",
+  BLOCKED: "border-red-300 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200",
+}
+
+const labelOverrides: Record<string, string> = {
+  TA: "TA",
+  GOOGLE: "Google",
+  OUTLOOK: "Outlook",
+  GOOGLE_MEET: "Google Meet",
+  MICROSOFT_TEAMS: "Microsoft Teams",
+  PENDING_APPROVAL: "Pending approval",
+  PROPOSED_NEW_TIME: "Proposed new time",
+  IN_PERSON: "In person",
+  TASK_DEADLINE: "Task deadline",
+  NOT_CONNECTED: "Not connected",
+  IN_PROGRESS: "In progress",
+}
+
+function formatLabel(value?: string | null) {
+  if (!value) return "Not set"
+  if (labelOverrides[value]) return labelOverrides[value]
+  return value
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function getCalendarDays(date: Date) {
+  const gridStart = startOfWeek(startOfMonth(date), { weekStartsOn })
+  const gridEnd = endOfWeek(endOfMonth(date), { weekStartsOn })
+  const days: Date[] = []
+  for (let cursor = gridStart; cursor <= gridEnd; cursor = addDays(cursor, 1)) {
+    days.push(cursor)
+  }
+  return days
+}
+
+function getWeekDays(date: Date) {
+  const weekStart = startOfWeek(date, { weekStartsOn })
+  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+}
+
+function getLoadRange(view: CalendarView, month: Date, selectedDay: Date) {
+  if (view === "day") return { start: startOfDay(selectedDay), end: endOfDay(selectedDay) }
+  if (view === "week") {
+    return {
+      start: startOfWeek(selectedDay, { weekStartsOn }),
+      end: endOfWeek(selectedDay, { weekStartsOn }),
+    }
+  }
+  return {
+    start: startOfWeek(startOfMonth(month), { weekStartsOn }),
+    end: endOfWeek(endOfMonth(month), { weekStartsOn }),
+  }
+}
+
+function sortEvents(events: ApiCalendarEvent[]) {
+  return [...events].sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime())
+}
+
+function isEventOnDay(event: ApiCalendarEvent, day: Date) {
+  const start = new Date(event.startAt)
+  const end = new Date(event.endAt)
+  return startOfDay(start) <= endOfDay(day) && endOfDay(end) >= startOfDay(day)
+}
+
+function formatEventTime(event: ApiCalendarEvent) {
+  const start = new Date(event.startAt)
+  const end = new Date(event.endAt)
+  if (event.allDay) return "All day"
+  if (isSameDay(start, end)) return `${format(start, "p")} – ${format(end, "p")}`
+  return `${format(start, "MMM d, p")} – ${format(end, "MMM d, p")}`
+}
+
+function compactParticipants(event: ApiCalendarEvent) {
+  const people = event.participants || []
+  if (people.length === 0) return "No participants listed"
+  const names = people.slice(0, 3).map((p) => p.displayName || p.email || formatLabel(p.participantRole))
+  const remaining = people.length - names.length
+  return remaining > 0 ? `${names.join(", ")} +${remaining} more` : names.join(", ")
+}
+
+function providerLabel(provider: ApiCalendarProvider) {
+  return provider === "GOOGLE" ? "Google Calendar" : "Outlook Calendar"
 }
 
 export default function CalendarPage() {
-  const { currentUser } = useAuthStore()
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 0, 15))
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [viewMode, setViewMode] = useState<"month" | "week" | "day" | "agenda">("month")
-  const [filterType, setFilterType] = useState<string>("all")
-  const [showAddDialog, setShowAddDialog] = useState(false)
-  const [showEventDialog, setShowEventDialog] = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
-  const [showSyncDialog, setShowSyncDialog] = useState(false)
-  const [searchQuery, setSearchQuery] = useState("")
+  const searchParams = useSearchParams()
+  const { accessToken } = useAuthStore()
+  const prefersReducedMotion = useReducedMotion()
+  const [view, setView] = useState<CalendarView>("month")
+  const [month, setMonth] = useState(new Date())
+  const [selectedDay, setSelectedDay] = useState(new Date())
+  const [search, setSearch] = useState("")
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("ALL")
+  const [statusFilter, setStatusFilter] = useState("ALL")
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [events, setEvents] = useState<ApiCalendarEvent[]>([])
+  const [integrations, setIntegrations] = useState<ApiCalendarIntegration[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<ApiCalendarEvent | null>(null)
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+  const [runningAction, setRunningAction] = useState(false)
 
-  // New event form state
-  const [newEvent, setNewEvent] = useState<Partial<CalendarEvent>>({
-    title: "",
-    description: "",
-    date: format(new Date(), "yyyy-MM-dd"),
-    startTime: "09:00",
-    endTime: "10:00",
-    type: "meeting",
-    location: "",
-    meetingLink: "",
-    isAllDay: false,
-    visibility: "team",
-    reminders: [{ type: "push", minutes: 15 }],
-  })
+  const loadPage = useCallback(async (quiet = false) => {
+    try {
+      if (quiet) setRefreshing(true)
+      else setLoading(true)
+      setError(null)
+      const range = getLoadRange(view, month, selectedDay)
+      const [nextEvents, nextIntegrations] = await Promise.all([
+        calendarApi.listEvents({ start: range.start.toISOString(), end: range.end.toISOString() }),
+        calendarApi.listIntegrations(),
+      ])
+      setEvents(sortEvents(nextEvents))
+      setIntegrations(nextIntegrations)
+    } catch (err: any) {
+      const message = err?.message || "Failed to load calendar."
+      setError(message)
+      toast.error(message)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [month, selectedDay, view])
 
-  const allEvents = useMemo(() => generateMockEvents(currentUser), [currentUser])
+  useEffect(() => { void loadPage(false) }, [loadPage])
+
+  useEffect(() => {
+    const provider = searchParams.get("provider")
+    const status = searchParams.get("status")
+    const message = searchParams.get("message")
+    if (!provider || !status || !message) return
+    if (status === "connected") toast.success(message)
+    else toast.error(message)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!accessToken) return
+    const socket = getSocket(accessToken)
+    if (!socket) return
+    const handler = () => void loadPage(true)
+    const evNames = [
+      "meeting.created", "meeting.pending", "meeting.approved", "meeting.declined",
+      "meeting.updated", "meeting.cancelled", "meeting.completed", "meeting.deleted",
+      "calendar.event.updated", "task.deadline.updated",
+    ]
+    evNames.forEach((n) => socket.on(n, handler))
+    return () => { evNames.forEach((n) => socket.off(n, handler)) }
+  }, [accessToken, loadPage])
 
   const filteredEvents = useMemo(() => {
-    let events = allEvents
-    if (filterType !== "all") {
-      events = events.filter((e) => e.type === filterType)
-    }
-    if (searchQuery) {
-      events = events.filter(
-        (e) =>
-          e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          e.description?.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    }
-    return events
-  }, [allEvents, filterType, searchQuery])
+    const query = search.trim().toLowerCase()
+    return events.filter((event) => {
+      if (sourceFilter !== "ALL" && event.sourceType !== sourceFilter) return false
+      if (statusFilter !== "ALL" && event.status !== statusFilter) return false
+      if (!query) return true
+      return [event.title, event.description, event.team?.name, event.organizer?.fullName, event.assignee?.fullName, event.location, event.provider, event.externalProvider]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(query))
+    })
+  }, [events, search, sourceFilter, statusFilter])
 
-  // Calendar calculations
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    const firstDay = new Date(year, month, 1).getDay()
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const prevMonthDays = new Date(year, month, 0).getDate()
-    return { firstDay, daysInMonth, prevMonthDays }
+  const statusOptions = useMemo(() => {
+    const values = Array.from(new Set(events.map((e) => e.status).filter(Boolean)))
+    return ["ALL", ...values]
+  }, [events])
+
+  const eventsByDay = useMemo(() => {
+    return filteredEvents.reduce<Record<string, ApiCalendarEvent[]>>((groups, event) => {
+      const start = startOfDay(new Date(event.startAt))
+      const end = startOfDay(new Date(event.endAt))
+      for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
+        const key = format(cursor, "yyyy-MM-dd")
+        groups[key] = groups[key] || []
+        groups[key].push(event)
+      }
+      return groups
+    }, {})
+  }, [filteredEvents])
+
+  const calendarDays = useMemo(() => getCalendarDays(month), [month])
+  const weekDays = useMemo(() => getWeekDays(selectedDay), [selectedDay])
+  const selectedEvents = useMemo(
+    () => sortEvents(filteredEvents.filter((e) => isEventOnDay(e, selectedDay))),
+    [filteredEvents, selectedDay]
+  )
+  const agendaEvents = useMemo(() => sortEvents(filteredEvents), [filteredEvents])
+  const todayEvents = useMemo(() => filteredEvents.filter((e) => isEventOnDay(e, new Date())), [filteredEvents])
+  const meetingEvents = filteredEvents.filter((e) => e.sourceType === "MEETING")
+  const taskEvents = filteredEvents.filter((e) => e.sourceType === "TASK_DEADLINE")
+  const actionNeededEvents = filteredEvents.filter(
+    (e) => e.status === "PENDING_APPROVAL" || e.status === "DECLINED" || e.externalSyncStatus === "ERROR"
+  )
+  const googleIntegration = integrations.find((i) => i.provider === "GOOGLE")
+  const outlookIntegration = integrations.find((i) => i.provider === "OUTLOOK")
+  const connectedCount = integrations.filter((i) => i.syncEnabled).length
+  const visibleRange = getLoadRange(view, month, selectedDay)
+
+  function selectDay(day: Date, nextView?: CalendarView) {
+    setSelectedDay(day)
+    setMonth(day)
+    if (nextView) setView(nextView)
   }
 
-  const getWeekDays = (date: Date) => {
-    const start = startOfWeek(date)
-    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  function goToday() {
+    const now = new Date()
+    setMonth(now)
+    setSelectedDay(now)
   }
 
-  const getEventsForDate = (date: Date) => {
-    const dateStr = format(date, "yyyy-MM-dd")
-    return filteredEvents.filter((e) => e.date === dateStr)
-  }
-
-  const { firstDay, daysInMonth, prevMonthDays } = getDaysInMonth(currentDate)
-  const weekDays = getWeekDays(currentDate)
-
-  // Navigation handlers
-  const goToToday = () => setCurrentDate(new Date())
-  const goToPrevious = () => {
-    if (viewMode === "month") setCurrentDate(subMonths(currentDate, 1))
-    else if (viewMode === "week") setCurrentDate(subWeeks(currentDate, 1))
-    else setCurrentDate(addDays(currentDate, -1))
-  }
-  const goToNext = () => {
-    if (viewMode === "month") setCurrentDate(addMonths(currentDate, 1))
-    else if (viewMode === "week") setCurrentDate(addWeeks(currentDate, 1))
-    else setCurrentDate(addDays(currentDate, 1))
-  }
-
-  // Event handlers
-  const handleCreateEvent = () => {
-    if (!newEvent.title?.trim()) {
-      toast.error("Event title is required")
+  function moveCursor(direction: -1 | 1) {
+    if (view === "month" || view === "agenda") {
+      const nextMonth = addMonths(month, direction)
+      setMonth(nextMonth)
+      if (!isSameMonth(selectedDay, nextMonth)) setSelectedDay(startOfMonth(nextMonth))
       return
     }
-    toast.success("Event created successfully")
-    setShowAddDialog(false)
-    setNewEvent({
-      title: "",
-      description: "",
-      date: format(new Date(), "yyyy-MM-dd"),
-      startTime: "09:00",
-      endTime: "10:00",
-      type: "meeting",
-      location: "",
-      meetingLink: "",
-      isAllDay: false,
-      visibility: "team",
+    if (view === "week") {
+      const nextDay = addWeeks(selectedDay, direction)
+      setSelectedDay(nextDay)
+      setMonth(nextDay)
+      return
+    }
+    const nextDay = addDays(selectedDay, direction)
+    setSelectedDay(nextDay)
+    setMonth(nextDay)
+  }
+
+  async function connect(provider: ApiCalendarProvider) {
+    try {
+      setRunningAction(true)
+      const data = provider === "GOOGLE" ? await calendarApi.connectGoogle() : await calendarApi.connectOutlook()
+      window.location.href = data.url
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to start ${providerLabel(provider)} connection.`)
+    } finally {
+      setRunningAction(false)
+    }
+  }
+
+  async function syncProvider(provider: ApiCalendarProvider, meetingId?: string) {
+    try {
+      setRunningAction(true)
+      await calendarApi.syncProvider(provider, meetingId)
+      toast.success(`${providerLabel(provider)} sync started`)
+      await loadPage(true)
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to sync ${providerLabel(provider)}.`)
+    } finally {
+      setRunningAction(false)
+    }
+  }
+
+  async function disconnect(provider: ApiCalendarProvider) {
+    try {
+      setRunningAction(true)
+      await calendarApi.disconnect(provider)
+      toast.success(`${providerLabel(provider)} disconnected`)
+      await loadPage(true)
+    } catch (err: any) {
+      toast.error(err?.message || `Failed to disconnect ${providerLabel(provider)}.`)
+    } finally {
+      setRunningAction(false)
+    }
+  }
+
+  function requestProviderAction(provider: ApiCalendarProvider, action: ProviderAction) {
+    if (action === "connect") { void connect(provider); return }
+    if (action === "sync") { void syncProvider(provider); return }
+    setPendingAction({
+      title: `Disconnect ${providerLabel(provider)}?`,
+      description: "Calendar events stay in the project, but automatic sync stops until reconnected.",
+      confirmLabel: "Disconnect",
+      confirmVariant: "destructive",
+      details: [{ label: "Provider", value: providerLabel(provider) }],
+      action: async () => disconnect(provider),
     })
   }
 
-  const handleDeleteEvent = (event: CalendarEvent) => {
-    toast.success("Event deleted successfully")
-    setShowEventDialog(false)
-    setSelectedEvent(null)
-  }
-
-  const handleExportCalendar = (format: "ics" | "csv") => {
-    toast.success(`Calendar exported as ${format.toUpperCase()}`)
-  }
-
-  const handleSyncCalendar = (provider: string) => {
-    toast.success(`Calendar synced with ${provider}`)
-    setShowSyncDialog(false)
-  }
-
-  const getEventColor = (type: string, priority?: string) => {
-    if (priority === "critical") return "bg-red-500"
-    if (priority === "high") return "bg-orange-500"
-    switch (type) {
-      case "meeting":
-        return "bg-blue-500"
-      case "virtual-meeting":
-        return "bg-purple-500"
-      case "deadline":
-        return "bg-red-500"
-      case "reminder":
-        return "bg-yellow-500"
-      case "milestone":
-        return "bg-amber-500"
-      case "presentation":
-        return "bg-pink-500"
-      case "review":
-        return "bg-emerald-500"
-      default:
-        return "bg-primary"
+  async function copyEventLink(event: ApiCalendarEvent) {
+    if (!event.joinUrl) return
+    try {
+      await navigator.clipboard.writeText(event.joinUrl)
+      toast.success("Meeting link copied")
+    } catch {
+      toast.error("Could not copy the meeting link")
     }
   }
 
-  const getEventIcon = (type: string) => {
-    switch (type) {
-      case "meeting":
-        return <Users className="h-3 w-3" />
-      case "virtual-meeting":
-        return <Video className="h-3 w-3" />
-      case "deadline":
-        return <AlertCircle className="h-3 w-3" />
-      case "reminder":
-        return <Bell className="h-3 w-3" />
-      case "milestone":
-        return <CheckCircle2 className="h-3 w-3" />
-      case "presentation":
-        return <CalendarLucide className="h-3 w-3" />
-      case "review":
-        return <Edit className="h-3 w-3" />
-      default:
-        return <CalendarIcon className="h-3 w-3" />
+  function requestMeetingAction(event: ApiCalendarEvent, kind: "cancel" | "complete" | "delete" | "sync") {
+    if (event.sourceType !== "MEETING") return
+    if (kind === "sync") {
+      if (!event.externalProvider) { toast.error("This meeting is not connected to Google or Outlook."); return }
+      void syncProvider(event.externalProvider, event.sourceId)
+      return
     }
+    const isDelete = kind === "delete"
+    const isComplete = kind === "complete"
+    setPendingAction({
+      title: isDelete ? "Delete this meeting?" : isComplete ? "Mark meeting as completed?" : "Cancel this meeting?",
+      description: isDelete
+        ? "This removes the meeting from the project calendar. Cannot be undone."
+        : isComplete
+          ? "Completed meetings stay visible for history and reporting."
+          : "Participants will see this meeting as cancelled.",
+      confirmLabel: isDelete ? "Delete meeting" : isComplete ? "Mark completed" : "Cancel meeting",
+      confirmVariant: isDelete || kind === "cancel" ? "destructive" : "default",
+      details: [
+        { label: "Meeting", value: event.title },
+        { label: "Time", value: `${format(new Date(event.startAt), "PPP p")} – ${format(new Date(event.endAt), "p")}` },
+      ],
+      action: async () => {
+        if (kind === "delete") await meetingsApi.delete(event.sourceId)
+        if (kind === "complete") await meetingsApi.complete(event.sourceId)
+        if (kind === "cancel") await meetingsApi.cancel(event.sourceId)
+        toast.success(kind === "delete" ? "Meeting deleted" : kind === "complete" ? "Meeting marked completed" : "Meeting cancelled")
+        setSelectedEvent(null)
+        await loadPage(true)
+      },
+    })
   }
 
-  const upcomingEvents = filteredEvents
-    .filter((e) => new Date(e.date) >= new Date())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 8)
+  async function runPendingAction() {
+    if (!pendingAction) return
+    try {
+      setRunningAction(true)
+      await pendingAction.action()
+      setPendingAction(null)
+    } catch (err: any) {
+      toast.error(err?.message || "Action failed. Please try again.")
+    } finally {
+      setRunningAction(false)
+    }
+  }
 
   return (
     <TeamRequiredGuard
-      pageName="Calendar & Schedule"
-      pageDescription="Track team meetings, deadlines, and project events in one shared calendar."
-      icon={<CalendarLucide className="h-10 w-10 text-primary" />}
+      pageName="Calendar"
+      pageDescription="See meetings and task deadlines together, with Google and Outlook sync from one place."
+      icon={<CalendarDays className="h-8 w-8 text-primary" />}
     >
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 md:space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Calendar</h1>
-            <p className="text-sm text-muted-foreground mt-1">Manage your schedule, meetings, and deadlines</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" onClick={goToToday}>
-              Today
-            </Button>
-
-            {/* Sync Calendar Dialog */}
-            <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-                  <Link2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Sync</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Sync Calendar</DialogTitle>
-                  <DialogDescription>Connect your calendar with external services</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <p className="text-sm text-muted-foreground">Connect your calendar with external services:</p>
-                  <div className="space-y-2">
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-3 bg-transparent"
-                      onClick={() => handleSyncCalendar("Google Calendar")}
-                    >
-                      <div className="h-5 w-5 rounded bg-gradient-to-br from-blue-500 to-green-500" />
-                      Google Calendar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-3 bg-transparent"
-                      onClick={() => handleSyncCalendar("Outlook")}
-                    >
-                      <div className="h-5 w-5 rounded bg-gradient-to-br from-blue-600 to-blue-400" />
-                      Microsoft Outlook
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-3 bg-transparent"
-                      onClick={() => handleSyncCalendar("Apple Calendar")}
-                    >
-                      <div className="h-5 w-5 rounded bg-gradient-to-br from-gray-700 to-gray-500" />
-                      Apple Calendar
-                    </Button>
-                  </div>
-                  <Separator />
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Export Calendar</p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 bg-transparent"
-                        onClick={() => handleExportCalendar("ics")}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        ICS File
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 bg-transparent"
-                        onClick={() => handleExportCalendar("csv")}
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        CSV File
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            {/* Add Event Dialog */}
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Add Event</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Event</DialogTitle>
-                  <DialogDescription>Fill in the details to create a new calendar event</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Title *</Label>
-                    <Input
-                      placeholder="Event title"
-                      value={newEvent.title}
-                      onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Date</Label>
-                      <Input
-                        type="date"
-                        value={newEvent.date}
-                        onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Type</Label>
-                      <Select value={newEvent.type} onValueChange={(v: any) => setNewEvent({ ...newEvent, type: v })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="meeting">Meeting</SelectItem>
-                          <SelectItem value="virtual-meeting">Virtual Meeting</SelectItem>
-                          <SelectItem value="deadline">Deadline</SelectItem>
-                          <SelectItem value="reminder">Reminder</SelectItem>
-                          <SelectItem value="milestone">Milestone</SelectItem>
-                          <SelectItem value="presentation">Presentation</SelectItem>
-                          <SelectItem value="review">Review</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      checked={newEvent.isAllDay}
-                      onCheckedChange={(c) => setNewEvent({ ...newEvent, isAllDay: c })}
-                    />
-                    <Label>All day event</Label>
-                  </div>
-
-                  {!newEvent.isAllDay && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Start Time</Label>
-                        <Input
-                          type="time"
-                          value={newEvent.startTime}
-                          onChange={(e) => setNewEvent({ ...newEvent, startTime: e.target.value })}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>End Time</Label>
-                        <Input
-                          type="time"
-                          value={newEvent.endTime}
-                          onChange={(e) => setNewEvent({ ...newEvent, endTime: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Location</Label>
-                    <Input
-                      placeholder="Location or meeting room"
-                      value={newEvent.location}
-                      onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
-                    />
-                  </div>
-
-                  {(newEvent.type === "virtual-meeting" || newEvent.type === "meeting") && (
-                    <div className="space-y-2">
-                      <Label>Meeting Link</Label>
-                      <Input
-                        placeholder="https://meet.google.com/..."
-                        value={newEvent.meetingLink}
-                        onChange={(e) => setNewEvent({ ...newEvent, meetingLink: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea
-                      placeholder="Event description..."
-                      value={newEvent.description}
-                      onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Visibility</Label>
-                    <Select
-                      value={newEvent.visibility}
-                      onValueChange={(v: any) => setNewEvent({ ...newEvent, visibility: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="public">
-                          <div className="flex items-center gap-2">
-                            <Globe className="h-4 w-4" />
-                            Public
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="team">
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            Team Only
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="private">
-                          <div className="flex items-center gap-2">
-                            <Lock className="h-4 w-4" />
-                            Private
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Reminder</Label>
-                    <Select defaultValue="15">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="5">5 minutes before</SelectItem>
-                        <SelectItem value="15">15 minutes before</SelectItem>
-                        <SelectItem value="30">30 minutes before</SelectItem>
-                        <SelectItem value="60">1 hour before</SelectItem>
-                        <SelectItem value="1440">1 day before</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Switch />
-                    <Label>Recurring event</Label>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowAddDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleCreateEvent}>Create Event</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-
-        {/* View Controls */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={goToPrevious} className="h-9 w-9 touch-target-sm">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <h2 className="text-base sm:text-lg font-semibold min-w-[180px] sm:min-w-[200px] text-center">
-              {viewMode === "day"
-                ? format(currentDate, "EEEE, MMMM d, yyyy")
-                : viewMode === "week"
-                  ? `${format(startOfWeek(currentDate), "MMM d")} - ${format(endOfWeek(currentDate), "MMM d, yyyy")}`
-                  : format(currentDate, "MMMM yyyy")}
-            </h2>
-            <Button variant="ghost" size="icon" onClick={goToNext} className="h-9 w-9 touch-target-sm">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Make tabs scrollable on mobile */}
-          <div className="flex items-center gap-2 flex-1 overflow-x-auto">
-            <Tabs value={viewMode} onValueChange={(v: any) => setViewMode(v)}>
-              <TabsList className="h-9">
-                <TabsTrigger value="month" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <Grid3X3 className="h-3.5 w-3.5 hidden xs:block" />
-                  Month
-                </TabsTrigger>
-                <TabsTrigger value="week" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <LayoutGrid className="h-3.5 w-3.5 hidden xs:block" />
-                  Week
-                </TabsTrigger>
-                <TabsTrigger value="day" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <CalendarIcon className="h-3.5 w-3.5 hidden xs:block" />
-                  Day
-                </TabsTrigger>
-                <TabsTrigger value="agenda" className="gap-1 text-xs sm:text-sm px-2 sm:px-3">
-                  <List className="h-3.5 w-3.5 hidden xs:block" />
-                  List
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            <div className="flex items-center gap-2 ml-auto">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search events..."
-                  className="pl-9 w-[150px] sm:w-[200px]"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+      <motion.div
+        initial={prefersReducedMotion ? false : { opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.3, ease: [0.22, 1, 0.36, 1] }}
+        className="space-y-5"
+      >
+        {/* ── PAGE HEADER ────────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <CalendarDays className="h-3 w-3" />
+                Calendar
               </div>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[130px]">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  <SelectItem value="meeting">Meetings</SelectItem>
-                  <SelectItem value="virtual-meeting">Virtual</SelectItem>
-                  <SelectItem value="deadline">Deadlines</SelectItem>
-                  <SelectItem value="milestone">Milestones</SelectItem>
-                  <SelectItem value="presentation">Presentations</SelectItem>
-                  <SelectItem value="review">Reviews</SelectItem>
-                </SelectContent>
-              </Select>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">One schedule for everything.</h1>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                Navigate meetings and deadlines by day, week, month, or agenda. Open any item for details and actions.
+              </p>
+            </div>
+
+            {/* Nav group */}
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void loadPage(true)} disabled={refreshing}>
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                Refresh
+              </Button>
+              <div className="flex items-center rounded-lg border bg-background divide-x">
+                <Button variant="ghost" size="sm" className="h-8 rounded-none rounded-l-md px-2.5" onClick={() => moveCursor(-1)} aria-label={`Previous ${viewLabels[view]}`}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 rounded-none px-3 text-xs font-medium" onClick={goToday}>
+                  Today
+                </Button>
+                <Button variant="ghost" size="sm" className="h-8 rounded-none rounded-r-md px-2.5" onClick={() => moveCursor(1)} aria-label={`Next ${viewLabels[view]}`}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
+
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+            <QuickStat label="Today" value={todayEvents.length} />
+            <QuickStat label="Meetings" value={meetingEvents.length} />
+            <QuickStat label="Deadlines" value={taskEvents.length} />
+            <QuickStat label="Needs attention" value={actionNeededEvents.length} tone="warning" />
+          </div>
         </div>
-      </div>
 
-      {/* Calendar Content */}
-      <div className="grid gap-4 lg:grid-cols-4">
-        {/* Main Calendar */}
-        <Card className="lg:col-span-3">
-          <CardContent className="p-4 md:p-6">
-            {/* Month View */}
-            {viewMode === "month" && (
-              <>
-                <div className="grid grid-cols-7 gap-1 mb-2">
-                  {daysOfWeekShort.map((day, i) => (
-                    <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">
-                      <span className="hidden sm:inline">{day}</span>
-                      <span className="sm:hidden">{daysOfWeekMobile[i]}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="grid grid-cols-7 gap-1">
-                  {/* Previous month days */}
-                  {Array.from({ length: firstDay }).map((_, i) => {
-                    const day = prevMonthDays - firstDay + i + 1
-                    return (
-                      <div key={`prev-${i}`} className="aspect-square p-1 text-muted-foreground/40">
-                        <span className="text-xs">{day}</span>
-                      </div>
-                    )
-                  })}
-                  {/* Current month days */}
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1
-                    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-                    const events = getEventsForDate(date)
-                    const isCurrentDay = isToday(date)
-                    const isSelected = selectedDate && isSameDay(date, selectedDate)
-
-                    return (
-                      <motion.button
-                        key={day}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => setSelectedDate(date)}
-                        className={`aspect-square p-1 rounded-lg transition-all relative flex flex-col ${
-                          isCurrentDay
-                            ? "bg-primary text-primary-foreground"
-                            : isSelected
-                              ? "bg-primary/20 ring-2 ring-primary"
-                              : "hover:bg-muted/50"
-                        }`}
-                      >
-                        <span className="text-xs font-medium">{day}</span>
-                        {events.length > 0 && (
-                          <div className="flex-1 overflow-hidden mt-1">
-                            <div className="flex flex-col gap-0.5">
-                              {events.slice(0, 2).map((event) => (
-                                <div
-                                  key={event.id}
-                                  className={`text-[9px] sm:text-[10px] px-1 py-0.5 rounded truncate text-white ${getEventColor(event.type, event.priority)}`}
-                                >
-                                  <span className="hidden sm:inline">{event.title}</span>
-                                  <span className="sm:hidden">{getEventIcon(event.type)}</span>
-                                </div>
-                              ))}
-                              {events.length > 2 && (
-                                <span className="text-[9px] text-muted-foreground">+{events.length - 2} more</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </motion.button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
-
-            {/* Week View */}
-            {viewMode === "week" && (
-              <div className="space-y-2">
-                <div className="grid grid-cols-8 gap-1">
-                  <div className="text-xs text-muted-foreground py-2">Time</div>
-                  {weekDays.map((date) => (
-                    <div
-                      key={date.toString()}
-                      className={`text-center py-2 rounded-lg ${isToday(date) ? "bg-primary text-primary-foreground" : ""}`}
-                    >
-                      <div className="text-xs font-medium">{format(date, "EEE")}</div>
-                      <div className="text-lg font-bold">{format(date, "d")}</div>
-                    </div>
-                  ))}
-                </div>
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-1">
-                    {Array.from({ length: 12 }).map((_, hour) => {
-                      const time = hour + 8
-                      return (
-                        <div key={hour} className="grid grid-cols-8 gap-1 min-h-[60px]">
-                          <div className="text-xs text-muted-foreground py-2">{`${time}:00`}</div>
-                          {weekDays.map((date) => {
-                            const dayEvents = getEventsForDate(date).filter((e) => {
-                              const eventHour = Number.parseInt(e.startTime.split(":")[0])
-                              return eventHour === time
-                            })
-                            return (
-                              <div key={date.toString()} className="border-t p-1 min-h-[60px]">
-                                {dayEvents.map((event) => (
-                                  <div
-                                    key={event.id}
-                                    className={`text-xs p-1 rounded text-white mb-1 cursor-pointer ${getEventColor(event.type)}`}
-                                    onClick={() => {
-                                      setSelectedEvent(event)
-                                      setShowEventDialog(true)
-                                    }}
-                                  >
-                                    <div className="font-medium truncate">{event.title}</div>
-                                    <div className="opacity-75">{event.startTime}</div>
-                                  </div>
-                                ))}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </ScrollArea>
-              </div>
-            )}
-
-            {/* Day View */}
-            {viewMode === "day" && (
-              <ScrollArea className="h-[500px]">
-                <div className="space-y-1">
-                  {Array.from({ length: 14 }).map((_, hour) => {
-                    const time = hour + 7
-                    const dayEvents = getEventsForDate(currentDate).filter((e) => {
-                      const eventHour = Number.parseInt(e.startTime.split(":")[0])
-                      return eventHour === time
-                    })
-                    return (
-                      <div key={hour} className="grid grid-cols-[80px_1fr] gap-4 min-h-[60px]">
-                        <div className="text-sm text-muted-foreground py-2 text-right">{`${time}:00`}</div>
-                        <div className="border-t p-2 min-h-[60px]">
-                          {dayEvents.map((event) => (
-                            <div
-                              key={event.id}
-                              className={`p-3 rounded-lg text-white mb-2 cursor-pointer ${getEventColor(event.type)}`}
-                              onClick={() => {
-                                setSelectedEvent(event)
-                                setShowEventDialog(true)
-                              }}
-                            >
-                              <div className="font-medium">{event.title}</div>
-                              <div className="text-sm opacity-75 mt-1">
-                                {event.startTime} - {event.endTime}
-                                {event.location && ` • ${event.location}`}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </ScrollArea>
-            )}
-
-            {/* Agenda View */}
-            {viewMode === "agenda" && (
-              <ScrollArea className="h-[500px]">
-                <div className="space-y-4">
-                  {upcomingEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="flex items-start gap-4 p-4 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => {
-                        setSelectedEvent(event)
-                        setShowEventDialog(true)
-                      }}
-                    >
-                      <div className={`p-2 rounded-lg ${getEventColor(event.type)} text-white`}>
-                        {getEventIcon(event.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="font-medium">{event.title}</h4>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {format(new Date(event.date), "EEEE, MMMM d")} • {event.startTime} - {event.endTime}
-                            </p>
-                          </div>
-                          <Badge variant="outline">{event.type.replace("-", " ")}</Badge>
-                        </div>
-                        {event.location && (
-                          <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            {event.location}
-                          </div>
-                        )}
-                        {event.attendees && event.attendees.length > 0 && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="flex -space-x-2">
-                              {event.attendees.slice(0, 3).map((attendee, i) => (
-                                <Avatar key={i} className="h-6 w-6 border-2 border-background">
-                                  <AvatarImage src={attendee.avatar || "/placeholder.svg"} />
-                                  <AvatarFallback className="text-xs">{attendee.name[0]}</AvatarFallback>
-                                </Avatar>
-                              ))}
-                            </div>
-                            {event.attendees.length > 3 && (
-                              <span className="text-xs text-muted-foreground">+{event.attendees.length - 3} more</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Mini Calendar */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <CalendarIcon className="h-4 w-4" />
-                Quick Navigate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-1 text-center">
-                {daysOfWeekMobile.map((d, i) => (
-                  <div key={`dow-${i}`} className="text-[10px] text-muted-foreground py-1">
-                    {d}
-                  </div>
+        {/* ── FILTER BAR ──────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-2 rounded-xl bg-muted/30 p-3 sm:flex sm:flex-wrap sm:items-center">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 w-full bg-background pl-8 text-sm sm:min-w-[180px] sm:flex-1"
+              placeholder="Search events..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:contents">
+            <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as SourceFilter)}>
+              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All sources</SelectItem>
+                <SelectItem value="MEETING">Meetings</SelectItem>
+                <SelectItem value="TASK_DEADLINE">Deadlines</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {statusOptions.map((s) => (
+                  <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : formatLabel(s)}</SelectItem>
                 ))}
-                {Array.from({ length: firstDay }).map((_, i) => (
-                  <div key={`e-${i}`} className="aspect-square" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1
-                  const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-                  const hasEvents = getEventsForDate(date).length > 0
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        setCurrentDate(date)
-                        setViewMode("day")
-                      }}
-                      className={`aspect-square flex items-center justify-center text-xs rounded-full transition-colors ${
-                        isToday(date)
-                          ? "bg-primary text-primary-foreground"
-                          : hasEvents
-                            ? "bg-primary/20 font-medium"
-                            : "hover:bg-muted"
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-2 sm:contents">
+            <Button variant="ghost" size="sm" className="h-9 w-full px-3 text-sm sm:w-auto"
+              onClick={() => { setSearch(""); setSourceFilter("ALL"); setStatusFilter("ALL") }}>
+              Clear filters
+            </Button>
+            <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap sm:ml-auto">
+              {filteredEvents.length} item{filteredEvents.length !== 1 ? "s" : ""} · {connectedCount}/2
+            </span>
+          </div>
+        </div>
 
-          {/* Upcoming Events */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Upcoming Events
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-3">
-                  {upcomingEvents.length > 0 ? (
-                    upcomingEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => {
-                          setSelectedEvent(event)
-                          setShowEventDialog(true)
-                        }}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className={`h-2 w-2 rounded-full mt-1.5 shrink-0 ${getEventColor(event.type)}`} />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-medium truncate">{event.title}</h4>
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(event.date), "MMM d")} • {event.startTime}
-                            </p>
-                          </div>
-                        </div>
+        {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
+        {error ? (
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 py-12 text-center">
+            <AlertCircle className="h-10 w-10 text-destructive" />
+            <div>
+              <h2 className="font-semibold">Calendar could not be loaded</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+            </div>
+            <Button size="sm" onClick={() => void loadPage(false)}>
+              <RefreshCcw className="h-4 w-4" />Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+            {/* ── LEFT: Views ─────────────────────────────────────── */}
+            <div className="space-y-0">
+              <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)}>
+                {/* View header + tab switcher */}
+                <div className="flex flex-col gap-3 rounded-t-xl border border-b-0 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">
+                      {view === "month" || view === "agenda"
+                        ? format(month, "MMMM yyyy")
+                        : format(selectedDay, "MMMM d, yyyy")}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                      {format(visibleRange.start, "MMM d")} – {format(visibleRange.end, "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <TabsList className="h-8 w-full grid grid-cols-4 rounded-lg sm:w-fit">
+                    <TabsTrigger value="month" className="h-7 rounded-md px-2 text-xs sm:px-3">Month</TabsTrigger>
+                    <TabsTrigger value="week" className="h-7 rounded-md px-2 text-xs sm:px-3">Week</TabsTrigger>
+                    <TabsTrigger value="day" className="h-7 rounded-md px-2 text-xs sm:px-3">Day</TabsTrigger>
+                    <TabsTrigger value="agenda" className="h-7 rounded-md px-2 text-xs sm:px-3">Agenda</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <div className="rounded-b-xl border border-t-0 bg-card overflow-hidden">
+                  <TabsContent value="month" className="mt-0">
+                    <CalendarGrid
+                      month={month}
+                      selectedDay={selectedDay}
+                      days={calendarDays}
+                      eventsByDay={eventsByDay}
+                      loading={loading}
+                      onSelectDay={selectDay}
+                      onOpenEvent={setSelectedEvent}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="week" className="mt-0">
+                    <div className="p-4">
+                      {loading ? <CalendarSkeleton /> : (
+                        <WeekView
+                          days={weekDays}
+                          eventsByDay={eventsByDay}
+                          selectedDay={selectedDay}
+                          onSelectDay={selectDay}
+                          onOpenEvent={setSelectedEvent}
+                        />
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="day" className="mt-0">
+                    <div className="p-4">
+                      <div className="mb-3">
+                        <h3 className="font-semibold">{format(selectedDay, "EEEE, MMMM d")}</h3>
+                        <p className="text-xs text-muted-foreground">{selectedEvents.length} item{selectedEvents.length !== 1 ? "s" : ""} scheduled</p>
                       </div>
-                    ))
+                      {loading ? <EventListSkeleton /> : (
+                        <EventList
+                          events={selectedEvents}
+                          emptyTitle="No events on this day"
+                          emptyDescription="Use the Meetings page to create a meeting or choose another date."
+                          onOpenEvent={setSelectedEvent}
+                        />
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="agenda" className="mt-0">
+                    <div className="p-4">
+                      <div className="mb-3">
+                        <h3 className="font-semibold">Agenda</h3>
+                        <p className="text-xs text-muted-foreground">Chronological list for this calendar range.</p>
+                      </div>
+                      {loading ? <EventListSkeleton /> : <AgendaList events={agendaEvents} onOpenEvent={setSelectedEvent} />}
+                    </div>
+                  </TabsContent>
+                </div>
+              </Tabs>
+            </div>
+
+            {/* ── RIGHT: Sidebar ──────────────────────────────────── */}
+            <div className="space-y-4">
+              {/* Provider connections */}
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-semibold">Calendar providers</h3>
+                  <p className="text-xs text-muted-foreground">{connectedCount}/2 connected</p>
+                </div>
+                <div className="divide-y">
+                  <ProviderCard provider="GOOGLE" integration={googleIntegration} running={runningAction} onAction={requestProviderAction} />
+                  <ProviderCard provider="OUTLOOK" integration={outlookIntegration} running={runningAction} onAction={requestProviderAction} />
+                </div>
+              </div>
+
+              {/* Action center */}
+              <div className="rounded-xl border bg-card overflow-hidden">
+                <div className="border-b px-4 py-3">
+                  <h3 className="font-semibold">Action center</h3>
+                  <p className="text-xs text-muted-foreground">Approvals, conflicts, and sync problems</p>
+                </div>
+                <div className="p-3">
+                  {loading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-16 rounded-lg" />
+                      <Skeleton className="h-16 rounded-lg" />
+                    </div>
+                  ) : actionNeededEvents.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-8 text-center">
+                      <CheckCircle2 className="h-7 w-7 text-emerald-500/60" />
+                      <p className="text-sm font-medium">Everything looks clear</p>
+                      <p className="text-xs text-muted-foreground">No pending approvals or sync errors.</p>
+                    </div>
                   ) : (
-                    <div className="text-center py-8">
-                      <CalendarIcon className="h-10 w-10 mx-auto text-muted-foreground/50 mb-2" />
-                      <p className="text-sm text-muted-foreground">No upcoming events</p>
+                    <div className="space-y-2">
+                      {actionNeededEvents.slice(0, 5).map((event) => (
+                        <CompactEventCard
+                          key={`${event.sourceType}-${event.sourceId}`}
+                          event={event}
+                          onOpenEvent={setSelectedEvent}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-
-          {/* Event Types Legend */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Palette className="h-4 w-4" />
-                Event Types
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[
-                  { type: "meeting", label: "Meeting", color: "bg-blue-500" },
-                  { type: "virtual-meeting", label: "Virtual Meeting", color: "bg-purple-500" },
-                  { type: "deadline", label: "Deadline", color: "bg-red-500" },
-                  { type: "milestone", label: "Milestone", color: "bg-amber-500" },
-                  { type: "presentation", label: "Presentation", color: "bg-pink-500" },
-                  { type: "review", label: "Review", color: "bg-emerald-500" },
-                ].map((item) => (
-                  <div key={item.type} className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded ${item.color}`} />
-                    <span className="text-sm">{item.label}</span>
-                  </div>
-                ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── EVENT DETAIL SHEET ─────────────────────────────────────── */}
+      <Sheet open={Boolean(selectedEvent)} onOpenChange={(open) => !open && setSelectedEvent(null)}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+          {selectedEvent && (
+            <EventDetails
+              event={selectedEvent}
+              onCopyLink={copyEventLink}
+              onMeetingAction={requestMeetingAction}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ── CONFIRM ACTION DIALOG ─────────────────────────────────── */}
+      <AlertDialog open={Boolean(pendingAction)} onOpenChange={(open) => !open && !runningAction && setPendingAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingAction?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{pendingAction?.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingAction?.details && (
+            <div className="space-y-2 rounded-xl border bg-muted/30 p-3 text-sm">
+              {pendingAction.details.map((d) => (
+                <div key={d.label} className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">{d.label}</span>
+                  <span className="text-right font-medium">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={runningAction}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); void runPendingAction() }}
+              disabled={runningAction}
+              className={pendingAction?.confirmVariant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : undefined}
+            >
+              {runningAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {pendingAction?.confirmLabel || "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </TeamRequiredGuard>
+  )
+}
+
+// ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
+
+function QuickStat({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warning" }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 sm:min-w-[120px]">
+      <span className={cn(
+        "text-xl font-bold leading-none tabular-nums",
+        tone === "warning" && value > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+      )}>
+        {value}
+      </span>
+      <span className="text-xs text-muted-foreground leading-tight">{label}</span>
+    </div>
+  )
+}
+
+function CalendarGrid({
+  month,
+  selectedDay,
+  days,
+  eventsByDay,
+  loading,
+  onSelectDay,
+  onOpenEvent,
+}: {
+  month: Date
+  selectedDay: Date
+  days: Date[]
+  eventsByDay: Record<string, ApiCalendarEvent[]>
+  loading: boolean
+  onSelectDay: (day: Date) => void
+  onOpenEvent: (event: ApiCalendarEvent) => void
+}) {
+  if (loading) {
+    return <div className="p-4"><CalendarSkeleton /></div>
+  }
+
+  return (
+    <div className="overflow-hidden">
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 border-b bg-muted/30 text-center">
+        {[["S","Sat"],["S","Sun"],["M","Mon"],["T","Tue"],["W","Wed"],["T","Thu"],["F","Fri"]].map(([short, full], i) => (
+          <div key={i} className="py-2.5 text-xs font-semibold tracking-wide text-muted-foreground">
+            <span className="sm:hidden">{short}</span>
+            <span className="hidden sm:inline">{full}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Day cells — entire cell is clickable; event pills stop propagation */}
+      <div className="grid grid-cols-7">
+        {days.map((day) => {
+          const key = format(day, "yyyy-MM-dd")
+          const dayEvents = sortEvents(eventsByDay[key] || [])
+          const isSelected = isSameDay(day, selectedDay)
+          const today = isToday(day)
+          const inMonth = isSameMonth(day, month)
+
+          return (
+            <div
+              key={key}
+              onClick={() => onSelectDay(day)}
+              aria-label={`Select ${format(day, "PPP")}${dayEvents.length ? `, ${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}` : ""}`}
+              className={cn(
+                "group relative cursor-pointer border-b border-r p-1 sm:p-1.5 transition-colors",
+                "min-h-[80px] sm:min-h-[110px] lg:min-h-[140px]",
+                !inMonth && "bg-muted/5",
+                today && !isSelected && "bg-primary/[0.04]",
+                isSelected ? "bg-primary/10" : "hover:bg-muted/20",
+              )}
+            >
+              {/* Date row */}
+              <div className="mb-1 flex items-start justify-between gap-0.5">
+                <span className={cn(
+                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold leading-none transition-colors",
+                  today && "bg-primary text-primary-foreground shadow-sm",
+                  !today && isSelected && "ring-2 ring-primary text-primary",
+                  !today && !isSelected && "group-hover:bg-muted/70 text-foreground",
+                  !inMonth && "text-muted-foreground/40",
+                )}>
+                  {format(day, "d")}
+                </span>
+                {dayEvents.length > 0 && (
+                  <Badge variant="outline" className="hidden h-4 shrink-0 px-1 text-[9px] leading-none sm:inline-flex">
+                    {dayEvents.length}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Events */}
+              <div className="space-y-px">
+                {/* Mobile: colored dots only */}
+                {dayEvents.length > 0 && (
+                  <div className="flex flex-wrap gap-0.5 px-0.5 sm:hidden">
+                    {dayEvents.slice(0, 6).map((event) => (
+                      <span
+                        key={`${event.sourceType}-${event.sourceId}`}
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          event.sourceType === "MEETING" ? "bg-primary" : "bg-amber-500"
+                        )}
+                      />
+                    ))}
+                    {dayEvents.length > 6 && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
+                  </div>
+                )}
+
+                {/* sm+: clickable event pills — stop propagation so cell click isn't also triggered */}
+                {dayEvents.slice(0, 3).map((event) => (
+                  <button
+                    key={`${event.sourceType}-${event.sourceId}`}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onOpenEvent(event) }}
+                    className={cn(
+                      "hidden w-full rounded border-l-2 px-1 py-px text-left text-[10px] leading-snug transition-opacity hover:opacity-75 focus-visible:outline-none sm:block",
+                      event.sourceType === "MEETING"
+                        ? "bg-primary/10 border-l-primary"
+                        : "bg-amber-50 border-l-amber-400 dark:bg-amber-950/20"
+                    )}
+                  >
+                    <div className="truncate font-medium">{event.title}</div>
+                    {!event.allDay && (
+                      <div className="hidden truncate text-muted-foreground opacity-70 lg:block">
+                        {format(new Date(event.startAt), "p")}
+                      </div>
+                    )}
+                  </button>
+                ))}
+
+                {dayEvents.length > 3 && (
+                  <p className="hidden pl-0.5 text-[10px] text-muted-foreground sm:block">
+                    +{dayEvents.length - 3} more
+                  </p>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function WeekView({
+  days,
+  eventsByDay,
+  selectedDay,
+  onSelectDay,
+  onOpenEvent,
+}: {
+  days: Date[]
+  eventsByDay: Record<string, ApiCalendarEvent[]>
+  selectedDay: Date
+  onSelectDay: (day: Date) => void
+  onOpenEvent: (event: ApiCalendarEvent) => void
+}) {
+  return (
+    <div className="-mx-4 overflow-x-auto sm:mx-0">
+      <div className="min-w-[640px] px-4 sm:px-0">
+        <div className="grid grid-cols-7 gap-1.5">
+          {days.map((day) => {
+            const key = format(day, "yyyy-MM-dd")
+            const dayEvents = sortEvents(eventsByDay[key] || [])
+            const isSelected = isSameDay(day, selectedDay)
+            const today = isToday(day)
+
+            return (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "flex flex-col overflow-hidden rounded-xl border transition-colors",
+                  isSelected ? "border-primary/60 ring-1 ring-primary/30" : "border-border",
+                )}
+              >
+                {/* Day header — click to drill into day view */}
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(day)}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 px-2 py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring",
+                    isSelected
+                      ? "bg-primary text-primary-foreground"
+                      : today
+                        ? "bg-primary/10 hover:bg-primary/15"
+                        : "bg-muted/40 hover:bg-muted/60"
+                  )}
+                >
+                  <span className={cn(
+                    "text-[10px] font-bold uppercase tracking-wider",
+                    isSelected ? "text-primary-foreground/70" : "text-muted-foreground"
+                  )}>
+                    {format(day, "EEE")}
+                  </span>
+                  <span className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-full text-base font-bold leading-none",
+                    today && !isSelected && "bg-primary text-primary-foreground",
+                    isSelected && "text-primary-foreground",
+                    !today && !isSelected && "text-foreground"
+                  )}>
+                    {format(day, "d")}
+                  </span>
+                  {dayEvents.length > 0 && !isSelected && (
+                    <span className="mt-0.5 h-1 w-1 rounded-full bg-primary/60" />
+                  )}
+                </button>
+
+                {/* Events area */}
+                <div className="flex-1 space-y-1 p-1.5 min-h-[100px]">
+                  {dayEvents.length === 0 ? (
+                    <div className="flex h-full min-h-[80px] items-center justify-center rounded-lg border border-dashed">
+                      <span className="text-[10px] text-muted-foreground/40">—</span>
+                    </div>
+                  ) : (
+                    dayEvents.map((event) => (
+                      <button
+                        key={`${event.sourceType}-${event.sourceId}`}
+                        type="button"
+                        onClick={() => onOpenEvent(event)}
+                        className={cn(
+                          "w-full rounded border-l-2 px-1.5 py-1 text-left text-[10px] leading-snug transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          event.sourceType === "MEETING"
+                            ? "bg-primary/10 border-l-primary"
+                            : "bg-amber-50 border-l-amber-400 dark:bg-amber-950/20"
+                        )}
+                      >
+                        <div className="truncate font-semibold">{event.title}</div>
+                        {!event.allDay && (
+                          <div className="truncate text-muted-foreground opacity-70">
+                            {format(new Date(event.startAt), "p")}
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AgendaList({ events, onOpenEvent }: { events: ApiCalendarEvent[]; onOpenEvent: (event: ApiCalendarEvent) => void }) {
+  if (events.length === 0) {
+    return <EmptyState title="No calendar items found" description="Try clearing filters or moving to another month." />
+  }
+
+  const groups = events.reduce<Record<string, ApiCalendarEvent[]>>((acc, event) => {
+    const key = format(new Date(event.startAt), "yyyy-MM-dd")
+    acc[key] = acc[key] || []
+    acc[key].push(event)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-5">
+      {Object.entries(groups).map(([key, group]) => (
+        <section key={key} className="space-y-2.5">
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border" />
+            <h3 className="text-xs font-semibold text-muted-foreground">
+              {format(new Date(`${key}T00:00:00`), "EEEE, MMMM d")}
+            </h3>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <EventList events={group} emptyTitle="No events" emptyDescription="" onOpenEvent={onOpenEvent} />
+        </section>
+      ))}
+    </div>
+  )
+}
+
+function EventList({
+  events,
+  emptyTitle,
+  emptyDescription,
+  onOpenEvent,
+}: {
+  events: ApiCalendarEvent[]
+  emptyTitle: string
+  emptyDescription: string
+  onOpenEvent: (event: ApiCalendarEvent) => void
+}) {
+  const prefersReducedMotion = useReducedMotion()
+  if (events.length === 0) return <EmptyState title={emptyTitle} description={emptyDescription} />
+
+  return (
+    <div className="space-y-2.5">
+      {sortEvents(events).map((event, index) => (
+        <motion.div
+          key={`${event.sourceType}-${event.sourceId}`}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: prefersReducedMotion ? 0 : Math.min(index * 0.03, 0.18), duration: 0.22 }}
+        >
+          <EventCard event={event} onOpenEvent={onOpenEvent} />
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+function EventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onOpenEvent: (event: ApiCalendarEvent) => void }) {
+  const borderCls = sourceBorderColor[event.sourceType] ?? "border-l-border"
+
+  return (
+    <motion.button
+      type="button"
+      onClick={() => onOpenEvent(event)}
+      whileHover={{ y: -1, transition: { duration: 0.15 } }}
+      className={cn(
+        "group w-full rounded-xl border border-l-4 bg-card p-4 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        borderCls
+      )}
+    >
+      <div className="flex items-start justify-between gap-4">
+        {/* Left: core info */}
+        <div className="min-w-0 flex-1 space-y-2">
+          {/* Badges row */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Badge variant="outline" className={cn("text-xs", sourceBadgeClass[event.sourceType])}>
+              {sourceLabel[event.sourceType]}
+            </Badge>
+            <Badge variant="outline" className={cn("text-xs", statusClass[event.status] || undefined)}>
+              {formatLabel(event.status)}
+            </Badge>
+            {event.externalProvider && (
+              <Badge variant="outline" className="text-xs">{formatLabel(event.externalProvider)}</Badge>
+            )}
+          </div>
+          {/* Title + time */}
+          <div>
+            <h3 className="truncate font-semibold leading-snug group-hover:text-primary transition-colors">{event.title}</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">{formatEventTime(event)}</p>
+          </div>
+          {/* Meta */}
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 shrink-0" />
+              {event.team?.name || "No team"}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              {event.mode === "VIRTUAL" ? <Video className="h-3.5 w-3.5 shrink-0" /> : <MapPin className="h-3.5 w-3.5 shrink-0" />}
+              {event.location || formatLabel(event.mode || event.sourceType)}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: owner + sync — visible on sm+ */}
+        <div className="hidden shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground sm:flex">
+          <span className="font-medium text-foreground">
+            {event.organizer?.fullName || event.assignee?.fullName || "No owner"}
+          </span>
+          <span>{event.externalSyncStatus ? formatLabel(event.externalSyncStatus) : "Internal"}</span>
+          <ChevronRight className="mt-1 h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+        </div>
+      </div>
+    </motion.button>
+  )
+}
+
+function CompactEventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onOpenEvent: (event: ApiCalendarEvent) => void }) {
+  const borderCls = sourceBorderColor[event.sourceType] ?? "border-l-border"
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenEvent(event)}
+      className={cn(
+        "w-full rounded-lg border border-l-4 bg-background p-2.5 text-left transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        borderCls
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold">{event.title}</p>
+          <p className="text-[11px] text-muted-foreground">{format(new Date(event.startAt), "MMM d, p")}</p>
+        </div>
+        <Badge variant="outline" className={cn("shrink-0 text-[10px] px-1.5 py-0", sourceBadgeClass[event.sourceType])}>
+          {sourceLabel[event.sourceType]}
+        </Badge>
+      </div>
+    </button>
+  )
+}
+
+function ProviderCard({
+  provider,
+  integration,
+  running,
+  onAction,
+}: {
+  provider: ApiCalendarProvider
+  integration?: ApiCalendarIntegration
+  running: boolean
+  onAction: (provider: ApiCalendarProvider, action: ProviderAction) => void
+}) {
+  const connected = Boolean(integration?.syncEnabled)
+  const isGoogle = provider === "GOOGLE"
+
+  return (
+    <div className="p-4">
+      <div className="flex items-center gap-3">
+        {/* Provider icon accent */}
+        <div className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white",
+          isGoogle ? "bg-[#4285f4]" : "bg-[#0078d4]"
+        )}>
+          {isGoogle ? "G" : "O"}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-sm">{providerLabel(provider)}</p>
+            <Badge variant={connected ? "default" : "outline"} className="text-[10px] px-1.5 py-0">
+              {connected ? "Connected" : "Off"}
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground truncate">{integration?.email || "Not connected"}</p>
         </div>
       </div>
 
-      {/* Event Detail Dialog */}
-      <Dialog open={showEventDialog} onOpenChange={setShowEventDialog}>
-        <DialogContent className="max-w-lg">
-          {selectedEvent && (
-            <>
-              <DialogHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${getEventColor(selectedEvent.type)} text-white`}>
-                      {getEventIcon(selectedEvent.type)}
-                    </div>
-                    <div>
-                      <DialogTitle>{selectedEvent.title}</DialogTitle>
-                      <Badge variant="outline" className="mt-1">
-                        {selectedEvent.type.replace("-", " ")}
-                      </Badge>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Event
-                      </DropdownMenuItem>
-                      <DropdownMenuItem>
-                        <Share2 className="h-4 w-4 mr-2" />
-                        Share
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-red-500" onClick={() => handleDeleteEvent(selectedEvent)}>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <DialogDescription>View event details and perform actions</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="flex items-center gap-3 text-sm">
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                  <span>{format(new Date(selectedEvent.date), "EEEE, MMMM d, yyyy")}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>
-                    {selectedEvent.startTime} - {selectedEvent.endTime}
-                  </span>
-                </div>
-                {selectedEvent.location && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedEvent.location}</span>
-                  </div>
-                )}
-                {selectedEvent.meetingLink && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Video className="h-4 w-4 text-muted-foreground" />
-                    <a
-                      href={selectedEvent.meetingLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline flex items-center gap-1"
-                    >
-                      Join Meeting
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-                {selectedEvent.description && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Description</h4>
-                      <p className="text-sm text-muted-foreground">{selectedEvent.description}</p>
-                    </div>
-                  </>
-                )}
-                {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="text-sm font-medium mb-2">Attendees ({selectedEvent.attendees.length})</h4>
-                      <div className="space-y-2">
-                        {selectedEvent.attendees.map((attendee, i) => (
-                          <div key={i} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-6 w-6">
-                                <AvatarImage src={attendee.avatar || "/placeholder.svg"} />
-                                <AvatarFallback className="text-xs">{attendee.name[0]}</AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm">{attendee.name}</span>
-                            </div>
-                            <Badge
-                              variant={
-                                attendee.status === "accepted"
-                                  ? "default"
-                                  : attendee.status === "declined"
-                                    ? "destructive"
-                                    : "secondary"
-                              }
-                              className="text-xs"
-                            >
-                              {attendee.status}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowEventDialog(false)}>
-                  Close
-                </Button>
-                {selectedEvent.meetingLink && (
-                  <Button asChild>
-                    <a href={selectedEvent.meetingLink} target="_blank" rel="noopener noreferrer">
-                      <Video className="h-4 w-4 mr-2" />
-                      Join Meeting
-                    </a>
-                  </Button>
-                )}
-              </DialogFooter>
-            </>
+      <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+        <div className="flex justify-between gap-3">
+          <span>Last sync</span>
+          <span className="font-medium text-foreground">
+            {integration?.lastSyncedAt ? format(new Date(integration.lastSyncedAt), "MMM d, p") : "Never"}
+          </span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span>Status</span>
+          <span className="font-medium text-foreground">{formatLabel(integration?.lastSyncStatus || "NOT_CONNECTED")}</span>
+        </div>
+      </div>
+
+      {integration?.lastSyncError && (
+        <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          {integration.lastSyncError}
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {!connected ? (
+          <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onAction(provider, "connect")} disabled={running}>
+            <ExternalLink className="h-3.5 w-3.5" />Connect
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => onAction(provider, "sync")} disabled={running}>
+              <RefreshCcw className="h-3.5 w-3.5" />Sync
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 px-3 text-xs text-muted-foreground" onClick={() => onAction(provider, "disconnect")} disabled={running}>
+              Disconnect
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EventDetails({
+  event,
+  onCopyLink,
+  onMeetingAction,
+}: {
+  event: ApiCalendarEvent
+  onCopyLink: (event: ApiCalendarEvent) => Promise<void>
+  onMeetingAction: (event: ApiCalendarEvent, kind: "cancel" | "complete" | "delete" | "sync") => void
+}) {
+  const isMeeting = event.sourceType === "MEETING"
+  const canManage = Boolean(isMeeting && event.permissions?.canManage)
+  const canCancel = canManage && !["CANCELLED", "COMPLETED"].includes(event.status)
+  const canComplete = canManage && event.status === "CONFIRMED"
+  const canSync = canManage && event.status === "CONFIRMED" && Boolean(event.externalProvider)
+  const borderCls = sourceBorderColor[event.sourceType] ?? "border-l-border"
+
+  return (
+    <>
+      <SheetHeader className="space-y-3 pb-4">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline" className={cn("text-xs", sourceBadgeClass[event.sourceType])}>
+            {sourceLabel[event.sourceType]}
+          </Badge>
+          <Badge variant="outline" className={cn("text-xs", statusClass[event.status] || undefined)}>
+            {formatLabel(event.status)}
+          </Badge>
+          {event.externalProvider && (
+            <Badge variant="outline" className="text-xs">{formatLabel(event.externalProvider)}</Badge>
           )}
-        </DialogContent>
-      </Dialog>
-    </motion.div>
-    </TeamRequiredGuard>
+        </div>
+        <div className={cn("rounded-xl border-l-4 pl-4", borderCls)}>
+          <SheetTitle className="text-xl leading-snug">{event.title}</SheetTitle>
+          <SheetDescription className="text-xs">
+            {format(new Date(event.startAt), "EEEE, MMMM d, yyyy")} · {formatEventTime(event)}
+          </SheetDescription>
+        </div>
+      </SheetHeader>
+
+      <div className="mt-2 space-y-4">
+        {event.description && (
+          <p className="rounded-xl border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
+            {event.description}
+          </p>
+        )}
+
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <InfoTile icon={CalendarClock} label="Date and time" value={`${format(new Date(event.startAt), "PPP p")} – ${format(new Date(event.endAt), "p")}`} />
+          <InfoTile icon={Users} label="Team" value={event.team?.name || "No team"} />
+          <InfoTile icon={event.mode === "VIRTUAL" ? Video : MapPin} label="Mode / location" value={event.location || formatLabel(event.mode || event.sourceType)} />
+          <InfoTile icon={CheckCircle2} label="Owner" value={event.organizer?.fullName || event.assignee?.fullName || "Not assigned"} />
+        </div>
+
+        {isMeeting && (
+          <div className="rounded-xl border p-4">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold">Participants</h3>
+              <span className="text-xs text-muted-foreground">{event.participants?.length || 0} invited</span>
+            </div>
+            <p className="text-sm text-muted-foreground">{compactParticipants(event)}</p>
+          </div>
+        )}
+
+        {event.approvals && event.approvals.length > 0 && (
+          <div className="rounded-xl border p-4 space-y-2.5">
+            <h3 className="text-sm font-semibold">Approval trail</h3>
+            <div className="space-y-2">
+              {event.approvals.map((approval) => (
+                <div key={approval.id} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">{approval.approverName || formatLabel(approval.approverRole)}</span>
+                    <Badge variant="outline" className={cn("text-xs", statusClass[approval.status] || undefined)}>
+                      {formatLabel(approval.status)}
+                    </Badge>
+                  </div>
+                  {approval.note && <p className="mt-1.5 text-xs text-muted-foreground">{approval.note}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-xl border p-4">
+          <h3 className="mb-2.5 text-sm font-semibold">Sync status</h3>
+          <div className="space-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Provider</span>
+              <span className="font-medium">{event.externalProvider ? formatLabel(event.externalProvider) : "Internal only"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Status</span>
+              <span className="font-medium">{formatLabel(event.externalSyncStatus || "NOT_CONNECTED")}</span>
+            </div>
+          </div>
+          {event.externalSyncError && (
+            <p className="mt-2.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              {event.externalSyncError}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <SheetFooter className="mt-5 flex-col gap-2 sm:flex-col sm:space-x-0">
+        {event.joinUrl && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button asChild>
+              <a href={event.joinUrl} target="_blank" rel="noreferrer">
+                <Link2 className="h-4 w-4" />Join meeting
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => void onCopyLink(event)}>
+              <ClipboardCopy className="h-4 w-4" />Copy link
+            </Button>
+          </div>
+        )}
+        {canManage && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {canSync && (
+              <Button variant="outline" onClick={() => onMeetingAction(event, "sync")}>
+                <RefreshCcw className="h-4 w-4" />Sync
+              </Button>
+            )}
+            {canComplete && (
+              <Button variant="outline" onClick={() => onMeetingAction(event, "complete")}>
+                <CheckCircle2 className="h-4 w-4" />Mark completed
+              </Button>
+            )}
+            {canCancel && (
+              <Button variant="outline" onClick={() => onMeetingAction(event, "cancel")}>
+                <AlertCircle className="h-4 w-4" />Cancel
+              </Button>
+            )}
+            <Button variant="destructive" onClick={() => onMeetingAction(event, "delete")}>
+              <Trash2 className="h-4 w-4" />Delete
+            </Button>
+          </div>
+        )}
+      </SheetFooter>
+    </>
+  )
+}
+
+function InfoTile({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-muted/20 p-3.5">
+      <div className="mb-2 inline-flex rounded-lg bg-primary/10 p-1.5 text-primary">
+        <Icon className="h-3.5 w-3.5" />
+      </div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 text-sm font-medium">{value}</p>
+    </div>
+  )
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed bg-muted/10 px-4 py-10 text-center">
+      <CalendarDays className="h-8 w-8 text-muted-foreground/30" />
+      <div>
+        <h3 className="font-semibold">{title}</h3>
+        {description && <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>}
+      </div>
+    </div>
+  )
+}
+
+function CalendarSkeleton() {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-7 rounded-lg" />)}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {Array.from({ length: 35 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl sm:h-28" />)}
+      </div>
+    </div>
+  )
+}
+
+function EventListSkeleton() {
+  return (
+    <div className="space-y-2.5">
+      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+    </div>
   )
 }

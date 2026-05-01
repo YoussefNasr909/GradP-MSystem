@@ -89,7 +89,7 @@ export default function PublicUserProfilePage() {
             {isSelf ? (
               <div className="flex justify-end border-b border-border/60 px-5 py-4 sm:px-7">
                 <Button variant="outline" className="h-10 rounded-xl border-primary/20 bg-transparent px-4 hover:border-primary/30 hover:bg-primary/[0.05]" asChild>
-                  <Link href="/dashboard/profile">Edit My Profile</Link>
+                  <Link href="/dashboard/settings?tab=profile">Edit My Profile</Link>
                 </Button>
               </div>
             ) : null}
@@ -140,7 +140,7 @@ export default function PublicUserProfilePage() {
                   <div className="space-y-4">
                     <SectionTitle>Profile details</SectionTitle>
                     <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-                      <DetailRow label="Email" value={profile.email} />
+                      <DetailRow label="Email" value={profile.email ?? "Hidden by privacy settings"} />
                       <DetailRow label="Role" value={roleLabel} />
                       <DetailRow label="Academic ID" value={academicIdLabel} />
                       <DetailRow label="Department" value={departmentLabel} />
