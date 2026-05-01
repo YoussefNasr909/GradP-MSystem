@@ -29,6 +29,8 @@ import {
   Timer,
   Github,
   FolderOpen,
+  Bell,
+  UserCheck,
   AlertTriangle,
   ClipboardList,
   Trophy,
@@ -95,6 +97,12 @@ const navigationGroups = [
         icon: Calendar,
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
+      {
+        name: "Notifications",
+        href: "/dashboard/notifications",
+        icon: Bell,
+        roles: ["admin", "doctor", "ta", "leader", "member"],
+      },
       { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "ta", "leader"] },
       {
         name: "Submissions",
@@ -104,6 +112,7 @@ const navigationGroups = [
       },
       { name: "Review Work", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta"] },
       { name: "Evaluations", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor", "ta"] },
+      { name: "Peer Reviews", href: "/dashboard/peer-reviews", icon: UserCheck, roles: ["leader", "member"] },
       {
         name: "Meetings",
         href: "/dashboard/meetings",

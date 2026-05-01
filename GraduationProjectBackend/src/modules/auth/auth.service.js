@@ -1,9 +1,14 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
+import { generateSecret, generateURI, verify } from "otplib";
+import QRCode from "qrcode";
 import { prisma } from "../../loaders/dbLoader.js";
 import { env } from "../../config/env.js";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../../common/utils/mailer.js";
 import { ACCOUNT_STATUSES } from "../../common/constants/accountStatuses.js";
+import { decryptSecret, encryptSecret } from "../../common/utils/crypto.js";
+import { notify } from "../../common/utils/notify.js";
 
 import { AppError } from "../../common/errors/AppError.js";
 
@@ -35,6 +40,7 @@ function sanitizeUser(user) {
     emailVerificationExpiresAt,
     passwordResetCodeHash,
 passwordResetExpiresAt,
+    settings,
 
     ...safe
   } = user;
@@ -56,6 +62,24 @@ function makeJwtToken(userId, rememberMe = false) {
   return jwt.sign({ id: String(userId) }, env.jwtSecret, { expiresIn });
 }
 
+function makeTwoFactorChallengeToken(userId, rememberMe = false) {
+  return jwt.sign({ id: String(userId), purpose: "2fa", rememberMe: Boolean(rememberMe) }, env.jwtSecret, {
+    expiresIn: "5m",
+  });
+}
+
+function verifyTwoFactorChallengeToken(token) {
+  try {
+    const payload = jwt.verify(String(token ?? ""), env.jwtSecret);
+    if (!payload || typeof payload !== "object" || payload.purpose !== "2fa" || !payload.id) {
+      throw httpError(400, "INVALID_2FA_CHALLENGE", "Invalid two-factor challenge.");
+    }
+    return payload;
+  } catch {
+    throw httpError(400, "INVALID_2FA_CHALLENGE", "Two-factor challenge expired. Please sign in again.");
+  }
+}
+
 function assertAccountCanAccess(user) {
   if (!user) return;
 
@@ -66,6 +90,80 @@ function assertAccountCanAccess(user) {
   if (user.accountStatus === ACCOUNT_STATUSES.SUSPENDED) {
     throw httpError(403, "ACCOUNT_SUSPENDED", "This account has been suspended. Please contact an administrator.");
   }
+}
+
+function getDisplayName(user) {
+  return `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim() || user?.email || "User";
+}
+
+function normalizeRecoveryCode(code) {
+  return String(code ?? "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+function makeRecoveryCode() {
+  const raw = randomBytes(5).toString("hex").toUpperCase();
+  return `${raw.slice(0, 5)}-${raw.slice(5)}`;
+}
+
+async function hashRecoveryCodes(codes) {
+  return Promise.all(codes.map((code) => bcrypt.hash(normalizeRecoveryCode(code), 10)));
+}
+
+function getTwoFactorSecret(settings) {
+  const encrypted = settings?.twoFactorSecretEncrypted;
+  if (!encrypted) return null;
+  return decryptSecret(encrypted);
+}
+
+async function verifyRecoveryCode(settings, recoveryCode) {
+  const normalized = normalizeRecoveryCode(recoveryCode);
+  if (!normalized) return null;
+
+  for (const hash of settings?.recoveryCodeHashes ?? []) {
+    if (await bcrypt.compare(normalized, hash)) {
+      return hash;
+    }
+  }
+
+  return null;
+}
+
+async function verifySecondFactorOrThrow(settings, { code, recoveryCode }) {
+  if (!settings?.twoFactorEnabled) {
+    throw httpError(400, "TWO_FACTOR_NOT_ENABLED", "Two-factor authentication is not enabled.");
+  }
+
+  if (code) {
+    const secret = getTwoFactorSecret(settings);
+    if (!secret) throw httpError(409, "TWO_FACTOR_NOT_CONFIGURED", "Two-factor authentication is not configured.");
+    const result = await verify({ secret, token: String(code).trim() });
+    if (result.valid) return { recoveryHash: null };
+  }
+
+  if (recoveryCode) {
+    const recoveryHash = await verifyRecoveryCode(settings, recoveryCode);
+    if (recoveryHash) return { recoveryHash };
+  }
+
+  throw httpError(400, "INVALID_TWO_FACTOR_CODE", "Invalid authenticator or recovery code.");
+}
+
+async function sendLoginAlert(user) {
+  const settings = await prisma.userSettings.findUnique({
+    where: { userId: user.id },
+    select: { loginAlerts: true },
+  });
+
+  if (settings?.loginAlerts === false) return;
+
+  await notify({
+    userId: user.id,
+    type: "SYSTEM",
+    title: "New login to your account",
+    message: `Your ProjectHub account was signed in on ${new Date().toLocaleString("en-US")}.`,
+    actionUrl: "/dashboard/settings?tab=security",
+    forceEmail: true,
+  });
 }
 
 // -------------------- services --------------------
@@ -160,7 +258,17 @@ export async function sendVerificationService({ email }) {
   const normalized = normalizeEmail(email);
   if (!normalized) throw httpError(400, "VALIDATION_ERROR", "Email is required");
 
-  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  const user = await prisma.user.findUnique({
+    where: { email: normalized },
+    include: {
+      settings: {
+        select: {
+          twoFactorEnabled: true,
+          loginAlerts: true,
+        },
+      },
+    },
+  });
   if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
 
   if (user.isEmailVerified) {
@@ -201,7 +309,17 @@ export async function verifyEmailService({ email, code }) {
     throw httpError(400, "VALIDATION_ERROR", "Email and code are required");
   }
 
-  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  const user = await prisma.user.findUnique({
+    where: { email: normalized },
+    include: {
+      settings: {
+        select: {
+          twoFactorEnabled: true,
+          loginAlerts: true,
+        },
+      },
+    },
+  });
   if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
 
   if (user.isEmailVerified) return { verified: true };
@@ -250,7 +368,17 @@ export async function forgotPasswordService({ email }) {
   const normalized = normalizeEmail(email);
   if (!normalized) throw httpError(400, "VALIDATION_ERROR", "Email is required");
 
-  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  const user = await prisma.user.findUnique({
+    where: { email: normalized },
+    include: {
+      settings: {
+        select: {
+          twoFactorEnabled: true,
+          loginAlerts: true,
+        },
+      },
+    },
+  });
   if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
 
   const code = generateOtp6();
@@ -360,7 +488,17 @@ export async function loginService({ email, password, rememberMe }) {
     throw httpError(400, "VALIDATION_ERROR", "Email and password are required");
   }
 
-  const user = await prisma.user.findUnique({ where: { email: normalized } });
+  const user = await prisma.user.findUnique({
+    where: { email: normalized },
+    include: {
+      settings: {
+        select: {
+          twoFactorEnabled: true,
+          loginAlerts: true,
+        },
+      },
+    },
+  });
   if (!user) {
     throw httpError(400, "INVALID_CREDENTIALS", "Invalid email or password");
   }
@@ -385,7 +523,20 @@ export async function loginService({ email, password, rememberMe }) {
     throw httpError(403, "EMAIL_NOT_VERIFIED", "Email not verified");
   }
 
+  if (user.settings?.twoFactorEnabled) {
+    return {
+      requiresTwoFactor: true,
+      challengeToken: makeTwoFactorChallengeToken(user.id, Boolean(rememberMe)),
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: getDisplayName(user),
+      },
+    };
+  }
+
   const token = makeJwtToken(user.id, Boolean(rememberMe));
+  await sendLoginAlert(user);
 
   return {
     token,
@@ -405,6 +556,180 @@ export async function meService(userId) {
 
   return sanitizeUser(user);
 }
+
+export async function changePasswordService(userId, { currentPassword, newPassword }) {
+  validateStrongPasswordOrThrow(newPassword);
+
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
+
+  if (!user.passwordHash) {
+    throw httpError(400, "NO_PASSWORD", "This account does not have a password set.");
+  }
+
+  const currentOk = await bcrypt.compare(String(currentPassword ?? ""), user.passwordHash);
+  if (!currentOk) throw httpError(400, "INVALID_CURRENT_PASSWORD", "Current password is incorrect.");
+
+  const passwordHash = await bcrypt.hash(String(newPassword), 10);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  await notify({
+    userId,
+    type: "SYSTEM",
+    title: "Password changed",
+    message: "Your ProjectHub password was changed successfully.",
+    actionUrl: "/dashboard/settings?tab=security",
+    forceEmail: true,
+  });
+
+  return { changed: true };
+}
+
+export async function setupTwoFactorService(userId, { password }) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
+
+  if (!user.passwordHash) {
+    throw httpError(400, "NO_PASSWORD", "Set a password before enabling two-factor authentication.");
+  }
+
+  const passwordOk = await bcrypt.compare(String(password ?? ""), user.passwordHash);
+  if (!passwordOk) throw httpError(400, "INVALID_CURRENT_PASSWORD", "Password is incorrect.");
+
+  const secret = generateSecret();
+  const otpauthUrl = generateURI({ issuer: "ProjectHub", label: user.email, secret });
+  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
+
+  await prisma.userSettings.upsert({
+    where: { userId },
+    create: {
+      userId,
+      pendingTwoFactorSecretEncrypted: encryptSecret(secret),
+    },
+    update: {
+      pendingTwoFactorSecretEncrypted: encryptSecret(secret),
+    },
+  });
+
+  return {
+    otpauthUrl,
+    qrCodeDataUrl,
+    manualEntryKey: secret,
+  };
+}
+
+export async function confirmTwoFactorService(userId, { code }) {
+  const settings = await prisma.userSettings.findUnique({ where: { userId } });
+  const pendingSecret = decryptSecret(settings?.pendingTwoFactorSecretEncrypted);
+
+  if (!pendingSecret) {
+    throw httpError(400, "TWO_FACTOR_SETUP_NOT_STARTED", "Start two-factor setup before confirming.");
+  }
+
+  const result = await verify({ secret: pendingSecret, token: String(code ?? "").trim() });
+  if (!result.valid) {
+    throw httpError(400, "INVALID_TWO_FACTOR_CODE", "Invalid authenticator code.");
+  }
+
+  const recoveryCodes = Array.from({ length: 10 }, makeRecoveryCode);
+  const recoveryCodeHashes = await hashRecoveryCodes(recoveryCodes);
+
+  await prisma.userSettings.update({
+    where: { userId },
+    data: {
+      twoFactorEnabled: true,
+      twoFactorSecretEncrypted: encryptSecret(pendingSecret),
+      pendingTwoFactorSecretEncrypted: null,
+      recoveryCodeHashes,
+    },
+  });
+
+  await notify({
+    userId,
+    type: "SYSTEM",
+    title: "Two-factor authentication enabled",
+    message: "Your ProjectHub account is now protected with authenticator-app verification.",
+    actionUrl: "/dashboard/settings?tab=security",
+    forceEmail: true,
+  });
+
+  return {
+    enabled: true,
+    recoveryCodes,
+  };
+}
+
+export async function disableTwoFactorService(userId, { password, code, recoveryCode }) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { settings: true },
+  });
+  if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
+
+  if (!user.settings?.twoFactorEnabled) return { enabled: false };
+
+  if (!user.passwordHash) {
+    throw httpError(400, "NO_PASSWORD", "This account does not have a password set.");
+  }
+
+  const passwordOk = await bcrypt.compare(String(password ?? ""), user.passwordHash);
+  if (!passwordOk) throw httpError(400, "INVALID_CURRENT_PASSWORD", "Password is incorrect.");
+
+  await verifySecondFactorOrThrow(user.settings, { code, recoveryCode });
+
+  await prisma.userSettings.update({
+    where: { userId },
+    data: {
+      twoFactorEnabled: false,
+      twoFactorSecretEncrypted: null,
+      pendingTwoFactorSecretEncrypted: null,
+      recoveryCodeHashes: [],
+    },
+  });
+
+  await notify({
+    userId,
+    type: "SYSTEM",
+    title: "Two-factor authentication disabled",
+    message: "Two-factor authentication was disabled for your ProjectHub account.",
+    actionUrl: "/dashboard/settings?tab=security",
+    forceEmail: true,
+  });
+
+  return { enabled: false };
+}
+
+export async function verifyTwoFactorLoginService({ challengeToken, code, recoveryCode }) {
+  const challenge = verifyTwoFactorChallengeToken(challengeToken);
+  const user = await prisma.user.findUnique({
+    where: { id: challenge.id },
+    include: { settings: true },
+  });
+
+  if (!user) throw httpError(404, "USER_NOT_FOUND", "User not found");
+  assertAccountCanAccess(user);
+  if (!user.isEmailVerified) throw httpError(403, "EMAIL_NOT_VERIFIED", "Email not verified");
+
+  const { recoveryHash } = await verifySecondFactorOrThrow(user.settings, { code, recoveryCode });
+
+  if (recoveryHash) {
+    await prisma.userSettings.update({
+      where: { userId: user.id },
+      data: {
+        recoveryCodeHashes: (user.settings?.recoveryCodeHashes ?? []).filter((hash) => hash !== recoveryHash),
+      },
+    });
+  }
+
+  const token = makeJwtToken(user.id, Boolean(challenge.rememberMe));
+  await sendLoginAlert(user);
+
+  return {
+    token,
+    user: sanitizeUser(user),
+  };
+}
+
 export async function oauthCompleteService(userId, payload) {
   const id = String(userId ?? "").trim();
   if (!id) throw httpError(400, "VALIDATION_ERROR", "Invalid user id");
@@ -724,4 +1049,3 @@ export async function githubCallbackService(code, flow = "login") {
   const token = makeJwtToken(user.id, true);
   return { token, user: sanitizeUser(user), isNewUser: true };
 }
-

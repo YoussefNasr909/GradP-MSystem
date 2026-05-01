@@ -36,9 +36,26 @@ const teamSummarySelect = {
   },
 };
 
+const directorySettingsSelect = {
+  profileVisibility: true,
+  showEmail: true,
+  showActivity: true,
+  showTeam: true,
+  showOnlineStatus: true,
+};
+
 const directoryUserSelect = {
   ...userSelect,
+  settings: {
+    select: directorySettingsSelect,
+  },
   ledTeam: {
+    select: teamSummarySelect,
+  },
+  doctorTeams: {
+    select: teamSummarySelect,
+  },
+  taTeams: {
     select: teamSummarySelect,
   },
   teamMembership: {

@@ -33,6 +33,9 @@
     "nodemailer": "^8.0.5",
     "npm": "^11.9.0",
     "octokit": "^5.0.5",
+    "otplib": "^13.4.0",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
