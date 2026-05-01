@@ -129,7 +129,8 @@ export default function NotificationsPage() {
   const loadMore = () => fetchNotifications(page + 1, false)
 
   // ─── Icon helper ──────────────────────────────────────────────────────────
-  const getIcon = (type: string) => {
+  const getIcon = (notification: ApiNotification) => {
+    const type = notification.type
     if (type.startsWith("TASK_ASSIGNED"))  return <CheckCheck   className="h-5 w-5" />
     if (type.startsWith("TASK_APPROVED"))  return <CheckCircle  className="h-5 w-5" />
     if (type.startsWith("TASK_CHANGES"))   return <AlertCircle  className="h-5 w-5" />
@@ -138,16 +139,27 @@ export default function NotificationsPage() {
     if (type.startsWith("TEAM_JOIN"))      return <Star         className="h-5 w-5" />
     if (type.startsWith("SUPERVISOR"))     return <Calendar     className="h-5 w-5" />
     if (type.startsWith("SUBMISSION"))     return <FileText     className="h-5 w-5" />
+    if (type === "SYSTEM") {
+      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
+        return <Calendar className="h-5 w-5" />
+      }
+    }
     return <Bell className="h-5 w-5" />
   }
 
-  const getTypeColor = (type: string) => {
+  const getTypeColor = (notification: ApiNotification) => {
+    const type = notification.type
     if (type.startsWith("TASK"))        return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
     if (type.startsWith("TEAM_INVITE")) return "bg-purple-500/10 text-purple-600 dark:text-purple-400"
     if (type.startsWith("TEAM_JOIN"))   return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
     if (type.startsWith("SUPERVISOR"))  return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
     if (type.startsWith("SUBMISSION"))  return "bg-green-500/10 text-green-600 dark:text-green-400"
-    if (type === "SYSTEM")              return "bg-red-500/10 text-red-600 dark:text-red-400"
+    if (type === "SYSTEM") {
+      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
+        return "bg-teal-500/10 text-teal-600 dark:text-teal-400"
+      }
+      return "bg-red-500/10 text-red-600 dark:text-red-400"
+    }
     return "bg-gray-500/10 text-gray-600 dark:text-gray-400"
   }
 
@@ -288,8 +300,8 @@ export default function NotificationsPage() {
                   }`}
                 >
                   <div className="flex gap-4">
-                    <div className={`p-3 rounded-lg ${getTypeColor(notification.type)} shrink-0`}>
-                      {getIcon(notification.type)}
+                    <div className={`p-3 rounded-lg ${getTypeColor(notification)} shrink-0`}>
+                      {getIcon(notification)}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4 mb-2">

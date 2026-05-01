@@ -111,6 +111,14 @@ export const deleteUserSchema = z.object({
   }),
 });
 
+export const deleteMeSchema = z.object({
+  body: z.object({
+    email: z.string().email("Enter your account email to confirm deletion"),
+  }),
+  query: z.any().optional(),
+  params: z.any().optional(),
+});
+
 export const updateMeSchema = z.object({
   body: z
     .object({
