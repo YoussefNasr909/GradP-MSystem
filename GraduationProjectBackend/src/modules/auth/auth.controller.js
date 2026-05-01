@@ -14,11 +14,6 @@ import {
   verifyResetCodeService,
   resetPasswordService,
   oauthCompleteService,
-  changePasswordService,
-  setupTwoFactorService,
-  confirmTwoFactorService,
-  disableTwoFactorService,
-  verifyTwoFactorLoginService,
 } from "./auth.service.js";
 
 import { env } from "../../config/env.js";
@@ -154,34 +149,9 @@ export async function login(req, res) {
   res.json({ ok: true, data: result });
 }
 
-export async function verifyTwoFactorLogin(req, res) {
-  const result = await verifyTwoFactorLoginService(req.validated.body);
-  res.json({ ok: true, data: result });
-}
-
 export async function me(req, res) {
   const user = await meService(req.user.id);
   res.json({ ok: true, data: user });
-}
-
-export async function changePassword(req, res) {
-  const result = await changePasswordService(req.user.id, req.validated.body);
-  res.json({ ok: true, data: result });
-}
-
-export async function setupTwoFactor(req, res) {
-  const result = await setupTwoFactorService(req.user.id, req.validated.body);
-  res.json({ ok: true, data: result });
-}
-
-export async function confirmTwoFactor(req, res) {
-  const result = await confirmTwoFactorService(req.user.id, req.validated.body);
-  res.json({ ok: true, data: result });
-}
-
-export async function disableTwoFactor(req, res) {
-  const result = await disableTwoFactorService(req.user.id, req.validated.body);
-  res.json({ ok: true, data: result });
 }
 
 export async function oauthComplete(req, res) {

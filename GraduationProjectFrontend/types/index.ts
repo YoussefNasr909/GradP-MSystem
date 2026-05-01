@@ -9,7 +9,6 @@ export type User = {
   phone?: string
   role: UserRole
   avatar?: string
-  avatarUrl?: string
   department?: string
   academicYear?: string
   academicId?: string

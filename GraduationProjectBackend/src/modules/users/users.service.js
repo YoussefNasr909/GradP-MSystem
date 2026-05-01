@@ -4,6 +4,7 @@ import { ACCOUNT_STATUSES } from "../../common/constants/accountStatuses.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { findTeamByLeaderId, findTeamMemberByUserId } from "../teams/teams.repository.js";
 import {
+  countDirectoryUsers,
   countActiveAdmins,
   countUsers,
   createUser,
@@ -179,52 +180,6 @@ function isDirectoryVisibleUser(user) {
   );
 }
 
-function getUserRelatedTeamIds(user) {
-  const ids = [
-    user?.ledTeam?.id,
-    user?.teamMembership?.team?.id,
-    ...(user?.doctorTeams ?? []).map((team) => team.id),
-    ...(user?.taTeams ?? []).map((team) => team.id),
-  ].filter(Boolean);
-
-  return Array.from(new Set(ids));
-}
-
-function hasSharedTeamContext(actorContext, targetUser) {
-  const actorTeamIds = actorContext?.teamIds ?? [];
-  if (actorTeamIds.length === 0) return false;
-
-  const targetTeamIds = getUserRelatedTeamIds(targetUser);
-  return targetTeamIds.some((teamId) => actorTeamIds.includes(teamId));
-}
-
-async function getDirectoryActorContext(actor) {
-  if (!actor?.id) return { id: null, role: null, teamIds: [] };
-  if (actor.role === ROLES.ADMIN) return { id: actor.id, role: actor.role, teamIds: [] };
-
-  const actorDirectoryUser = await findDirectoryUserById(actor.id);
-  return {
-    id: actor.id,
-    role: actor.role,
-    teamIds: getUserRelatedTeamIds(actorDirectoryUser),
-  };
-}
-
-function isDirectoryVisibleToActor(user, actorContext) {
-  if (!isDirectoryVisibleUser(user)) return false;
-  if (actorContext?.role === ROLES.ADMIN) return true;
-  if (actorContext?.id && actorContext.id === user.id) return true;
-
-  const visibility = user.settings?.profileVisibility ?? "PUBLIC";
-  if (visibility === "PRIVATE") return false;
-  if (visibility === "TEAM_ONLY") return hasSharedTeamContext(actorContext, user);
-  return true;
-}
-
-function canSeePrivateProfileFields(user, actorContext) {
-  return Boolean(actorContext?.role === ROLES.ADMIN || (actorContext?.id && actorContext.id === user.id));
-}
-
 function toCurrentTeamResponse(user) {
   const ledTeam = user.ledTeam;
   const memberTeam = user.teamMembership?.team;
@@ -244,18 +199,13 @@ function toCurrentTeamResponse(user) {
   };
 }
 
-function toDirectoryUserResponse(user, actorContext) {
-  const settings = user.settings ?? {};
-  const canSeePrivateFields = canSeePrivateProfileFields(user, actorContext);
-  const shouldShowEmail = canSeePrivateFields || settings.showEmail !== false;
-  const shouldShowTeam = canSeePrivateFields || settings.showTeam !== false;
-
+function toDirectoryUserResponse(user) {
   return {
     id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
     fullName: buildFullName(user),
-    email: shouldShowEmail ? user.email : null,
+    email: user.email,
     role: user.role,
     academicId: user.academicId ?? null,
     department: user.department ?? null,
@@ -265,14 +215,7 @@ function toDirectoryUserResponse(user, actorContext) {
     bio: user.bio ?? null,
     linkedinUrl: user.linkedinUrl ?? null,
     githubUsername: user.githubUsername ?? null,
-    currentTeam: shouldShowTeam ? toCurrentTeamResponse(user) : null,
-    privacy: {
-      profileVisibility: settings.profileVisibility ?? "PUBLIC",
-      showEmail: settings.showEmail !== false,
-      showActivity: settings.showActivity !== false,
-      showTeam: settings.showTeam !== false,
-      showOnlineStatus: settings.showOnlineStatus !== false,
-    },
+    currentTeam: toCurrentTeamResponse(user),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -474,27 +417,6 @@ export async function deleteUserService(actorId, userId) {
   return toUserResponse(deleted);
 }
 
-export async function deleteMeService(userId, { email }) {
-  const existing = await findUserById(userId);
-  if (!existing) throw new AppError("User not found", 404, "USER_NOT_FOUND");
-
-  if (normalizeEmail(email) !== normalizeEmail(existing.email)) {
-    throw new AppError("Email confirmation does not match your account.", 400, "EMAIL_CONFIRMATION_MISMATCH");
-  }
-
-  const wouldDeleteLastActiveAdmin =
-    existing.role === ROLES.ADMIN &&
-    existing.accountStatus === ACCOUNT_STATUSES.ACTIVE &&
-    (await countActiveAdmins()) <= 1;
-
-  if (wouldDeleteLastActiveAdmin) {
-    throw new AppError("You cannot delete the last active admin account.", 409, "LAST_ACTIVE_ADMIN");
-  }
-
-  const deleted = await deleteUserById(userId);
-  return toUserResponse(deleted);
-}
-
 export async function updateMeService(userId, payload) {
   const existing = await findUserById(userId);
   if (!existing) throw new AppError("User not found", 404, "USER_NOT_FOUND");
@@ -553,22 +475,24 @@ export async function updateMyRoleService(userId, { role }) {
   return toUserResponse(updated);
 }
 
-export async function listDirectoryUsersService(actor, { page, limit, search, role }) {
+export async function listDirectoryUsersService({ page, limit, search, role }) {
   const skip = (page - 1) * limit;
   const where = buildDirectoryWhere({ search, role });
   const normalizedSearch = normalizeText(search);
-  const actorContext = await getDirectoryActorContext(actor);
 
-  const allItems = await listDirectoryUsers({ where });
-  const visibleItems = allItems.filter((user) => isDirectoryVisibleToActor(user, actorContext));
-  const total = visibleItems.length;
-  let items = visibleItems;
+  let total = 0;
+  let items = [];
 
   if (normalizedSearch) {
-    const rankedItems = [...visibleItems].sort((left, right) => compareDirectoryUsers(left, right, normalizedSearch));
+    const matchedItems = await listDirectoryUsers({ where });
+    const rankedItems = [...matchedItems].sort((left, right) => compareDirectoryUsers(left, right, normalizedSearch));
+    total = rankedItems.length;
     items = rankedItems.slice(skip, skip + limit);
   } else {
-    items = visibleItems.slice(skip, skip + limit);
+    [total, items] = await Promise.all([
+      countDirectoryUsers(where),
+      listDirectoryUsers({ where, skip, take: limit }),
+    ]);
   }
 
   return {
@@ -578,16 +502,15 @@ export async function listDirectoryUsersService(actor, { page, limit, search, ro
       total,
       totalPages: Math.max(Math.ceil(total / limit), 1),
     },
-    items: items.map((item) => toDirectoryUserResponse(item, actorContext)),
+    items: items.map(toDirectoryUserResponse),
   };
 }
 
-export async function getDirectoryUserByIdService(actor, id) {
+export async function getDirectoryUserByIdService(id) {
   const user = await findDirectoryUserById(id);
-  const actorContext = await getDirectoryActorContext(actor);
-  if (!isDirectoryVisibleToActor(user, actorContext)) {
+  if (!isDirectoryVisibleUser(user)) {
     throw new AppError("User not found", 404, "USER_NOT_FOUND");
   }
 
-  return toDirectoryUserResponse(user, actorContext);
+  return toDirectoryUserResponse(user);
 }
