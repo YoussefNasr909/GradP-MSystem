@@ -92,7 +92,7 @@ function SupervisorCard({ user, delay, reduceMotion }: { user: ApiDirectoryUser;
             )}
             <div className="flex items-center gap-2 text-sm">
               <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate text-muted-foreground">{user.email ?? "Hidden by privacy settings"}</span>
+              <span className="truncate text-muted-foreground">{user.email}</span>
             </div>
           </div>
 

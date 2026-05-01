@@ -396,7 +396,7 @@ function SubmissionDetailDialog({
                         <div className="min-w-0">
                           <p className="text-sm font-semibold truncate">{submission.fileName}</p>
                           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                            <span className="uppercase font-medium tracking-wider">{submission.fileType?.split('/')[1] || submission.fileType || "file"}</span>
+                            <span className="uppercase font-medium tracking-wider">{submission.fileType.split('/')[1] || submission.fileType}</span>
                             <span>•</span>
                             <span>{formatFileSize(submission.fileSize)}</span>
                           </p>
@@ -568,23 +568,21 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
     if (!deliverableType) errors.type = "Please select a deliverable type."
     if (!file) errors.file = "Please upload a file."
     
-    if (Object.keys(errors).length > 0 || !deliverableType || !file) {
+    if (Object.keys(errors).length > 0) {
       setFormErrors(errors)
       return
     }
-    const selectedDeliverableType = deliverableType
-    const selectedFile = file
 
     setLoading(true)
     try {
       const created = await submissionsApi.create(
         {
-          deliverableType: selectedDeliverableType,
-          sdlcPhase: DELIVERABLE_META[selectedDeliverableType].phase,
+          deliverableType: deliverableType as ApiDeliverableType,
+          sdlcPhase: DELIVERABLE_META[deliverableType as ApiDeliverableType].phase,
           title: title || undefined,
           notes: notes || undefined,
         },
-        selectedFile,
+        file,
       )
       onCreated(created)
       resetForm()

@@ -15,11 +15,21 @@ async function removeFile(filePath) {
   }
 }
 
+/**
+ * Removes a file that was uploaded via Multer.
+ * @param {import('multer').File} file - The Multer file object.
+ */
 export async function removeUploadedMulterFile(file) {
   if (!file?.path) return;
   await removeFile(file.path);
 }
 
+/**
+ * Resolves a local filesystem path from a public upload URL.
+ * @param {string} url - The public URL of the uploaded file.
+ * @param {string} folderName - The upload subdirectory name.
+ * @returns {string|null} The resolved absolute path, or null if invalid.
+ */
 export function resolveLocalUploadPathFromUrl(url, folderName) {
   const normalizedUrl = String(url ?? "").trim();
   if (!normalizedUrl) return null;
@@ -36,6 +46,11 @@ export function resolveLocalUploadPathFromUrl(url, folderName) {
   return path.resolve(uploadsRoot, folderName, fileName);
 }
 
+/**
+ * Deletes a locally stored upload file given its public URL.
+ * @param {string} url - The public URL of the uploaded file.
+ * @param {string} folderName - The upload subdirectory name.
+ */
 export async function removeLocalUploadByUrl(url, folderName) {
   const filePath = resolveLocalUploadPathFromUrl(url, folderName);
   await removeFile(filePath);

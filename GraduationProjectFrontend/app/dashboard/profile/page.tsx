@@ -29,7 +29,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useForm, useWatch } from "react-hook-form"
-import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import {
@@ -53,6 +52,7 @@ import {
   Shield,
   Zap,
   Share2,
+  Camera,
   Linkedin,
   Github,
   BarChart3,
@@ -128,7 +128,6 @@ const tracksList = [
 
 export default function ProfilePage() {
   const { currentUser, accessToken, hasHydrated, setAuth } = useAuthStore()
-  const router = useRouter()
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
@@ -436,9 +435,18 @@ useEffect(() => {
       {/* Profile Header */}
       <motion.div variants={itemVariants}>
         <Card className="overflow-hidden">
+          {/* Cover Image */}
+          <div className="h-32 md:h-48 bg-gradient-to-r from-primary/20 via-primary/10 to-secondary/20 relative">
+            <div className="absolute inset-0 bg-grid-white/10" />
+            <Button variant="ghost" size="sm" className="absolute top-4 right-4 bg-background/50 backdrop-blur-sm">
+              <Camera className="h-4 w-4 mr-2" />
+              Change Cover
+            </Button>
+          </div>
+
           {/* Profile Info */}
-          <div className="px-6 py-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="px-6 pb-6">
+            <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-16 md:-mt-20">
               {/* Avatar */}
               <div className="relative">
                 <Avatar className="h-32 w-32 border-4 border-background shadow-xl">
@@ -448,6 +456,13 @@ useEffect(() => {
 </AvatarFallback>
 
                 </Avatar>
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="absolute bottom-0 right-0 h-8 w-8 rounded-full shadow-lg"
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
                 {/* Level Badge for Students */}
                 {isStudent && (
                   <div className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
@@ -484,40 +499,6 @@ useEffect(() => {
                   )}
                 </div>
 
-                {(currentUser.bio || currentUser.linkedinUrl || currentUser.githubUsername) && (
-                  <div className="space-y-3 pt-1">
-                    {currentUser.bio ? (
-                      <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{currentUser.bio}</p>
-                    ) : null}
-                    {(currentUser.linkedinUrl || currentUser.githubUsername) ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {currentUser.linkedinUrl ? (
-                          <a
-                            href={currentUser.linkedinUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                          >
-                            <Linkedin className="h-3.5 w-3.5" />
-                            LinkedIn
-                          </a>
-                        ) : null}
-                        {currentUser.githubUsername ? (
-                          <a
-                            href={`https://github.com/${currentUser.githubUsername}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
-                          >
-                            <Github className="h-3.5 w-3.5" />
-                            @{currentUser.githubUsername}
-                          </a>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
                 {/* Quick Stats */}
                 {isStudent && (
                   <div className="flex flex-wrap gap-4 pt-2">
@@ -541,13 +522,7 @@ useEffect(() => {
               <div className="flex gap-2 mt-4 md:mt-0">
                 <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        router.push("/dashboard/settings?tab=profile")
-                      }}
-                    >
+                    <Button>
                       <Edit className="h-4 w-4 mr-2" />
                       Edit Profile
                     </Button>
@@ -788,6 +763,12 @@ useEffect(() => {
               <CardTitle className="text-lg">About</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {currentUser.bio ? (
+                <p className="text-sm text-muted-foreground">{currentUser.bio}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No bio added yet</p>
+              )}
+
               <div className="space-y-3 pt-2">
                 {currentUser.track && (
                   <div className="flex items-center gap-3 text-sm">
@@ -810,6 +791,35 @@ useEffect(() => {
                           {skill}
                         </Badge>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {(currentUser.linkedinUrl || currentUser.githubUsername) && (
+                  <div className="pt-2">
+                    <p className="text-sm font-medium mb-2">Profile Links</p>
+                    <div className="flex flex-wrap gap-2">
+                      {currentUser.linkedinUrl && (
+                        <a
+                          href={currentUser.linkedinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                        >
+                          <Linkedin className="h-3.5 w-3.5" />
+                          LinkedIn
+                        </a>
+                      )}
+                      {currentUser.githubUsername && (
+                        <a
+                          href={`https://github.com/${currentUser.githubUsername}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full border border-border/70 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                        >
+                          <Github className="h-3.5 w-3.5" />
+                          @{currentUser.githubUsername}
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}

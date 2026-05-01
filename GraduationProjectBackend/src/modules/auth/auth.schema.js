@@ -10,13 +10,6 @@ const academicIdSchema = z
   .transform((v) => v.replace(/[-\s]/g, "")) // يشيل '-' والمسافات
   .refine((v) => /^\d{8}$/.test(v), "academicId must be 8 digits");
 
-const strongPassword = z
-  .string()
-  .min(8, "password must be at least 8 characters")
-  .refine((v) => /[A-Z]/.test(v), "password must contain at least one uppercase letter")
-  .refine((v) => /\d/.test(v), "password must contain at least one number")
-  .refine((v) => /[^A-Za-z0-9]/.test(v), "password must contain at least one special character");
-
 export const registerSchema = z.object({
   body: z
     .object({
@@ -55,67 +48,6 @@ export const loginSchema = z.object({
   params: z.any().optional(),
 });
 
-export const changePasswordSchema = z.object({
-  body: z
-    .object({
-      currentPassword: z.string().min(1, "Current password is required"),
-      newPassword: strongPassword,
-      confirmPassword: z.string().min(8),
-    })
-    .refine((data) => data.newPassword === data.confirmPassword, {
-      message: "Passwords do not match",
-      path: ["confirmPassword"],
-    }),
-  query: z.any().optional(),
-  params: z.any().optional(),
-});
-
-export const setupTwoFactorSchema = z.object({
-  body: z.object({
-    password: z.string().min(1, "Password is required"),
-  }),
-  query: z.any().optional(),
-  params: z.any().optional(),
-});
-
-export const confirmTwoFactorSchema = z.object({
-  body: z.object({
-    code: z.string().trim().regex(/^\d{6}$/, "code must be 6 digits"),
-  }),
-  query: z.any().optional(),
-  params: z.any().optional(),
-});
-
-export const disableTwoFactorSchema = z.object({
-  body: z
-    .object({
-      password: z.string().min(1, "Password is required"),
-      code: z.string().trim().regex(/^\d{6}$/, "code must be 6 digits").optional(),
-      recoveryCode: z.string().trim().min(8).optional(),
-    })
-    .refine((data) => data.code || data.recoveryCode, {
-      message: "Enter an authenticator code or recovery code",
-      path: ["code"],
-    }),
-  query: z.any().optional(),
-  params: z.any().optional(),
-});
-
-export const verifyTwoFactorLoginSchema = z.object({
-  body: z
-    .object({
-      challengeToken: z.string().min(1),
-      code: z.string().trim().regex(/^\d{6}$/, "code must be 6 digits").optional(),
-      recoveryCode: z.string().trim().min(8).optional(),
-    })
-    .refine((data) => data.code || data.recoveryCode, {
-      message: "Enter an authenticator code or recovery code",
-      path: ["code"],
-    }),
-  query: z.any().optional(),
-  params: z.any().optional(),
-});
-
 export const sendVerificationSchema = z.object({
   body: z.object({
     email: z.string().email(),
@@ -148,6 +80,13 @@ export const verifyResetCodeSchema = z.object({
   query: z.any().optional(),
   params: z.any().optional(),
 });
+
+const strongPassword = z
+  .string()
+  .min(8, "password must be at least 8 characters")
+  .refine((v) => /[A-Z]/.test(v), "password must contain at least one uppercase letter")
+  .refine((v) => /\d/.test(v), "password must contain at least one number")
+  .refine((v) => /[^A-Za-z0-9]/.test(v), "password must contain at least one special character");
 
 export const resetPasswordSchema = z.object({
   body: z

@@ -107,11 +107,6 @@ export const usersApi = {
     apiRequest<ApiUser>(`/users/${id}`, {
       method: "DELETE",
     }),
-  deleteMe: (payload: { email: string }) =>
-    apiRequest<ApiUser>("/users/me", {
-      method: "DELETE",
-      body: payload,
-    }),
 
   /** Update the logged-in user's profile */
   updateMe: (
@@ -131,17 +126,6 @@ export const usersApi = {
     apiRequest<ApiUser>("/users/me", {
       method: "PATCH",
       body: payload,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-  uploadMyAvatar: (payload: FormData, token?: string) =>
-    apiRequest<ApiUser>("/users/me/avatar", {
-      method: "PATCH",
-      body: payload,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
-  removeMyAvatar: (token?: string) =>
-    apiRequest<ApiUser>("/users/me/avatar", {
-      method: "DELETE",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }),
   updateMyRole: (role: SelfSelectableRole) =>

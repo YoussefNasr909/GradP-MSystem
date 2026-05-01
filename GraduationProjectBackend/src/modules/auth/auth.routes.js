@@ -11,11 +11,6 @@ import {
   verifyResetCodeSchema,
   resetPasswordSchema,
   oauthCompleteSchema,
-  changePasswordSchema,
-  setupTwoFactorSchema,
-  confirmTwoFactorSchema,
-  disableTwoFactorSchema,
-  verifyTwoFactorLoginSchema,
 } from "./auth.schema.js";
 
 import {
@@ -32,11 +27,6 @@ import {
   verifyResetCode,
   resetPassword,
   oauthComplete,
-  changePassword,
-  setupTwoFactor,
-  confirmTwoFactor,
-  disableTwoFactor,
-  verifyTwoFactorLogin,
 } from "./auth.controller.js";
 import {
   registerLimiter,
@@ -52,12 +42,7 @@ const router = Router();
 // local auth
 router.post("/register", registerLimiter, validate(registerSchema), register);
 router.post("/login", loginLimiter, validate(loginSchema), login);
-router.post("/2fa/login", otpLimiter, validate(verifyTwoFactorLoginSchema), verifyTwoFactorLogin);
 router.get("/me", auth, me);
-router.post("/change-password", auth, validate(changePasswordSchema), changePassword);
-router.post("/2fa/setup", auth, validate(setupTwoFactorSchema), setupTwoFactor);
-router.post("/2fa/confirm", auth, validate(confirmTwoFactorSchema), confirmTwoFactor);
-router.post("/2fa/disable", auth, validate(disableTwoFactorSchema), disableTwoFactor);
 
 router.post("/send-verification", otpLimiter, validate(sendVerificationSchema), sendVerification);
 router.post("/verify-email", otpLimiter, validate(verifyEmailSchema), verifyEmail);
