@@ -10,11 +10,7 @@ import { corsOptions } from "../config/cors.js";
 export function expressLoader(app) {
   app.disable("x-powered-by");
 
-  app.use(
-    helmet({
-      crossOriginResourcePolicy: { policy: "cross-origin" },
-    }),
-  );
+  app.use(helmet());
   app.use(morgan("dev"));
   app.use(
     express.json({

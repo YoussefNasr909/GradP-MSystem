@@ -1,9 +1,0 @@
-import { Server } from "socket.io";
-import jwt from "jsonwebtoken";
-import { env } from "../config/env.js";
-import { prisma } from "../loaders/dbLoader.js";
-let ioInstance=null;
-async function getUserRoomTeamIds(userId){const [led,membership,doctorTeams,taTeams]=await Promise.all([prisma.team.findUnique({where:{leaderId:userId},select:{id:true}}),prisma.teamMember.findUnique({where:{userId},select:{teamId:true}}),prisma.team.findMany({where:{doctorId:userId},select:{id:true}}),prisma.team.findMany({where:{taId:userId},select:{id:true}})]); return Array.from(new Set([led?.id,membership?.teamId,...doctorTeams.map(t=>t.id),...taTeams.map(t=>t.id)].filter(Boolean)));}
-export function initSocket(httpServer){ioInstance=new Server(httpServer,{cors:{origin:env.corsOrigins,credentials:false}}); ioInstance.use(async(socket,next)=>{try{const token=socket.handshake.auth?.token||socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i,"")||socket.handshake.query?.token; if(!token) return next(new Error("UNAUTHORIZED")); const payload=jwt.verify(String(token),env.jwtSecret); const user=await prisma.user.findUnique({where:{id:payload?.id},select:{id:true,role:true}}); if(!user) return next(new Error("UNAUTHORIZED")); socket.data.user=user; next();}catch{next(new Error("UNAUTHORIZED"));}}); ioInstance.on("connection", async(socket)=>{const user=socket.data.user; socket.join(`user:${user.id}`); (await getUserRoomTeamIds(user.id)).forEach(teamId=>socket.join(`team:${teamId}`)); socket.on("team:subscribe",teamId=>{if(typeof teamId==='string'&&teamId.trim()) socket.join(`team:${teamId.trim()}`);});}); return ioInstance;}
-export function emitToUser(userId,event,payload){if(ioInstance&&userId) ioInstance.to(`user:${userId}`).emit(event,payload);}
-export function emitToTeam(teamId,event,payload){if(ioInstance&&teamId) ioInstance.to(`team:${teamId}`).emit(event,payload);}

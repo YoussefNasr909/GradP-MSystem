@@ -867,9 +867,7 @@ function SupervisorCandidatesSection({
                       </Badge>
                     )}
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {candidate.email ?? "Hidden by privacy settings"}
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{candidate.email}</p>
                   {candidate.department && (
                     <p className="mt-0.5 text-xs text-muted-foreground">{candidate.department.replaceAll("_", " ")}</p>
                   )}

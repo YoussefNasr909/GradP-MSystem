@@ -2,8 +2,6 @@
 
 import { create } from "zustand"
 
-const LS_IN_APP = "pref:inAppNotifications"
-
 interface UIState {
   sidebarCollapsed: boolean
   toggleSidebar: () => void
@@ -15,8 +13,6 @@ interface UIState {
   setCommandPaletteOpen: (open: boolean) => void
   notificationsPanelOpen: boolean
   setNotificationsPanelOpen: (open: boolean) => void
-  inAppNotifications: boolean
-  setInAppNotifications: (enabled: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -30,11 +26,4 @@ export const useUIStore = create<UIState>((set) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   notificationsPanelOpen: false,
   setNotificationsPanelOpen: (open) => set({ notificationsPanelOpen: open }),
-  inAppNotifications: typeof window !== "undefined"
-    ? localStorage.getItem(LS_IN_APP) !== "false"
-    : true,
-  setInAppNotifications: (enabled) => {
-    if (typeof window !== "undefined") localStorage.setItem(LS_IN_APP, String(enabled))
-    set({ inAppNotifications: enabled })
-  },
 }))

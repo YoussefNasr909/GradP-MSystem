@@ -128,16 +128,6 @@ export default function CompleteProfilePage() {
     window.history.replaceState({}, document.title, cleanPath)
   }, [hasHydrated, accessToken, setAccessToken, readTokenFromUrl, reason])
 
-  const [formData, setFormData] = useState({
-    phone: "",
-    academicId: "",
-    department: "",
-    academicYear: "",
-    preferredTrack: "",
-    password: "",
-    confirmPassword: "",
-  })
-
   // 2) auto-load /me; if profile already complete => go dashboard
   useEffect(() => {
     if (!hasHydrated) return
@@ -186,6 +176,16 @@ export default function CompleteProfilePage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // ✅ C) Added preferredTrack
+  const [formData, setFormData] = useState({
+    phone: "",
+    academicId: "",
+    department: "",
+    academicYear: "",
+    preferredTrack: "",
+    password: "",
+    confirmPassword: "",
+  })
+
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [passwordStrength, setPasswordStrength] = useState(0)
   const [passwordFeedback, setPasswordFeedback] = useState<string[]>([])
