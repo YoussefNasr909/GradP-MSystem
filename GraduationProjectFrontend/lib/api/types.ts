@@ -315,7 +315,7 @@ export type ApiDirectoryUser = {
   firstName: string
   lastName: string
   fullName: string
-  email: string
+  email: string | null
   role: Role
   academicId: string | null
   department: Department | null
@@ -326,6 +326,13 @@ export type ApiDirectoryUser = {
   linkedinUrl: string | null
   githubUsername: string | null
   currentTeam: ApiCurrentTeamSummary | null
+  privacy?: {
+    profileVisibility: "PUBLIC" | "TEAM_ONLY" | "PRIVATE"
+    showEmail: boolean
+    showActivity: boolean
+    showTeam: boolean
+    showOnlineStatus: boolean
+  }
   createdAt: string
   updatedAt: string
 }
@@ -780,8 +787,64 @@ export type AuthResponse = {
   user: ApiUser
 }
 
+export type TwoFactorLoginChallenge = {
+  requiresTwoFactor: true
+  challengeToken: string
+  user: {
+    id: string
+    email: string
+    fullName: string
+  }
+}
+
+export type LoginResponse = AuthResponse | TwoFactorLoginChallenge
+
 export type RegisterResponse = AuthResponse & {
   emailSent: boolean
+}
+
+export type UserSettings = {
+  notifications: {
+    emailNotifications: boolean
+    websiteNotifications: boolean
+    soundNotifications: boolean
+    taskReminders: boolean
+    meetingReminders: boolean
+    submissionAlerts: boolean
+    teamUpdates: boolean
+    mentionNotifications: boolean
+    deadlineWarnings: boolean
+    gradeNotifications: boolean
+    weeklyDigest: boolean
+  }
+  appearance: {
+    theme: "light" | "dark" | "system"
+    fontSize: number
+    compactMode: boolean
+    reducedMotion: boolean
+    highContrast: boolean
+    sidebarCollapsed: boolean
+  }
+  privacy: {
+    profileVisibility: "PUBLIC" | "TEAM_ONLY" | "PRIVATE"
+    showEmail: boolean
+    showActivity: boolean
+    showTeam: boolean
+    showOnlineStatus: boolean
+  }
+  security: {
+    loginAlerts: boolean
+    sessionTimeout: number
+    twoFactorEnabled: boolean
+  }
+  updatedAt?: string
+}
+
+export type UserSettingsPatch = {
+  notifications?: Partial<UserSettings["notifications"]>
+  appearance?: Partial<UserSettings["appearance"]>
+  privacy?: Partial<UserSettings["privacy"]>
+  security?: Partial<Pick<UserSettings["security"], "loginAlerts" | "sessionTimeout">>
 }
 
 export type Paginated<T> = {
@@ -789,3 +852,263 @@ export type Paginated<T> = {
   items: T[]
 }
 
+export type ApiChatRelation =
+  | "TEAM_MEMBER"
+  | "TEAM_LEADER"
+  | "TEAM_DOCTOR"
+  | "TEAM_TA"
+  | "SUPERVISED_TEAM_LEADER"
+  | "STUDENT_PEER"
+  | "STAFF_PEER"
+
+export type ApiChatMessageStatus = "SENT" | "DELIVERED" | "SEEN" | "DELETED"
+
+export type ApiChatUser = {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  role: Role
+  academicId: string | null
+  avatarUrl: string | null
+  bio: string | null
+}
+
+export type ApiChatTeamSummary = {
+  id: string
+  name: string
+}
+
+export type ApiChatMessage = {
+  id: string
+  conversationId: string
+  senderId: string
+  recipientId: string
+  content: string
+  fileUrl: string | null
+  fileName: string | null
+  fileSize: number | null
+  fileType: string | null
+  isDeleted: boolean
+  deletedAt: string | null
+  deliveredAt: string | null
+  seenAt: string | null
+  createdAt: string
+  updatedAt: string
+  status: ApiChatMessageStatus
+}
+
+export type ApiChatConversationSummary = {
+  id: string
+  participant: ApiChatUser
+  relation: ApiChatRelation | null
+  team: ApiChatTeamSummary | null
+  lastMessage: ApiChatMessage | null
+  unreadCount: number
+  clearedAt: string | null
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiChatContact = {
+  user: ApiChatUser
+  relation: ApiChatRelation
+  team: ApiChatTeamSummary | null
+  conversationId: string | null
+}
+
+export type ApiChatSearchResult = ApiChatContact
+
+export type ApiChatBootstrap = {
+  conversations: ApiChatConversationSummary[]
+  contacts: ApiChatContact[]
+  unreadCount: number
+}
+
+export type ApiChatConversationMessages = {
+  conversation: ApiChatConversationSummary
+  messages: ApiChatMessage[]
+}
+
+export type ApiChatSendResult = {
+  conversation: ApiChatConversationSummary
+  message: ApiChatMessage
+  recipientOnline: boolean
+  recipientViewingConversation: boolean
+}
+
+export type ApiChatSeenResult = {
+  conversation: ApiChatConversationSummary
+  seenMessageIds: string[]
+  unreadCount: number
+}
+
+export type ApiChatDeleteMessageResult = {
+  conversationId: string
+  message: ApiChatMessage
+}
+
+export type ApiChatEditMessageResult = ApiChatDeleteMessageResult
+
+export type ApiChatClearResult = {
+  conversation: ApiChatConversationSummary
+  conversationId: string
+  clearedAt: string
+  unreadCount: number
+}
+
+export type ApiTeamGroupChatMessage = {
+  id: string
+  conversationId: string
+  content: string
+  senderId: string
+  sender: ApiChatUser
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiTeamGroupChatConversationSummary = {
+  id: string
+  team: ApiChatTeamSummary
+  isPinned: boolean
+  lastMessage: ApiTeamGroupChatMessage | null
+  unreadCount: number
+  participantCount: number
+  clearedAt: string | null
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiTeamGroupChatBootstrap = {
+  conversations: ApiTeamGroupChatConversationSummary[]
+}
+
+export type ApiTeamGroupChatConversationMessages = {
+  conversation: ApiTeamGroupChatConversationSummary
+  messages: ApiTeamGroupChatMessage[]
+}
+
+export type ApiTeamGroupChatSendResult = {
+  conversation: ApiTeamGroupChatConversationSummary
+  message: ApiTeamGroupChatMessage
+}
+
+export type ApiTeamGroupChatSeenResult = {
+  conversation: ApiTeamGroupChatConversationSummary
+}
+
+export type ApiRiskStatus = "OPEN" | "MONITORING" | "RESOLVED"
+export type ApiRiskApprovalStatus = "PENDING" | "APPROVED" | "REVISION_REQUESTED"
+export type ApiRiskChance = "LOW" | "MEDIUM" | "HIGH"
+export type ApiRiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+
+export type ApiRisk = {
+  id: string
+  team: ApiChatTeamSummary
+  title: string
+  description: string
+  category: string
+  chance: ApiRiskChance
+  impact: ApiRiskChance
+  severity: ApiRiskSeverity | null
+  status: ApiRiskStatus
+  approvalStatus: ApiRiskApprovalStatus
+  mitigation: string
+  monitoringNotes: string
+  resolutionNotes: string
+  approvalNote: string
+  approvedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: ApiChatUser | null
+  monitor: ApiChatUser | null
+  approvedBy: ApiChatUser | null
+  permissions: {
+    canEdit: boolean
+    canMonitor: boolean
+    canApprove: boolean
+    canRequestRevision: boolean
+  }
+}
+
+export type ApiDiscussionCategory = "technical" | "team" | "resources" | "general"
+
+export type ApiDiscussionAuthor = {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  avatarUrl: string | null
+  role: Role
+  roleLabel: string
+}
+
+export type ApiDiscussionComment = {
+  id: string
+  content: string
+  parentCommentId: string | null
+  replyCount: number
+  replies: ApiDiscussionComment[]
+  createdAt: string
+  updatedAt: string
+  author: ApiDiscussionAuthor
+}
+
+export type ApiDiscussionSummary = {
+  id: string
+  title: string
+  content: string
+  category: ApiDiscussionCategory
+  tags: string[]
+  likeCount: number
+  viewCount: number
+  commentCount: number
+  isPinned: boolean
+  createdAt: string
+  updatedAt: string
+  author: ApiDiscussionAuthor
+  viewerHasLiked: boolean
+  viewerHasViewed: boolean
+}
+
+export type ApiDiscussionDetail = ApiDiscussionSummary & {
+  comments: ApiDiscussionComment[]
+}
+
+export type ApiDiscussionFeed = {
+  items: ApiDiscussionSummary[]
+  stats: {
+    totalDiscussions: number
+    activeToday: number
+    yourPosts: number
+    replies: number
+  }
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
+}
+
+
+
+export type ApiCalendarProvider = "GOOGLE" | "OUTLOOK"
+export type ApiMeetingMode = "VIRTUAL" | "IN_PERSON" | "HYBRID"
+export type ApiMeetingStatus = "PENDING_APPROVAL" | "CONFIRMED" | "DECLINED" | "CANCELLED" | "COMPLETED"
+export type ApiMeetingProvider = "GOOGLE_MEET" | "MICROSOFT_TEAMS" | "MANUAL"
+export type ApiMeetingParticipantRole = "ORGANIZER" | "LEADER" | "DOCTOR" | "TA" | "MEMBER" | "EXTERNAL"
+export type ApiMeetingResponseStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "TENTATIVE"
+export type ApiMeetingApprovalStatus = "PENDING" | "APPROVED" | "DECLINED" | "PROPOSED_NEW_TIME"
+export type ApiExternalSyncStatus = "NOT_CONNECTED" | "PENDING" | "SYNCED" | "ERROR" | "DISCONNECTED"
+
+export type ApiMeetingParticipant = { id: string; userId: string | null; email: string | null; displayName: string | null; participantRole: ApiMeetingParticipantRole; responseStatus: ApiMeetingResponseStatus; canApprove: boolean; isExternalGuest: boolean; user: ApiTeamUser | null }
+export type ApiMeetingApproval = { id: string; approverRole: Role; status: ApiMeetingApprovalStatus; proposedStartAt: string | null; proposedEndAt: string | null; note: string | null; respondedAt: string | null; approver: ApiTeamUser | null }
+export type ApiMeeting = { id: string; title: string; description: string | null; agenda: string | null; startAt: string; endAt: string; timezone: string; mode: ApiMeetingMode; status: ApiMeetingStatus; provider: ApiMeetingProvider; location: string | null; joinUrl: string | null; requiresApproval: boolean; approvalRequestedAt: string | null; confirmedAt: string | null; cancelledAt: string | null; externalProvider: ApiCalendarProvider | null; externalEventId: string | null; externalSyncStatus: ApiExternalSyncStatus; externalSyncError: string | null; externalSyncedAt: string | null; createdAt: string; updatedAt: string; team: { id: string; name: string; leader: ApiTeamUser | null; doctor: ApiTeamUser | null; ta: ApiTeamUser | null }; organizer: ApiTeamUser; participants: ApiMeetingParticipant[]; approvals: ApiMeetingApproval[]; permissions: { canManage: boolean; canApprove: boolean; canRespond: boolean; isOrganizer: boolean } }
+export type ApiCalendarIntegration = { id: string; provider: ApiCalendarProvider; email: string | null; displayName: string | null; syncEnabled: boolean; lastSyncedAt: string | null; lastSyncStatus: ApiExternalSyncStatus; lastSyncError: string | null; createdAt: string; updatedAt: string }
+export type ApiCalendarEvent = { id: string; sourceType: "MEETING" | "TASK_DEADLINE"; sourceId: string; title: string; description?: string | null; startAt: string; endAt: string; allDay?: boolean; status: string; mode?: ApiMeetingMode; provider?: ApiMeetingProvider; externalProvider?: ApiCalendarProvider | null; location?: string | null; joinUrl?: string | null; team: { id: string; name: string }; organizer?: { id: string; fullName: string; email: string; role: Role }; participants?: Array<{ id: string; userId: string | null; email: string | null; displayName: string | null; participantRole: ApiMeetingParticipantRole; responseStatus: ApiMeetingResponseStatus; canApprove: boolean; isExternalGuest: boolean }>; approvals?: Array<{ id: string; approverUserId: string; approverRole: Role; status: ApiMeetingApprovalStatus; proposedStartAt: string | null; proposedEndAt: string | null; note: string | null; respondedAt: string | null; approverName: string | null }>; permissions?: { isOrganizer: boolean; canManage: boolean; canApprove: boolean; canRespond: boolean }; externalSyncStatus?: ApiExternalSyncStatus; externalSyncError?: string | null; confirmedAt?: string | null; updatedAt?: string; priority?: ApiTaskPriority; assignee?: { id: string; fullName: string; email: string; role: Role } | null }

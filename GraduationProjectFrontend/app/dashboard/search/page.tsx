@@ -309,7 +309,7 @@ function SearchUserRow({ user }: { user: ApiDirectoryUser }) {
           <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
             <div className="space-y-1">
               <p className="font-medium uppercase tracking-[0.14em] text-foreground/70">Email</p>
-              <p className="break-words">{user.email}</p>
+              <p className="break-words">{user.email ?? "Hidden by privacy settings"}</p>
             </div>
             <div className="space-y-1">
               <p className="font-medium uppercase tracking-[0.14em] text-foreground/70">Team</p>

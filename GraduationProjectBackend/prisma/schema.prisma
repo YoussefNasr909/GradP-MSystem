@@ -21,6 +21,12 @@ enum AccountStatus {
   SUSPENDED
 }
 
+enum ProfileVisibility {
+  PUBLIC
+  TEAM_ONLY
+  PRIVATE
+}
+
 enum TeamVisibility {
   PUBLIC
   PRIVATE
@@ -190,6 +196,94 @@ enum NotificationType {
   SYSTEM
 }
 
+enum DiscussionCategory {
+  TECHNICAL
+  TEAM
+  RESOURCES
+  GENERAL
+}
+
+enum RiskStatus {
+  OPEN
+  MONITORING
+  RESOLVED
+}
+
+enum RiskApprovalStatus {
+  PENDING
+  APPROVED
+  REVISION_REQUESTED
+}
+
+enum RiskChance {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum RiskSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CalendarProvider {
+  GOOGLE
+  OUTLOOK
+}
+
+enum MeetingStatus {
+  PENDING_APPROVAL
+  CONFIRMED
+  DECLINED
+  CANCELLED
+  COMPLETED
+}
+
+enum MeetingMode {
+  VIRTUAL
+  IN_PERSON
+  HYBRID
+}
+
+enum MeetingProvider {
+  GOOGLE_MEET
+  MICROSOFT_TEAMS
+  MANUAL
+}
+
+enum MeetingParticipantRole {
+  ORGANIZER
+  LEADER
+  DOCTOR
+  TA
+  MEMBER
+  EXTERNAL
+}
+
+enum MeetingResponseStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  TENTATIVE
+}
+
+enum MeetingApprovalStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  PROPOSED_NEW_TIME
+}
+
+enum ExternalSyncStatus {
+  NOT_CONNECTED
+  PENDING
+  SYNCED
+  ERROR
+  DISCONNECTED
+}
+
 enum Department {
   COMPUTER_SCIENCE
   SOFTWARE_ENGINEERING
@@ -279,7 +373,70 @@ model User {
   reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
   uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
   createdResources        TeamResource[]     @relation("ResourceCreator")
+  createdRisks            Risk[]             @relation("RiskCreator")
+  monitoredRisks          Risk[]             @relation("RiskMonitor")
+  approvedRisks           Risk[]             @relation("RiskApprover")
   notifications           Notification[]     @relation("UserNotifications")
+  settings                UserSettings?
+  organizedMeetings       Meeting[]             @relation("MeetingOrganizer")
+  meetingParticipants     MeetingParticipant[]  @relation("MeetingParticipantUser")
+  meetingApprovals        MeetingApproval[]     @relation("MeetingApprovalUser")
+  calendarIntegrations    CalendarIntegration[]
+  teamGroupChatParticipants  TeamGroupConversationParticipant[]
+  sentTeamGroupMessages      TeamGroupMessage[]       @relation("TeamGroupMessageSender")
+  directChatConversationsOne DirectChatConversation[] @relation("DirectChatConversationUserOne")
+  directChatConversationsTwo DirectChatConversation[] @relation("DirectChatConversationUserTwo")
+  sentDirectChatMessages     DirectChatMessage[]      @relation("DirectChatMessageSender")
+  receivedDirectChatMessages DirectChatMessage[]      @relation("DirectChatMessageRecipient")
+  deletedDirectChatMessages  DirectChatMessage[]      @relation("DirectChatMessageDeletedBy")
+  discussionPosts         Discussion[]          @relation("DiscussionAuthor")
+  discussionComments      DiscussionComment[]   @relation("DiscussionCommentAuthor")
+  discussionLikes         DiscussionLike[]      @relation("DiscussionLikeUser")
+  discussionViews         DiscussionView[]      @relation("DiscussionViewUser")
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  emailNotifications   Boolean @default(true)
+  websiteNotifications Boolean @default(true)
+  soundNotifications   Boolean @default(true)
+  taskReminders        Boolean @default(true)
+  meetingReminders     Boolean @default(true)
+  submissionAlerts     Boolean @default(true)
+  teamUpdates          Boolean @default(true)
+  mentionNotifications Boolean @default(true)
+  deadlineWarnings     Boolean @default(true)
+  gradeNotifications   Boolean @default(true)
+  weeklyDigest         Boolean @default(false)
+
+  theme            String  @default("system")
+  fontSize         Int     @default(16)
+  compactMode      Boolean @default(false)
+  reducedMotion    Boolean @default(false)
+  highContrast     Boolean @default(false)
+  sidebarCollapsed Boolean @default(false)
+
+  profileVisibility ProfileVisibility @default(PUBLIC)
+  showEmail         Boolean           @default(true)
+  showActivity      Boolean           @default(true)
+  showTeam          Boolean           @default(true)
+  showOnlineStatus  Boolean           @default(true)
+
+  loginAlerts                     Boolean  @default(true)
+  sessionTimeout                  Int      @default(30)
+  twoFactorEnabled                Boolean  @default(false)
+  twoFactorSecretEncrypted        String?
+  pendingTwoFactorSecretEncrypted String?
+  recoveryCodeHashes              String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([profileVisibility])
 }
 
 model Team {
@@ -310,11 +467,47 @@ model Team {
   weeklyReports WeeklyReport[]
   submissions  Submission[]
   documents    TeamDocument[]
+  meetings     Meeting[]
+  risks         Risk[]
+  groupConversation TeamGroupConversation?
 
   @@index([visibility, stage])
   @@index([name])
   @@index([doctorId])
   @@index([taId])
+}
+
+model Risk {
+  id               String             @id @default(cuid())
+  teamId           String
+  title            String
+  description      String
+  category         String
+  chance           RiskChance         @default(MEDIUM)
+  impact           RiskChance         @default(MEDIUM)
+  severity         RiskSeverity?
+  status           RiskStatus         @default(OPEN)
+  approvalStatus   RiskApprovalStatus @default(PENDING)
+  mitigation       String?
+  monitoringNotes  String?
+  resolutionNotes  String?
+  approvalNote     String?
+  createdByUserId  String
+  monitorUserId    String?
+  approvedByUserId String?
+  approvedAt       DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy  User  @relation("RiskCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  monitor    User? @relation("RiskMonitor", fields: [monitorUserId], references: [id], onDelete: SetNull)
+  approvedBy User? @relation("RiskApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([teamId, status])
+  @@index([teamId, approvalStatus])
+  @@index([monitorUserId])
+  @@index([approvedByUserId])
 }
 
 model TeamMember {
@@ -650,4 +843,272 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+model TeamGroupConversation {
+  id            String    @id @default(cuid())
+  teamId        String    @unique
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  team         Team                               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  participants TeamGroupConversationParticipant[]
+  messages     TeamGroupMessage[]
+
+  @@index([lastMessageAt])
+}
+
+model TeamGroupConversationParticipant {
+  id             String    @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime  @default(now())
+  clearedAt      DateTime?
+  lastSeenAt     DateTime?
+
+  conversation TeamGroupConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model TeamGroupMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation TeamGroupConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User                  @relation("TeamGroupMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model DirectChatConversation {
+  id                String    @id @default(cuid())
+  pairKey           String    @unique
+  userOneId         String
+  userTwoId         String
+  userOneClearedAt  DateTime?
+  userTwoClearedAt  DateTime?
+  userOneLastSeenAt DateTime?
+  userTwoLastSeenAt DateTime?
+  lastMessageAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  userOne  User                @relation("DirectChatConversationUserOne", fields: [userOneId], references: [id], onDelete: Cascade)
+  userTwo  User                @relation("DirectChatConversationUserTwo", fields: [userTwoId], references: [id], onDelete: Cascade)
+  messages DirectChatMessage[]
+
+  @@index([userOneId])
+  @@index([userTwoId])
+  @@index([lastMessageAt])
+}
+
+model DirectChatMessage {
+  id             String    @id @default(cuid())
+  conversationId String
+  senderId       String
+  recipientId    String
+  deletedById    String?
+  content        String
+  fileUrl        String?
+  fileName       String?
+  fileSize       Int?
+  fileType       String?
+  deliveredAt    DateTime?
+  seenAt         DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  conversation DirectChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User                   @relation("DirectChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient    User                   @relation("DirectChatMessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  deletedBy    User?                  @relation("DirectChatMessageDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([recipientId, createdAt])
+  @@index([recipientId, deliveredAt])
+  @@index([recipientId, seenAt])
+}
+
+model Discussion {
+  id        String             @id @default(cuid())
+  title     String
+  content   String
+  category  DiscussionCategory @default(GENERAL)
+  tags      String[]           @default([])
+  likeCount Int                @default(0) @map("likesCount")
+  viewCount Int                @default(0) @map("viewsCount")
+  authorId  String
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  author   User                @relation("DiscussionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments DiscussionComment[]
+  likes    DiscussionLike[]
+  views    DiscussionView[]
+
+  @@index([authorId])
+  @@index([category, createdAt])
+  @@index([createdAt])
+}
+
+model DiscussionComment {
+  id              String   @id @default(cuid())
+  discussionId    String
+  authorId        String
+  parentCommentId String?
+  content         String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  discussion    Discussion          @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  author        User                @relation("DiscussionCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment DiscussionComment?  @relation("DiscussionCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies       DiscussionComment[] @relation("DiscussionCommentReplies")
+
+  @@index([discussionId, createdAt])
+  @@index([authorId])
+  @@index([parentCommentId, createdAt])
+}
+
+model DiscussionLike {
+  id           String   @id @default(cuid())
+  discussionId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  user       User       @relation("DiscussionLikeUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([discussionId, userId])
+  @@index([userId])
+}
+
+model DiscussionView {
+  id           String   @id @default(cuid())
+  discussionId String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  user       User       @relation("DiscussionViewUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([discussionId, userId])
+  @@index([userId])
+}
+
+
+model Meeting {
+  id                   String             @id @default(cuid())
+  teamId               String
+  organizerId          String
+  organizerRole        Role
+  title                String
+  description          String?
+  agenda               String?
+  startAt              DateTime
+  endAt                DateTime
+  timezone             String             @default("Africa/Cairo")
+  mode                 MeetingMode        @default(VIRTUAL)
+  status               MeetingStatus      @default(PENDING_APPROVAL)
+  provider             MeetingProvider    @default(MANUAL)
+  location             String?
+  joinUrl              String?
+  requiresApproval     Boolean            @default(false)
+  approvalRequestedAt  DateTime?
+  confirmedAt          DateTime?
+  cancelledAt          DateTime?
+  externalProvider     CalendarProvider?
+  externalCalendarId   String?
+  externalEventId      String?
+  externalSyncStatus   ExternalSyncStatus @default(NOT_CONNECTED)
+  externalSyncError    String?
+  externalSyncedAt     DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  team                 Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organizer            User               @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  participants         MeetingParticipant[]
+  approvals            MeetingApproval[]
+
+  @@index([teamId, startAt])
+  @@index([organizerId, startAt])
+  @@index([status, startAt])
+}
+
+model MeetingParticipant {
+  id              String                 @id @default(cuid())
+  meetingId       String
+  userId          String?
+  email           String?
+  displayName     String?
+  participantRole MeetingParticipantRole @default(MEMBER)
+  responseStatus  MeetingResponseStatus  @default(PENDING)
+  canApprove      Boolean                @default(false)
+  isExternalGuest Boolean                @default(false)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  meeting         Meeting                @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user            User?                  @relation("MeetingParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@index([userId])
+  @@unique([meetingId, userId])
+}
+
+model MeetingApproval {
+  id              String                @id @default(cuid())
+  meetingId       String
+  approverUserId  String
+  approverRole    Role
+  status          MeetingApprovalStatus @default(PENDING)
+  proposedStartAt DateTime?
+  proposedEndAt   DateTime?
+  note            String?
+  respondedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  meeting         Meeting               @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  approver        User                  @relation("MeetingApprovalUser", fields: [approverUserId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@index([approverUserId, status])
+  @@unique([meetingId, approverUserId])
+}
+
+model CalendarIntegration {
+  id                    String             @id @default(cuid())
+  userId                String
+  provider              CalendarProvider
+  email                 String?
+  displayName           String?
+  externalCalendarId    String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  accessTokenExpiresAt  DateTime?
+  scopes                String[]           @default([])
+  syncEnabled           Boolean            @default(true)
+  lastSyncedAt          DateTime?
+  lastSyncStatus        ExternalSyncStatus @default(PENDING)
+  lastSyncError         String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([provider, syncEnabled])
 }

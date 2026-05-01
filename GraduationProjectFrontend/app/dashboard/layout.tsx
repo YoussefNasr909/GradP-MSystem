@@ -9,6 +9,8 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect } from "react"
 import { useUIStore } from "@/lib/stores/ui-store"
+import { ChatProvider } from "@/components/features/chat/chat-provider"
+import { ChatLauncher } from "@/components/features/chat/chat-launcher"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
 const { currentUser, accessToken, hasHydrated } = useAuthStore()
@@ -92,6 +94,7 @@ if (incomplete) {
 }
 
   return (
+    <ChatProvider>
     <div className="flex h-[100dvh] overflow-hidden bg-background relative">
       <div className="fixed inset-0 gradient-bg -z-10 opacity-30" />
 
@@ -139,12 +142,12 @@ if (incomplete) {
           <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
             <Breadcrumbs />
 
-            <AnimatePresence mode="wait">
+            <AnimatePresence initial={false}>
               <motion.div
                 key={pathname}
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="min-w-0"
               >
@@ -154,6 +157,8 @@ if (incomplete) {
           </div>
         </main>
       </div>
+      <ChatLauncher />
     </div>
+    </ChatProvider>
   )
 }

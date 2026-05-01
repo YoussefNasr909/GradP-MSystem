@@ -10,6 +10,13 @@ import documentsRouter from "../modules/documents/documents.routes.js";
 import resourcesRouter from "../modules/resources/resources.routes.js";
 import submissionsRouter from "../modules/submissions/submissions.routes.js";
 import notificationsRouter from "../modules/notifications/notifications.routes.js";
+import meetingsRouter from "../modules/meetings/meetings.routes.js";
+import calendarRouter from "../modules/calendar/calendar.routes.js";
+import settingsRouter from "../modules/settings/settings.routes.js";
+import discussionsRouter from "../modules/discussions/discussions.routes.js";
+import chatRouter from "../modules/chat/chat.routes.js";
+import teamChatRouter from "../modules/team-chat/team-chat.routes.js";
+import risksRouter from "../modules/risks/risks.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -25,4 +32,11 @@ router.use("/documents", documentsRouter);
 router.use("/resources", resourcesRouter);
 router.use("/submissions", submissionsRouter);
 router.use("/notifications", notificationsRouter);
+router.use("/meetings", meetingsRouter);
+router.use("/calendar", calendarRouter);
+router.use("/settings", settingsRouter);
+router.use("/discussions", discussionsRouter);
+router.use("/chat", chatRouter);
+router.use("/team-chats", teamChatRouter);
+router.use("/risks", risksRouter);
 export default router;
