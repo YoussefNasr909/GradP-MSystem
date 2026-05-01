@@ -1,7 +1,7 @@
 {
   "name": "backend",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.0.1",
+  "description": "Graduation Project Management System - Backend API built with Express.js and Prisma",
   "main": "index.js",
   "type": "module",
   "scripts": {
