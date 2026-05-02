@@ -8687,16 +8687,64 @@ function WorkspaceShell({
 
 function WorkspaceSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-44 rounded-[32px] border border-border/60 bg-muted/30" />
-      <div className="grid gap-4 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 rounded-[28px] border border-border/60 bg-muted/20" />
+    <div className="space-y-6">
+      {/* Spinner banner */}
+      <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Loading workspace…</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2.5">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+      </div>
+
+      {/* Main card */}
+      <div className="rounded-[32px] border border-border/60 bg-muted/40 p-5 space-y-4 animate-pulse">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-3.5 w-72" />
+          </div>
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-border/40 p-3 space-y-2">
+              <Skeleton className="h-3.5 w-16" />
+              <Skeleton className="h-6 w-10" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-2 overflow-hidden">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-9 w-20 rounded-lg shrink-0" />
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="h-[360px] rounded-[28px] border border-border/60 bg-muted/20 sm:h-[420px] xl:h-[520px]" />
-        <div className="h-[360px] rounded-[28px] border border-border/60 bg-muted/20 sm:h-[420px] xl:h-[520px]" />
+
+      {/* Content rows */}
+      <div className="space-y-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-2xl border border-border/50 bg-muted/40 p-4 flex items-center gap-4 animate-pulse">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+            <Skeleton className="h-7 w-16 rounded-lg" />
+          </div>
+        ))}
       </div>
     </div>
   )
