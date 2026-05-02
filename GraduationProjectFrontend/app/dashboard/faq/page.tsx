@@ -458,7 +458,7 @@ export default function FAQPage() {
                   <MessageSquare className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-lg">Can't find what you're looking for?</h3>
+                  <h3 className="font-semibold text-lg">Can&apos;t find what you&apos;re looking for?</h3>
                   <p className="text-muted-foreground">Our support team is ready to help you</p>
                 </div>
               </div>

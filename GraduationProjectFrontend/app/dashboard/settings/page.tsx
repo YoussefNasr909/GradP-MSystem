@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import {
@@ -1222,10 +1223,10 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">Step 1 — Scan this QR code with your authenticator app</p>
                   <div className="rounded-lg border bg-background p-3">
-                    <img src={twoFactorSetup.qrCodeDataUrl} alt="Authenticator QR code" className="mx-auto h-48 w-48" />
+                    <Image src={twoFactorSetup.qrCodeDataUrl} alt="Authenticator QR code" width={192} height={192} unoptimized className="mx-auto h-48 w-48" />
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Can't scan? Enter this key manually instead</p>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Can&apos;t scan? Enter this key manually instead</p>
                     <div className="mt-2 flex items-center gap-2">
                       <code className="min-w-0 flex-1 break-all rounded bg-muted px-2 py-1 text-xs">{twoFactorSetup.manualEntryKey}</code>
                       <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(twoFactorSetup.manualEntryKey)}>

@@ -686,7 +686,7 @@ function StudentTeamExperience({
                   <div className="space-y-1">
                     <p className="font-semibold text-foreground/80">No Doctor Assigned</p>
                     <p className="text-xs text-muted-foreground">
-                      Your team doesn't have an assigned Doctor yet.
+                      Your team doesn&apos;t have an assigned Doctor yet.
                     </p>
                   </div>
                   {currentMember?.teamRole === "LEADER" && (
@@ -710,7 +710,7 @@ function StudentTeamExperience({
                     </div>
                     <CardTitle className="text-lg tracking-tight">Teaching Assistant</CardTitle>
                   </div>
-                  <CardDescription>Assisting in your project's technical guidance.</CardDescription>
+                  <CardDescription>Assisting in your project&apos;s technical guidance.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4">
@@ -744,7 +744,7 @@ function StudentTeamExperience({
                   <div className="space-y-1">
                     <p className="font-semibold text-foreground/80">No TA Assigned</p>
                     <p className="text-xs text-muted-foreground">
-                      Your team doesn't have an assigned TA yet.
+                      Your team doesn&apos;t have an assigned TA yet.
                     </p>
                   </div>
                 </CardContent>
@@ -1509,7 +1509,7 @@ function JoinRequestsCard({ requests, onRefresh }: { requests: ApiTeamJoinReques
               <Users className="h-5 w-5" />
             </div>
             <p className="mt-3 text-sm font-medium">No pending requests</p>
-            <p className="mt-1 text-xs text-muted-foreground">When students request to join your team, they'll appear here for review.</p>
+            <p className="mt-1 text-xs text-muted-foreground">When students request to join your team, they&apos;ll appear here for review.</p>
           </div>
         ) : (
           requests.map((request) => (

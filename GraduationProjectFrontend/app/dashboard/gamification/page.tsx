@@ -1157,7 +1157,7 @@ export default function GamificationPage() {
             {/* Daily Progress */}
             <Card className="p-6 lg:col-span-2">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold">Today's Progress</h3>
+                <h3 className="text-xl font-semibold">Today&apos;s Progress</h3>
                 <Badge variant="outline">
                   <Clock className="h-3 w-3 mr-1" />
                   Resets in 4h 32m

@@ -91,7 +91,7 @@ export default function WeeklyProgressPage() {
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text mb-2">Weekly Progress Report</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Track and submit your team's weekly achievements</p>
+          <p className="text-sm sm:text-base text-muted-foreground">Track and submit your team&apos;s weekly achievements</p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -100,7 +100,7 @@ export default function WeeklyProgressPage() {
             <Card className="glass-card p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">This Week's Summary</h3>
+                <h3 className="text-lg font-semibold">This Week&apos;s Summary</h3>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">

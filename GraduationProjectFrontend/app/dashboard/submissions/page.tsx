@@ -378,7 +378,7 @@ function SubmissionDetailDialog({
                   <div>
                     <h4 className="text-base font-semibold mb-3">Submission Notes</h4>
                     <p className="text-sm text-foreground bg-muted/30 p-4 rounded-xl italic leading-relaxed border">
-                      "{submission.notes}"
+                      &ldquo;{submission.notes}&rdquo;
                     </p>
                   </div>
                )}

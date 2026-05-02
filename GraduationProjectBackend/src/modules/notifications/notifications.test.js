@@ -10,8 +10,16 @@
 
 import { test, describe, before } from "node:test";
 import assert from "node:assert/strict";
+import bcrypt from "bcrypt";
+import { prisma } from "../../loaders/dbLoader.js";
 
 const BASE = "http://localhost:4000/api/v1";
+const DEMO_PASSWORD = "demo123";
+const DEMO_LOGIN_EMAILS = [
+  "mariam.salah@student.edu",
+  "amira.khalil@student.edu",
+  "ahmed.hassan@university.edu",
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,7 +39,38 @@ async function request(path, options = {}) {
   return { status: res.status, ok: res.ok, body: json };
 }
 
-async function login(email, password = "demo123") {
+async function ensureDemoLogin(email, password = DEMO_PASSWORD) {
+  const normalizedEmail = String(email).trim().toLowerCase();
+  const user = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
+  });
+
+  if (!user) return false;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await bcrypt.hash(password, 10),
+      isEmailVerified: true,
+      accountStatus: "ACTIVE",
+    },
+  });
+
+  await prisma.userSettings.updateMany({
+    where: { userId: user.id },
+    data: {
+      twoFactorEnabled: false,
+      pendingTwoFactorSecretEncrypted: null,
+      twoFactorSecretEncrypted: null,
+      recoveryCodeHashes: [],
+    },
+  });
+
+  return true;
+}
+
+async function login(email, password = DEMO_PASSWORD) {
   const res = await request("/auth/login", {
     method: "POST",
     body: { email, password },
@@ -49,7 +88,14 @@ const ctx = {
   doctorToken: null,
   leaderNotificationId: null,
   studentNotificationId: null,
+  notificationSeedMissing: null,
 };
+
+function skipWhenNotificationSeedMissing(t) {
+  if (!ctx.notificationSeedMissing) return false;
+  t.skip(ctx.notificationSeedMissing);
+  return true;
+}
 
 // ─── Suite ───────────────────────────────────────────────────────────────────
 
@@ -57,13 +103,21 @@ describe("Notification System", { concurrency: false }, () => {
 
   // Run sequentially — tokens are shared across all subtests
   before(async () => {
+    const loginUsersReady = await Promise.all(DEMO_LOGIN_EMAILS.map((email) => ensureDemoLogin(email)));
+    if (loginUsersReady.some((ready) => !ready)) {
+      ctx.notificationSeedMissing =
+        "Notification integration tests require seeded demo users; run npm run db:seed to exercise them.";
+      return;
+    }
+
     ctx.leaderToken  = await login("mariam.salah@student.edu");
     ctx.studentToken = await login("amira.khalil@student.edu");
     ctx.doctorToken  = await login("ahmed.hassan@university.edu");
   });
 
   // ── 1. GET /notifications — correct response shape ────────────────────────
-  test("1. GET /notifications returns ok shape", async () => {
+  test("1. GET /notifications returns ok shape", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications", { token: ctx.leaderToken });
     assert.equal(res.status, 200, `Expected 200, got: ${JSON.stringify(res.body)}`);
     assert.ok(Array.isArray(res.body.data.notifications), "data.notifications must be an array");
@@ -75,7 +129,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 2. GET /notifications/unread-count ────────────────────────────────────
-  test("2. GET /notifications/unread-count returns a non-negative number", async () => {
+  test("2. GET /notifications/unread-count returns a non-negative number", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications/unread-count", { token: ctx.leaderToken });
     assert.equal(res.status, 200);
     assert.ok(typeof res.body.data.unreadCount === "number", "unreadCount must be a number");
@@ -89,7 +144,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 4. Pagination works ───────────────────────────────────────────────────
-  test("4. GET /notifications?page=1&limit=5 returns correct pagination shape", async () => {
+  test("4. GET /notifications?page=1&limit=5 returns correct pagination shape", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications?page=1&limit=5", { token: ctx.leaderToken });
     assert.equal(res.status, 200, `Expected 200, got ${res.status}: ${JSON.stringify(res.body)}`);
     const { pagination, notifications } = res.body.data;
@@ -102,7 +158,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 5. Join request trigger — leader gets notified ────────────────────────
-  test("5. Creating a join request notifies the team leader", async () => {
+  test("5. Creating a join request notifies the team leader", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     // Look up Smart Campus — leader is Mariam Salah (ctx.leaderToken)
     // Use doctorToken to search (neutral actor who can see all)
     const teamsRes = await request("/teams", { token: ctx.doctorToken });
@@ -152,7 +209,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 6. PATCH /:id/read — mark one notification as read ───────────────────
-  test("6. PATCH /notifications/:id/read marks notification as read", async () => {
+  test("6. PATCH /notifications/:id/read marks notification as read", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.leaderNotificationId) {
       console.log("  ⚠ No notification id — skipping");
       return;
@@ -167,7 +225,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 7. PATCH /:id/read — idempotent ──────────────────────────────────────
-  test("7. PATCH /notifications/:id/read is idempotent (already read)", async () => {
+  test("7. PATCH /notifications/:id/read is idempotent (already read)", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.leaderNotificationId) return;
     const res = await request(`/notifications/${ctx.leaderNotificationId}/read`, {
       method: "PATCH",
@@ -178,7 +237,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 8. PATCH /:id/read — ownership check ─────────────────────────────────
-  test("8. PATCH /notifications/:id/read returns 403 for another user's notification", async () => {
+  test("8. PATCH /notifications/:id/read returns 403 for another user's notification", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.leaderNotificationId) return;
     const res = await request(`/notifications/${ctx.leaderNotificationId}/read`, {
       method: "PATCH",
@@ -188,7 +248,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 9. Team invite trigger — student gets notified ────────────────────────
-  test("9. Inviting a student creates a notification for them", async () => {
+  test("9. Inviting a student creates a notification for them", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const teamsRes = await request("/teams", { token: ctx.doctorToken });
     const items = teamsRes.body.data?.items ?? teamsRes.body.data ?? [];
     const smartCampus = (Array.isArray(items) ? items : []).find((t) => t.name === "Smart Campus");
@@ -226,7 +287,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 10. DELETE /:id — ownership check ────────────────────────────────────
-  test("10. DELETE /notifications/:id returns 403 for another user's notification", async () => {
+  test("10. DELETE /notifications/:id returns 403 for another user's notification", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.studentNotificationId) {
       console.log("  ⚠ No student notification id — skipping");
       return;
@@ -240,7 +302,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 11. DELETE /:id — delete own notification ────────────────────────────
-  test("11. DELETE /notifications/:id deletes own notification", async () => {
+  test("11. DELETE /notifications/:id deletes own notification", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.leaderNotificationId) return;
     const res = await request(`/notifications/${ctx.leaderNotificationId}`, {
       method: "DELETE",
@@ -256,7 +319,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 12. DELETE /:id — 404 on non-existent ────────────────────────────────
-  test("12. DELETE /notifications/:id returns 404 for non-existent id", async () => {
+  test("12. DELETE /notifications/:id returns 404 for non-existent id", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     if (!ctx.leaderNotificationId) return;
     // leaderNotificationId was just deleted in test 11
     const res = await request(`/notifications/${ctx.leaderNotificationId}`, {
@@ -267,7 +331,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 13. PATCH /read-all ───────────────────────────────────────────────────
-  test("13. PATCH /notifications/read-all marks all as read and unread count becomes 0", async () => {
+  test("13. PATCH /notifications/read-all marks all as read and unread count becomes 0", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications/read-all", {
       method: "PATCH",
       token: ctx.leaderToken,
@@ -280,7 +345,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 14. PATCH /:id/read — 404 for non-existent ───────────────────────────
-  test("14. PATCH /notifications/nonexistent-id/read returns 404", async () => {
+  test("14. PATCH /notifications/nonexistent-id/read returns 404", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications/nonexistent-id-abc123/read", {
       method: "PATCH",
       token: ctx.leaderToken,
@@ -289,7 +355,8 @@ describe("Notification System", { concurrency: false }, () => {
   });
 
   // ── 15. DELETE /notifications — clear all ────────────────────────────────
-  test("15. DELETE /notifications clears all notifications for the user", async () => {
+  test("15. DELETE /notifications clears all notifications for the user", async (t) => {
+    if (skipWhenNotificationSeedMissing(t)) return;
     const res = await request("/notifications", {
       method: "DELETE",
       token: ctx.doctorToken,
