@@ -768,11 +768,14 @@ function StudentTeamExperience({
 function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader: boolean; onRefresh: () => Promise<void> }) {
   const [busy, setBusy] = useState("")
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const copyCode = async () => {
-    if (!team.inviteCode) return
+    if (!team.inviteCode || copied) return
     await navigator.clipboard.writeText(team.inviteCode)
+    setCopied(true)
     toast.success("Invite code copied.")
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const leaveTeam = async () => {
@@ -836,12 +839,81 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
 
             {isLeader && team.inviteCode && (
               <div className="flex items-center gap-2">
-                <div className="flex h-10 items-center rounded-xl border border-border/60 bg-background/70 px-3 font-mono text-sm tracking-[0.2em]">
-                  {team.inviteCode}
+                {/* Invite code pill — text swaps to "Copied!" */}
+                <div className={`relative flex h-10 items-center overflow-hidden rounded-xl border px-3 font-mono text-sm tracking-[0.2em] transition-all duration-300 ${
+                  copied
+                    ? "border-green-500/40 bg-green-500/[0.06] text-green-700 dark:text-green-400"
+                    : "border-border/60 bg-background/70"
+                }`}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="copied-label"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
+                        className="font-sans text-xs font-semibold tracking-wide"
+                      >
+                        Copied!
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="invite-code"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
+                      >
+                        {team.inviteCode}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl border-border/60" onClick={() => void copyCode()}>
-                  <Copy className="h-4 w-4" />
-                </Button>
+
+                {/* Copy button — bounces on copy, turns green, swaps icon */}
+                <motion.div
+                  whileTap={{ scale: 0.82 }}
+                  animate={copied ? { scale: [1, 1.18, 0.95, 1] } : { scale: 1 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] as const }}
+                >
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={`h-10 w-10 rounded-xl transition-all duration-300 ${
+                      copied
+                        ? "border-green-500/40 bg-green-500/10 text-green-600 hover:bg-green-500/15 dark:text-green-400"
+                        : "border-border/60 hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                    }`}
+                    onClick={() => void copyCode()}
+                  >
+                    <AnimatePresence mode="wait" initial={false}>
+                      {copied ? (
+                        <motion.span
+                          key="check-icon"
+                          initial={{ scale: 0.3, opacity: 0, rotate: -45 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          exit={{ scale: 0.3, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
+                          className="flex items-center justify-center"
+                        >
+                          <Check className="h-4 w-4" />
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="copy-icon"
+                          initial={{ scale: 0.3, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.3, opacity: 0 }}
+                          transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] as const }}
+                          className="flex items-center justify-center"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </Button>
+                </motion.div>
               </div>
             )}
 
