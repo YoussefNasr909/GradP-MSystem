@@ -290,6 +290,46 @@ function useDebouncedValue<T>(value: T, delayMs = 250) {
   return debounced
 }
 
+/**
+ * A controlled search Input that shows keystrokes instantly (local state)
+ * while deferring the parent state update via startTransition so the
+ * expensive filtering/re-render never blocks the input from feeling responsive.
+ */
+function DeferredSearchInput({
+  value,
+  onDeferredChange,
+  placeholder,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: string
+  onDeferredChange: (value: string) => void
+  placeholder?: string
+  className?: string
+  "aria-label"?: string
+}) {
+  const [localValue, setLocalValue] = useState(value)
+
+  // Sync when the parent resets the value externally (e.g. clear-search)
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  return (
+    <Input
+      value={localValue}
+      onChange={(e) => {
+        const next = e.target.value
+        setLocalValue(next)
+        startTransition(() => onDeferredChange(next))
+      }}
+      placeholder={placeholder}
+      className={className}
+      aria-label={ariaLabel}
+    />
+  )
+}
+
 function formatRepoSize(sizeInKb?: number | null) {
   const bytes = Math.max(Number(sizeInKb ?? 0), 0) * 1024
   if (!bytes) return "0 KB"
@@ -1006,7 +1046,10 @@ export function GitHubWorkspaceClient() {
     }
   }, [activeTeamId])
 
-  const selectedBranchMeta = branches.find((branch) => branch.name === selectedBranch) ?? null
+  const selectedBranchMeta = useMemo(
+    () => branches.find((branch) => branch.name === selectedBranch) ?? null,
+    [branches, selectedBranch],
+  )
   const canManageRepository = Boolean(workspace?.permissions.canManageRepository)
   const canSyncWorkspace = Boolean(workspace?.permissions.canSync)
   const canDisconnectConnectedRepository = Boolean(workspace?.permissions.canDisconnectRepository)
@@ -1092,27 +1135,54 @@ export function GitHubWorkspaceClient() {
   const totalTreeItemLabel = `${treeItems.length} total item${treeItems.length === 1 ? "" : "s"}`
   const commitPageStart = commits.length ? (commitPage - 1) * RECENT_COMMITS_PAGE_SIZE + 1 : 0
   const commitPageEnd = commits.length ? commitPageStart + commits.length - 1 : 0
-  const teamMembers = workspace?.team?.members ?? []
+  const teamMembers = useMemo(() => workspace?.team?.members ?? [], [workspace?.team?.members])
   const teamMemberCount = workspace?.team?.memberCount ?? teamMembers.length
-  const teamMembersWithGitHubCount = teamMembers.filter((member) => Boolean(member.user?.githubUsername)).length
+  const teamMembersWithGitHubCount = useMemo(
+    () => teamMembers.filter((member) => Boolean(member.user?.githubUsername)).length,
+    [teamMembers],
+  )
   const missingGitHubCount = Math.max(teamMemberCount - teamMembersWithGitHubCount, 0)
   const collaboratorCount = repositoryAccessState.collaborators.length
-  const collaboratorWriteCount = repositoryAccessState.collaborators.filter((collaborator) => collaborator.hasWriteAccess).length
+  const collaboratorWriteCount = useMemo(
+    () => repositoryAccessState.collaborators.filter((collaborator) => collaborator.hasWriteAccess).length,
+    [repositoryAccessState.collaborators],
+  )
   const pendingInvitationCount = repositoryAccessState.invitations.length
-  const openIssueCount = workspace?.repository?.openIssues ?? issues.filter((issue) => issue.state === "open").length
-  const openPullRequestCount = workspace?.stats?.openPullRequests ?? pullRequests.filter((pullRequest) => pullRequest.state === "open").length
-  const linkedTaskCount = issues.filter((issue) => issue.linkedTask).length
+  const openIssueCount = useMemo(
+    () => workspace?.repository?.openIssues ?? issues.filter((issue) => issue.state === "open").length,
+    [workspace?.repository?.openIssues, issues],
+  )
+  const openPullRequestCount = useMemo(
+    () => workspace?.stats?.openPullRequests ?? pullRequests.filter((pullRequest) => pullRequest.state === "open").length,
+    [workspace?.stats?.openPullRequests, pullRequests],
+  )
+  const linkedTaskCount = useMemo(
+    () => issues.filter((issue) => issue.linkedTask).length,
+    [issues],
+  )
   const repoBackedTasks = useMemo(
     () => workspaceTasks.filter((task) => task.origin === "GPMS" && task.integrationMode === "GITHUB"),
     [workspaceTasks],
   )
   const repoBackedTaskCount = repoBackedTasks.length
-  const repoBackedTasksWaitingAcceptance = repoBackedTasks.filter((task) => task.awaitingAcceptance).length
-  const repoBackedTasksInReview = repoBackedTasks.filter((task) => task.status === "REVIEW").length
-  const repoBackedTasksAwaitingMerge = repoBackedTasks.filter((task) => task.status === "APPROVED").length
-  const repoBackedTasksBlocked = repoBackedTasks.filter(
-    (task) => task.status !== "DONE" && Boolean(task.github?.reviewGate) && !task.github?.reviewGate?.ready,
-  ).length
+  const repoBackedTasksWaitingAcceptance = useMemo(
+    () => repoBackedTasks.filter((task) => task.awaitingAcceptance).length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksInReview = useMemo(
+    () => repoBackedTasks.filter((task) => task.status === "REVIEW").length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksAwaitingMerge = useMemo(
+    () => repoBackedTasks.filter((task) => task.status === "APPROVED").length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksBlocked = useMemo(
+    () => repoBackedTasks.filter(
+      (task) => task.status !== "DONE" && Boolean(task.github?.reviewGate) && !task.github?.reviewGate?.ready,
+    ).length,
+    [repoBackedTasks],
+  )
   const nextRepoTask = useMemo(
     () =>
       repoBackedTasks.find((task) => task.status !== "DONE") ??
@@ -4581,9 +4651,9 @@ export function GitHubWorkspaceClient() {
                       </Select>
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                        <Input
+                        <DeferredSearchInput
                           value={commitSearch}
-                          onChange={(event) => setCommitSearch(event.target.value)}
+                          onDeferredChange={setCommitSearch}
                           placeholder="Filter commits by message, author, or SHA..."
                           aria-label="Filter commits"
                           className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
@@ -5004,9 +5074,9 @@ export function GitHubWorkspaceClient() {
 
                             <div className="relative">
                               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                              <Input
+                              <DeferredSearchInput
                                 value={codeSearch}
-                                onChange={(event) => setCodeSearch(event.target.value)}
+                                onDeferredChange={setCodeSearch}
                                 placeholder="Search files..."
                                 aria-label="Search files in explorer"
                                 className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
@@ -5412,9 +5482,9 @@ export function GitHubWorkspaceClient() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                        <Input 
-                          value={issueSearch} 
-                          onChange={(event) => setIssueSearch(event.target.value)} 
+                        <DeferredSearchInput
+                          value={issueSearch}
+                          onDeferredChange={setIssueSearch}
                           placeholder="Filter issues by title or number..." 
                             aria-label="Filter issues"
                           className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
@@ -5679,9 +5749,9 @@ export function GitHubWorkspaceClient() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <Input 
-                        value={pullSearch} 
-                        onChange={(event) => setPullSearch(event.target.value)} 
+                      <DeferredSearchInput
+                        value={pullSearch}
+                        onDeferredChange={setPullSearch}
                         placeholder="Filter pull requests by title, number or author..." 
                           aria-label="Filter pull requests"
                         className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
@@ -6395,9 +6465,9 @@ export function GitHubWorkspaceClient() {
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <Input 
-                        value={memberSearch} 
-                        onChange={(event) => setMemberSearch(event.target.value)} 
+                      <DeferredSearchInput
+                        value={memberSearch}
+                        onDeferredChange={setMemberSearch}
                         placeholder="Search team members..." 
                         aria-label="Search team members"
                         className="h-10 rounded-xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background w-full sm:w-[240px]" 
