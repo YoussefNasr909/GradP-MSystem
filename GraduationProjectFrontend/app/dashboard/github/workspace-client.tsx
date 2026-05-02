@@ -1010,6 +1010,182 @@ const CommitListItem = memo(function CommitListItem({
 })
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Isolated confirmation dialog panels ─────────────────────────────────────
+// Input state lives here so typing never triggers a parent re-render.
+
+const ConfirmationDialogPanel = memo(function ConfirmationDialogPanel({
+  dialog,
+  busyAction,
+  onClose,
+  onConfirm,
+}: {
+  dialog: ConfirmationDialogState
+  busyAction: string
+  onClose: () => void
+  onConfirm: (inputValue: string) => void
+}) {
+  const [inputValue, setInputValue] = useState("")
+
+  // Reset input each time the dialog opens
+  useEffect(() => {
+    if (dialog.open) setInputValue("")
+  }, [dialog.open])
+
+  const confirmValues = dialog.confirmationValues ?? []
+  const isBusy = busyAction === dialog.busyKey
+  const isMatchConfirmed = confirmValues.length
+    ? confirmValues.some((v) => {
+        const cs = dialog.confirmationCaseSensitive
+        return (cs ? v.trim() : v.trim().toLowerCase()) ===
+               (cs ? inputValue.trim() : inputValue.trim().toLowerCase())
+      })
+    : true
+
+  return (
+    <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{dialog.title}</DialogTitle>
+        <DialogDescription>{dialog.description}</DialogDescription>
+      </DialogHeader>
+      <div className={cn(
+        "rounded-[22px] border p-4",
+        dialog.tone === "danger" ? "border-red-200/70 bg-red-50/80" : "border-amber-200/70 bg-amber-50/80",
+      )}>
+        <div className="flex items-start gap-3">
+          <AlertCircle className={cn("mt-0.5 h-5 w-5 shrink-0", dialog.tone === "danger" ? "text-red-700" : "text-amber-700")} />
+          <div className="space-y-3">
+            <p className={cn("text-sm leading-6", dialog.tone === "danger" ? "text-red-900" : "text-amber-900")}>
+              Review this change before you continue.
+            </p>
+            {dialog.notes.length ? (
+              <ul className={cn("space-y-2 text-sm leading-6", dialog.tone === "danger" ? "text-red-800" : "text-amber-800")}>
+                {dialog.notes.map((note) => (
+                  <li key={note} className="flex items-start gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-current" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      {confirmValues.length ? (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-foreground">
+            {dialog.confirmationLabel ?? "Type confirmation text"}
+          </Label>
+          {confirmValues[0] ? (
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
+              {confirmValues[0]}
+            </div>
+          ) : null}
+          <Input
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={dialog.confirmationPlaceholder ?? ""}
+            className="h-11 rounded-xl"
+            autoFocus
+          />
+        </div>
+      ) : null}
+      <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          className={cn(
+            "w-full sm:w-auto",
+            dialog.tone === "danger" && "bg-red-600 text-white hover:bg-red-700",
+            dialog.tone === "warning" && "bg-amber-500 text-amber-950 hover:bg-amber-400",
+          )}
+          onClick={() => onConfirm(inputValue)}
+          disabled={!dialog.action || isBusy || !isMatchConfirmed}
+        >
+          {isBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : dialog.tone === "danger" ? (
+            <Trash2 className="mr-2 h-4 w-4" />
+          ) : (
+            <AlertCircle className="mr-2 h-4 w-4" />
+          )}
+          {dialog.confirmLabel}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+})
+
+const BranchDeleteDialogPanel = memo(function BranchDeleteDialogPanel({
+  branch,
+  busyAction,
+  onClose,
+  onConfirm,
+}: {
+  branch: { name: string } | null
+  busyAction: string
+  onClose: () => void
+  onConfirm: (inputValue: string) => void
+}) {
+  const [inputValue, setInputValue] = useState("")
+
+  // Reset input each time a branch is selected for deletion
+  useEffect(() => {
+    setInputValue("")
+  }, [branch?.name])
+
+  const branchName = branch?.name ?? ""
+  const isBusy = busyAction === `delete-branch-${branchName}`
+
+  return (
+    <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Delete branch</DialogTitle>
+        <DialogDescription>
+          This removes the branch from GitHub. Default and protected branches stay blocked for safety.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="rounded-[22px] border border-red-200 bg-red-50/50 p-4 dark:border-red-500/20 dark:bg-red-500/5">
+        <p className="font-medium text-red-900 dark:text-red-200">{branchName || "Unknown branch"}</p>
+        <p className="mt-2 text-sm leading-6 text-red-800 dark:text-red-200/80">
+          Make sure this branch is no longer needed before deleting it. The branch history will stay in GitHub commits and pull requests, but the branch name itself will be removed.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-foreground">Type the branch name to confirm</Label>
+        <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
+          {branchName}
+        </div>
+        <Input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={branchName}
+          className="h-11 rounded-xl"
+          autoFocus
+        />
+      </div>
+      <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
+          onClick={() => onConfirm(inputValue)}
+          disabled={!branch || isBusy || inputValue.trim() !== branchName}
+        >
+          {isBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="mr-2 h-4 w-4" />
+          )}
+          Delete Branch
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+})
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function GitHubWorkspaceClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1071,7 +1247,6 @@ export function GitHubWorkspaceClient() {
   const [callbackInstallationHint, setCallbackInstallationHint] = useState<string | null>(callbackInstallationId)
   const [callbackOwnerHint, setCallbackOwnerHint] = useState<string | null>(callbackOwner)
   const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState>(initialConfirmationDialogState)
-  const [confirmationInputValue, setConfirmationInputValue] = useState("")
 
   const [selectedBranch, setSelectedBranch] = useState("")
   const [currentPath, setCurrentPath] = useState("")
@@ -1093,7 +1268,6 @@ export function GitHubWorkspaceClient() {
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [branchForm, setBranchForm] = useState({ name: "", fromBranch: "", startEmpty: false, confirmEmptyStart: false })
   const [branchToDelete, setBranchToDelete] = useState<ApiGitHubBranch | null>(null)
-  const [branchDeleteConfirmationText, setBranchDeleteConfirmationText] = useState("")
 
   const [issueDialogOpen, setIssueDialogOpen] = useState(false)
   const [issueForm, setIssueForm] = useState(initialIssueForm)
@@ -1409,42 +1583,34 @@ export function GitHubWorkspaceClient() {
   const isUploadInProgress = busyAction === "upload-folder"
 
   const closeConfirmationDialog = useCallback(() => {
-    setConfirmationInputValue("")
     setConfirmationDialog(initialConfirmationDialogState)
   }, [])
 
   const openConfirmationDialog = useCallback(
     (config: Omit<ConfirmationDialogState, "open">) => {
-      setConfirmationInputValue("")
-      setConfirmationDialog({
-        open: true,
-        ...config,
-      })
+      setConfirmationDialog({ open: true, ...config })
     },
     [],
   )
 
-  const runConfirmedAction = useCallback(async () => {
+  const runConfirmedAction = useCallback(async (inputValue: string) => {
     const action = confirmationDialog.action
     if (!action) return
     if (confirmationDialog.confirmationValues?.length) {
-      const inputValue = confirmationDialog.confirmationCaseSensitive
-        ? confirmationInputValue.trim()
-        : confirmationInputValue.trim().toLowerCase()
+      const iv = confirmationDialog.confirmationCaseSensitive ? inputValue.trim() : inputValue.trim().toLowerCase()
       const hasMatch = confirmationDialog.confirmationValues.some((value) => {
         const candidate = confirmationDialog.confirmationCaseSensitive ? value.trim() : value.trim().toLowerCase()
-        return candidate === inputValue
+        return candidate === iv
       })
       if (!hasMatch) return
     }
     closeConfirmationDialog()
-    await action(confirmationInputValue.trim())
+    await action(inputValue.trim())
   }, [
     closeConfirmationDialog,
     confirmationDialog.action,
     confirmationDialog.confirmationCaseSensitive,
     confirmationDialog.confirmationValues,
-    confirmationInputValue,
   ])
 
   const applyWorkspaceSummary = useCallback((data: ApiGitHubWorkspaceSummary) => {
@@ -2664,12 +2830,12 @@ export function GitHubWorkspaceClient() {
     }
   }
 
-  const handleDeleteBranch = async () => {
+  const handleDeleteBranch = async (inputValue: string) => {
     if (!branchToDelete) return
 
     const branchName = branchToDelete.name
     const fallbackBranch = workspace?.repositoryRecord?.defaultBranch ?? workspace?.repository?.defaultBranch ?? "main"
-    if (branchDeleteConfirmationText.trim() !== branchName) {
+    if (inputValue.trim() !== branchName) {
       toast.error(`Type "${branchName}" exactly to confirm branch deletion.`)
       return
     }
@@ -2679,7 +2845,6 @@ export function GitHubWorkspaceClient() {
       await githubApi.deleteBranch(branchName, activeTeamId)
       toast.success(`Branch ${branchName} deleted.`)
       setBranchToDelete(null)
-      setBranchDeleteConfirmationText("")
 
       if (selectedBranch === branchName) {
         setSelectedBranch(fallbackBranch)
@@ -6240,7 +6405,6 @@ export function GitHubWorkspaceClient() {
                                   size="icon"
                                   className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition-all"
                                   onClick={() => {
-                                    setBranchDeleteConfirmationText("")
                                     setBranchToDelete(branch)
                                   }}
                                   disabled={busyAction === `delete-branch-${branch.name}`}
@@ -7268,166 +7432,24 @@ export function GitHubWorkspaceClient() {
           </Dialog>
 
           <Dialog open={confirmationDialog.open} onOpenChange={(open) => (!open ? closeConfirmationDialog() : null)}>
-            <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{confirmationDialog.title}</DialogTitle>
-                <DialogDescription>{confirmationDialog.description}</DialogDescription>
-              </DialogHeader>
-              <div
-                className={cn(
-                  "rounded-[22px] border p-4",
-                  confirmationDialog.tone === "danger"
-                    ? "border-red-200/70 bg-red-50/80"
-                    : "border-amber-200/70 bg-amber-50/80",
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <AlertCircle
-                    className={cn(
-                      "mt-0.5 h-5 w-5 shrink-0",
-                      confirmationDialog.tone === "danger" ? "text-red-700" : "text-amber-700",
-                    )}
-                  />
-                  <div className="space-y-3">
-                    <p
-                      className={cn(
-                        "text-sm leading-6",
-                        confirmationDialog.tone === "danger" ? "text-red-900" : "text-amber-900",
-                      )}
-                    >
-                      Review this change before you continue.
-                    </p>
-                    {confirmationDialog.notes.length ? (
-                      <ul
-                        className={cn(
-                          "space-y-2 text-sm leading-6",
-                          confirmationDialog.tone === "danger" ? "text-red-800" : "text-amber-800",
-                        )}
-                      >
-                        {confirmationDialog.notes.map((note) => (
-                          <li key={note} className="flex items-start gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-current" />
-                            <span>{note}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              {confirmationDialog.confirmationValues?.length ? (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">
-                    {confirmationDialog.confirmationLabel ?? "Type confirmation text"}
-                  </Label>
-                  {confirmationDialog.confirmationValues[0] ? (
-                    <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
-                      {confirmationDialog.confirmationValues[0]}
-                    </div>
-                  ) : null}
-                  <Input
-                    value={confirmationInputValue}
-                    onChange={(event) => setConfirmationInputValue(event.target.value)}
-                    placeholder={confirmationDialog.confirmationPlaceholder ?? ""}
-                    className="h-11 rounded-xl"
-                  />
-                </div>
-              ) : null}
-              <DialogFooter className="flex-col gap-2 sm:flex-row">
-                <Button className="w-full sm:w-auto" variant="outline" onClick={closeConfirmationDialog}>
-                  Cancel
-                </Button>
-                <Button
-                  className={cn(
-                    "w-full sm:w-auto",
-                    confirmationDialog.tone === "danger" && "bg-red-600 text-white hover:bg-red-700",
-                    confirmationDialog.tone === "warning" && "bg-amber-500 text-amber-950 hover:bg-amber-400",
-                  )}
-                  onClick={() => void runConfirmedAction()}
-                  disabled={
-                    !confirmationDialog.action ||
-                    busyAction === confirmationDialog.busyKey ||
-                    (confirmationDialog.confirmationValues?.length
-                      ? !confirmationDialog.confirmationValues.some((value) =>
-                          (confirmationDialog.confirmationCaseSensitive
-                            ? value.trim()
-                            : value.trim().toLowerCase()) ===
-                          (confirmationDialog.confirmationCaseSensitive
-                            ? confirmationInputValue.trim()
-                            : confirmationInputValue.trim().toLowerCase()),
-                        )
-                      : false)
-                  }
-                >
-                  {busyAction === confirmationDialog.busyKey ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : confirmationDialog.tone === "danger" ? (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  ) : (
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                  )}
-                  {confirmationDialog.confirmLabel}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            <ConfirmationDialogPanel
+              dialog={confirmationDialog}
+              busyAction={busyAction ?? ""}
+              onClose={closeConfirmationDialog}
+              onConfirm={(iv) => void runConfirmedAction(iv)}
+            />
           </Dialog>
 
           <Dialog
             open={Boolean(branchToDelete)}
-            onOpenChange={(open) => {
-              if (!open) {
-                setBranchToDelete(null)
-                setBranchDeleteConfirmationText("")
-              }
-            }}
+            onOpenChange={(open) => { if (!open) setBranchToDelete(null) }}
           >
-            <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Delete branch</DialogTitle>
-                <DialogDescription>
-                  This removes the branch from GitHub. Default and protected branches stay blocked for safety.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-[22px] border border-red-200 bg-red-50/50 p-4 dark:border-red-500/20 dark:bg-red-500/5">
-                <p className="font-medium text-red-900 dark:text-red-200">{branchToDelete?.name ?? "Unknown branch"}</p>
-                <p className="mt-2 text-sm leading-6 text-red-800 dark:text-red-200/80">
-                  Make sure this branch is no longer needed before deleting it. The branch history will stay in GitHub commits and pull requests, but the branch name itself will be removed.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Type the branch name to confirm</Label>
-                <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
-                  {branchToDelete?.name ?? ""}
-                </div>
-                <Input
-                  value={branchDeleteConfirmationText}
-                  onChange={(event) => setBranchDeleteConfirmationText(event.target.value)}
-                  placeholder={branchToDelete?.name ?? ""}
-                  className="h-11 rounded-xl"
-                />
-              </div>
-              <DialogFooter className="flex-col gap-2 sm:flex-row">
-                <Button className="w-full sm:w-auto" variant="outline" onClick={() => setBranchToDelete(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
-                  onClick={() => void handleDeleteBranch()}
-                  disabled={
-                    !branchToDelete ||
-                    busyAction === `delete-branch-${branchToDelete?.name ?? ""}` ||
-                    branchDeleteConfirmationText.trim() !== (branchToDelete?.name ?? "")
-                  }
-                >
-                  {busyAction === `delete-branch-${branchToDelete?.name ?? ""}` ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  )}
-                  Delete Branch
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            <BranchDeleteDialogPanel
+              branch={branchToDelete}
+              busyAction={busyAction ?? ""}
+              onClose={() => setBranchToDelete(null)}
+              onConfirm={(iv) => void handleDeleteBranch(iv)}
+            />
           </Dialog>
 
           <Dialog
