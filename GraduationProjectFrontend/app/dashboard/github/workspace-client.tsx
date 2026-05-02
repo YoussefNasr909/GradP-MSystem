@@ -5473,7 +5473,7 @@ export function GitHubWorkspaceClient() {
                                     isSelected={selectedFilePath === item.path}
                                     isLastRow={index === visibleTreeItems.length - 1}
                                     canDelete={canAuthorRepositoryChanges}
-                                    busyAction={busyAction}
+                                    busyAction={busyAction ?? ""}
                                     onOpenFile={openFile}
                                     onOpenDirectory={openDirectory}
                                     onRequestDelete={requestDeleteTreeItem}
