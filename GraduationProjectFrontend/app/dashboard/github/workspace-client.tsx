@@ -4239,7 +4239,7 @@ export function GitHubWorkspaceClient() {
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as WorkspaceTab)} className="space-y-8">
+          <Tabs value={activeTab} onValueChange={(value) => startTransition(() => setActiveTab(value as WorkspaceTab))} className="space-y-8">
             <div className="sticky top-0 z-20 -mx-4 mb-2 overflow-x-auto no-scrollbar bg-background/80 px-4 py-3 backdrop-blur-md transition-all duration-300 md:-mx-8 md:px-8">
               <TabsList className="flex h-auto w-max items-center justify-start gap-1.5 bg-transparent p-0 pr-2">
                 <TabsTrigger value="overview" className={workspaceTabTriggerClass}>
@@ -4315,7 +4315,7 @@ export function GitHubWorkspaceClient() {
               </TabsList>
             </div>
 
-            <TabsContent value="overview" className="mt-0 space-y-8 outline-none">
+            {activeTab === "overview" && (<TabsContent value="overview" forceMount className="mt-0 space-y-8 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -4514,9 +4514,9 @@ export function GitHubWorkspaceClient() {
 
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="commits" className="mt-0 outline-none">
+            {activeTab === "commits" && (<TabsContent value="commits" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -4878,9 +4878,9 @@ export function GitHubWorkspaceClient() {
                 </SectionCard>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="code" className="mt-0 outline-none">
+            {activeTab === "code" && (<TabsContent value="code" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, scale: 0.99 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -5369,9 +5369,9 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="issues" className="mt-0 outline-none">
+            {activeTab === "issues" && (<TabsContent value="issues" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -5637,9 +5637,9 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="pulls" className="mt-0 outline-none">
+            {activeTab === "pulls" && (<TabsContent value="pulls" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -5945,9 +5945,9 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="branches" className="mt-0 outline-none">
+            {activeTab === "branches" && (<TabsContent value="branches" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6212,9 +6212,9 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="actions" className="mt-0 outline-none">
+            {activeTab === "actions" && (<TabsContent value="actions" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6289,9 +6289,9 @@ export function GitHubWorkspaceClient() {
                   )}
                 </SectionCard>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="releases" className="mt-0 outline-none">
+            {activeTab === "releases" && (<TabsContent value="releases" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6368,9 +6368,9 @@ export function GitHubWorkspaceClient() {
                   )}
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="members" className="mt-0 outline-none">
+            {activeTab === "members" && (<TabsContent value="members" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6740,9 +6740,9 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="settings" className="mt-0 outline-none">
+            {activeTab === "settings" && (<TabsContent value="settings" forceMount className="mt-0 outline-none">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -6991,7 +6991,7 @@ export function GitHubWorkspaceClient() {
                 </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
           </Tabs>
 
           <Dialog
