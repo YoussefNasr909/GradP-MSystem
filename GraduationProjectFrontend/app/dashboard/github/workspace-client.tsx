@@ -76,6 +76,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { TeamRequiredLoadingState, TeamRequiredState } from "@/components/team-required-guard"
 import { githubApi } from "@/lib/api/github"
 import { ApiRequestError } from "@/lib/api/http"
