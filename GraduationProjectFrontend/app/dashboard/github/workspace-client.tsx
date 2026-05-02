@@ -276,6 +276,36 @@ function splitCsv(value: string) {
     .filter(Boolean)
 }
 
+// ─── Stable animation variant objects ────────────────────────────────────────
+// Defined at module level so they're never re-created on component renders.
+// Passing inline objects like initial={{ opacity: 0 }} allocates a new object
+// every render; hoisting them here eliminates that cost entirely.
+const ANIM_FADE_IN          = { opacity: 1 } as const
+const ANIM_FADE_OUT         = { opacity: 0 } as const
+const ANIM_FADE_IN_UP       = { opacity: 1, y: 0 } as const
+const ANIM_FADE_OUT_DOWN    = { opacity: 0, y: 10 } as const
+const ANIM_FADE_IN_UP_SM    = { opacity: 1, y: 0 } as const
+const ANIM_FADE_OUT_UP_SM   = { opacity: 0, y: -10 } as const
+const ANIM_SCALE_IN         = { opacity: 1, scale: 1 } as const
+const ANIM_SCALE_OUT        = { opacity: 0.85, scale: 0.9 } as const
+const ANIM_SCALE_IN_SOFT    = { opacity: 1, scale: 1 } as const
+const ANIM_SCALE_OUT_SOFT   = { opacity: 0.98, scale: 0.99 } as const
+const ANIM_HOVER_LIFT       = { y: -2 } as const
+const ANIM_HOVER_LIFT_CARD  = { y: -4, scale: 1.02 } as const
+const ANIM_TAP_CARD         = { scale: 0.98 } as const
+const ANIM_TAP_SOFT         = { scale: 0.995 } as const
+const ANIM_BADGE_IN         = { scale: 1, opacity: 1 } as const
+const ANIM_BADGE_OUT        = { scale: 0.92, opacity: 0.85 } as const
+const ANIM_ENTRY_UP         = { opacity: 0, y: 10 } as const
+const ANIM_ENTRY_UP_SM      = { opacity: 0, y: 12 } as const
+const ANIM_ENTRY_DOWN       = { opacity: 0, y: -10 } as const
+const ANIM_ENTRY_SCALE      = { opacity: 0, scale: 0.98 } as const
+const ANIM_ENTRY_SCALE_SOFT = { opacity: 0, scale: 0.99 } as const
+const ANIM_ENTRY_FADE       = { opacity: 0 } as const
+const ANIM_HOVER_LIFT_SCALE = { y: -2, scale: 1.01 } as const
+const ANIM_SCALE_OUT_90     = { scale: 0.9, opacity: 0.85 } as const
+// ─────────────────────────────────────────────────────────────────────────────
+
 function formatRelative(value?: string | null) {
   if (!value) return "Not available"
   return formatDistanceToNow(new Date(value), { addSuffix: true })
@@ -699,8 +729,8 @@ function StatCard({
 
   return (
     <motion.button
-      whileHover={{ y: -4, scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={ANIM_HOVER_LIFT_CARD}
+      whileTap={ANIM_TAP_CARD}
       onClick={onClick}
       className={cn(
         "group relative overflow-hidden rounded-[28px] border bg-background p-6 text-left transition-all duration-300",
@@ -822,6 +852,162 @@ function getMemberRepositoryAccessState({
     detail: "This GitHub account still needs collaborator access",
   }
 }
+
+// ─── Memoized list-row components ────────────────────────────────────────────
+// Extracted so React.memo can skip re-renders for unchanged rows.
+// With up to 200 tree rows and 60 commit rows on screen at once, skipping
+// unaffected rows when selection changes is a significant win.
+
+type TreeItem = {
+  name: string
+  path: string
+  type: string
+  size: number | null
+  sha: string | null
+  url: string | null
+  downloadUrl: string | null
+}
+
+const FileTreeItem = React.memo(function FileTreeItem({
+  item,
+  isSelected,
+  isLastRow,
+  canDelete,
+  busyAction,
+  onOpenFile,
+  onOpenDirectory,
+  onRequestDelete,
+}: {
+  item: TreeItem
+  isSelected: boolean
+  isLastRow: boolean
+  canDelete: boolean
+  busyAction: string
+  onOpenFile: (path: string) => void
+  onOpenDirectory: (path: string) => void
+  onRequestDelete: (item: { path: string; type: string; name: string }) => void
+}) {
+  const isDirectory = item.type === "dir"
+  const deleteKey = toPathBusyKey("delete-item", item.path)
+  const isDeleting = busyAction === deleteKey
+
+  return (
+    <div className={cn("group relative flex items-center gap-1 rounded-xl transition-all duration-200", !isLastRow && "border-b border-border/35")}>
+      <button
+        type="button"
+        onClick={() => (isDirectory ? onOpenDirectory(item.path) : onOpenFile(item.path))}
+        className={cn(
+          "flex flex-1 items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-left transition-all duration-200 [content-visibility:auto]",
+          isSelected
+            ? "bg-primary/12 text-primary ring-1 ring-primary/25 dark:bg-primary/20"
+            : "text-foreground/90 hover:border-border/50 hover:bg-muted/45 hover:text-foreground dark:text-foreground/85 dark:hover:bg-muted/35",
+        )}
+      >
+        <div className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
+          isSelected ? "border-primary/25 bg-background dark:bg-background/80" : "border-transparent group-hover:bg-background group-hover:border-border/60 dark:group-hover:bg-background/80"
+        )}>
+          {isDirectory ? (
+            <Folder className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <FileCode2 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold tracking-tight text-foreground/95 dark:text-foreground/90">{item.name}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 dark:text-muted-foreground/80">{isDirectory ? "Folder" : "File"}</p>
+        </div>
+        <ChevronRight className={cn(
+          "h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 text-muted-foreground/65",
+          isSelected && "opacity-100 text-primary"
+        )} />
+      </button>
+
+      {canDelete && (
+        <div className="absolute right-10 flex items-center pr-2">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
+              isDeleting
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10",
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (isDeleting) return
+              onRequestDelete(item)
+            }}
+            aria-label={`Delete ${isDirectory ? "folder" : "file"} ${item.name}`}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+})
+
+const CommitListItem = React.memo(function CommitListItem({
+  commit,
+  isSelected,
+  branchName,
+  onSelect,
+}: {
+  commit: ApiGitHubCommit
+  isSelected: boolean
+  branchName: string
+  onSelect: (sha: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(commit.sha)}
+      className={cn(
+        "group relative w-full rounded-2xl border p-4 text-left transition-all duration-250",
+        isSelected
+          ? "border-primary/35 bg-primary/12 shadow-xl shadow-primary/15 ring-1 ring-primary/30 dark:border-primary/45 dark:bg-primary/20 dark:ring-primary/40"
+          : "border-border/40 bg-muted/2 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/4 hover:shadow-md",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Avatar className="h-9 w-9 border border-border/50 shadow-sm">
+          <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
+          <AvatarFallback className="text-[10px] font-bold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="outline" className="h-5 rounded-full border-border/50 bg-background/50 px-2 text-[10px] font-bold text-muted-foreground shadow-none">
+              {commit.sha.slice(0, 7)}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="h-5 rounded-full border-primary/20 bg-primary/8 px-2 text-[10px] font-bold text-primary shadow-none"
+            >
+              {branchName}
+            </Badge>
+            <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(commit.author.date)}</span>
+          </div>
+          <p className={cn(
+            "line-clamp-2 text-sm font-bold leading-snug tracking-tight transition-colors",
+            isSelected ? "text-primary" : "text-foreground/90 group-hover:text-foreground"
+          )}>
+            {getCommitSubject(commit.message)}
+          </p>
+          <p className="truncate text-[11px] font-medium text-muted-foreground/70">
+            by <span className="text-foreground/60">@{commit.author.login || commit.author.name}</span>
+          </p>
+        </div>
+      </div>
+    </button>
+  )
+})
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function GitHubWorkspaceClient() {
   const router = useRouter()
@@ -1069,9 +1255,9 @@ export function GitHubWorkspaceClient() {
   const canRunLeaderWriteActions = canManageRepository && hasConnectedGitHubWriteAccess
   const isTeamLeader = Boolean(workspace?.team?.leader?.id && currentUser?.id && workspace.team.leader.id === currentUser.id)
 
-  const filteredIssues = useMemo(() => issues, [issues])
+  const filteredIssues = issues
 
-  const filteredPullRequests = useMemo(() => pullRequests, [pullRequests])
+  const filteredPullRequests = pullRequests
 
   const filteredMembers = useMemo(() => {
     const query = deferredMemberSearch.trim().toLowerCase()
@@ -1087,7 +1273,7 @@ export function GitHubWorkspaceClient() {
   const visibleMembers = useMemo(() => filteredMembers.slice(0, memberRenderLimit), [filteredMembers, memberRenderLimit])
   const hasMoreMembers = filteredMembers.length > visibleMembers.length
 
-  const filteredCommits = useMemo(() => commits, [commits])
+  const filteredCommits = commits
   const commitSearchQuery = deferredCommitSearch.trim()
   const visibleCommits = useMemo(() => filteredCommits.slice(0, commitRenderLimit), [filteredCommits, commitRenderLimit])
   const hasMoreCommits = filteredCommits.length > visibleCommits.length
@@ -2989,14 +3175,14 @@ export function GitHubWorkspaceClient() {
     }
   }
 
-  const openFile = (path: string) => {
+  const openFile = useCallback((path: string) => {
     setSelectedFilePath(path)
     setIsEditingCode(false)
     setCodeActionNotice(null)
     void loadPathActivity(path)
-  }
+  }, [loadPathActivity])
 
-  const openDirectory = (path: string) => {
+  const openDirectory = useCallback((path: string) => {
     setCurrentPath(path)
     setSelectedFilePath("")
     setSelectedBlob(null)
@@ -3004,7 +3190,7 @@ export function GitHubWorkspaceClient() {
     setIsEditingCode(false)
     setCodeActionNotice(null)
     void loadPathActivity(path)
-  }
+  }, [loadPathActivity])
 
   const handleOpenBranchDialog = () => {
     setCodeActionNotice(null)
@@ -3813,8 +3999,8 @@ export function GitHubWorkspaceClient() {
     >
       {callbackNotice ? (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={ANIM_ENTRY_DOWN}
+          animate={ANIM_FADE_IN_UP}
           className={cn(
             "rounded-[24px] border p-5 mb-6 shadow-sm",
             callbackNotice.tone === "error"
@@ -3864,8 +4050,8 @@ export function GitHubWorkspaceClient() {
 
       {repositoryConnected && (missingGitHubCount || teamInviteCandidates.length || pendingInvitationCount || !workspace.githubConnection.isConnected) ? (
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={ANIM_ENTRY_SCALE}
+          animate={ANIM_SCALE_IN}
           className="rounded-[24px] border border-rose-500/20 bg-rose-500/5 p-6 mb-6 dark:border-rose-500/30 dark:bg-rose-500/10"
         >
           <div className="flex items-start gap-4">
@@ -3943,8 +4129,8 @@ export function GitHubWorkspaceClient() {
             <CardContent className="relative space-y-6 p-5 sm:p-6 lg:p-7">
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-start">
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={ANIM_ENTRY_UP}
+                  animate={ANIM_FADE_IN_UP}
                   transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                   className="space-y-5"
                 >
@@ -4027,7 +4213,7 @@ export function GitHubWorkspaceClient() {
                   </div>
 
                   <motion.div
-                    whileHover={{ y: -2 }}
+                    whileHover={ANIM_HOVER_LIFT}
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="flex flex-col gap-3 rounded-[24px] border border-border/70 bg-muted/4 p-4 transition-all duration-200 hover:border-primary/25 hover:bg-primary/5 sm:flex-row sm:items-center sm:justify-between"
                   >
@@ -4130,8 +4316,8 @@ export function GitHubWorkspaceClient() {
                 </motion.div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={ANIM_ENTRY_UP_SM}
+                  animate={ANIM_FADE_IN_UP}
                   transition={{ delay: 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                   className="space-y-4 rounded-[24px] border border-border/70 bg-muted/6 p-4 shadow-sm"
                 >
@@ -4208,8 +4394,8 @@ export function GitHubWorkspaceClient() {
                         <Button className={quickActionButtonClass} variant="outline" onClick={() => void handleCopy("HTTPS clone URL", workspace?.repositoryRecord?.cloneUrlHttps, "copy-clone")}>
                           <motion.span
                             key={copiedActionKey === "copy-clone" ? "copied-clone" : "copy-clone"}
-                            initial={{ scale: 0.92, opacity: 0.85 }}
-                            animate={{ scale: 1, opacity: 1 }}
+                            initial={ANIM_BADGE_OUT}
+                            animate={ANIM_BADGE_IN}
                             transition={{ duration: 0.16 }}
                             className="mr-2 inline-flex"
                           >
@@ -4387,8 +4573,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "overview" && (<TabsContent value="overview" forceMount className="mt-0 space-y-8 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 className="grid gap-8 xl:grid-cols-[1fr_minmax(320px,360px)]"
               >
@@ -4509,8 +4695,8 @@ export function GitHubWorkspaceClient() {
                           {commits.slice(0, 3).map((commit) => (
                             <motion.button
                               key={`overview-${commit.sha}`}
-                              whileHover={{ y: -2 }}
-                              whileTap={{ scale: 0.995 }}
+                              whileHover={ANIM_HOVER_LIFT}
+                              whileTap={ANIM_TAP_SOFT}
                               onClick={() => {
                                 setSelectedCommitSha(commit.sha)
                                 setActiveTab("commits")
@@ -4588,8 +4774,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "commits" && (<TabsContent value="commits" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -4687,53 +4873,15 @@ export function GitHubWorkspaceClient() {
                     <div className="space-y-4">
                       <ScrollArea className="h-[52vh] min-h-[320px] sm:h-[calc(100vh-22rem)] sm:min-h-[400px]">
                         <div className="space-y-3 p-2">
-                          {visibleCommits.map((commit) => {
-                            const isSelected = selectedCommitSha === commit.sha
-
-                            return (
-                              <button
-                                key={commit.sha}
-                                type="button"
-                                onClick={() => setSelectedCommitSha(commit.sha)}
-                                className={cn(
-                                  "group relative w-full rounded-2xl border p-4 text-left transition-all duration-250",
-                                  isSelected
-                                    ? "border-primary/35 bg-primary/12 shadow-xl shadow-primary/15 ring-1 ring-primary/30 dark:border-primary/45 dark:bg-primary/20 dark:ring-primary/40"
-                                    : "border-border/40 bg-muted/2 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/4 hover:shadow-md",
-                                )}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <Avatar className="h-9 w-9 border border-border/50 shadow-sm">
-                                    <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
-                                    <AvatarFallback className="text-[10px] font-bold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <Badge variant="outline" className="h-5 rounded-full border-border/50 bg-background/50 px-2 text-[10px] font-bold text-muted-foreground shadow-none">
-                                        {commit.sha.slice(0, 7)}
-                                      </Badge>
-                                      <Badge
-                                        variant="outline"
-                                        className="h-5 rounded-full border-primary/20 bg-primary/8 px-2 text-[10px] font-bold text-primary shadow-none"
-                                      >
-                                        {selectedBranch || defaultBranchName}
-                                      </Badge>
-                                      <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(commit.author.date)}</span>
-                                    </div>
-                                    <p className={cn(
-                                      "line-clamp-2 text-sm font-bold leading-snug tracking-tight transition-colors",
-                                      isSelected ? "text-primary" : "text-foreground/90 group-hover:text-foreground"
-                                    )}>
-                                      {getCommitSubject(commit.message)}
-                                    </p>
-                                    <p className="truncate text-[11px] font-medium text-muted-foreground/70">
-                                      by <span className="text-foreground/60">@{commit.author.login || commit.author.name}</span>
-                                    </p>
-                                  </div>
-                                </div>
-                              </button>
-                            )
-                          })}
+                          {visibleCommits.map((commit) => (
+                            <CommitListItem
+                              key={commit.sha}
+                              commit={commit}
+                              isSelected={selectedCommitSha === commit.sha}
+                              branchName={selectedBranch || defaultBranchName}
+                              onSelect={setSelectedCommitSha}
+                            />
+                          ))}
                           {hasMoreCommits ? (
                             <div className="px-2 pb-2">
                               <Button
@@ -4802,7 +4950,7 @@ export function GitHubWorkspaceClient() {
                       <span className="text-sm font-medium text-muted-foreground/60">Loading commit details...</span>
                     </div>
                   ) : selectedCommit ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+                    <motion.div initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-8">
                       <div className="rounded-2xl border border-border/50 bg-muted/10 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
@@ -4952,8 +5100,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "code" && (<TabsContent value="code" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={ANIM_ENTRY_SCALE_SOFT}
+                animate={ANIM_SCALE_IN}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -5000,7 +5148,7 @@ export function GitHubWorkspaceClient() {
                 </div>
 
                 {codeActionNotice && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                  <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP}>
                     <InlineNotice tone={codeActionNotice.tone} title={codeActionNotice.title} message={codeActionNotice.message} />
                   </motion.div>
                 )}
@@ -5145,77 +5293,25 @@ export function GitHubWorkspaceClient() {
                         <div className="p-2">
                           <AnimatePresence mode="wait">
                             {treeLoading ? (
-                              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-32 flex-col items-center justify-center gap-3">
+                              <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center gap-3">
                                 <Loader2 className="h-5 w-5 animate-spin text-primary/30" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Reading tree...</span>
                               </motion.div>
                             ) : filteredTreeItems.length ? (
-                              <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-0.5">
-                                {visibleTreeItems.map((item, index) => {
-                                  const isDirectory = item.type === "dir"
-                                  const isSelected = selectedFilePath === item.path
-                                  const isLastRow = index === visibleTreeItems.length - 1
-                                  return (
-                                    <div key={item.path} className={cn("group relative flex items-center gap-1 rounded-xl transition-all duration-200", !isLastRow && "border-b border-border/35")}>
-                                      <button
-                                        type="button"
-                                        onClick={() => (isDirectory ? openDirectory(item.path) : openFile(item.path))}
-                                        className={cn(
-                                          "flex flex-1 items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-left transition-all duration-200 [content-visibility:auto]",
-                                          isSelected
-                                            ? "bg-primary/12 text-primary ring-1 ring-primary/25 dark:bg-primary/20"
-                                            : "text-foreground/90 hover:border-border/50 hover:bg-muted/45 hover:text-foreground dark:text-foreground/85 dark:hover:bg-muted/35",
-                                        )}
-                                      >
-                                        <div className={cn(
-                                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
-                                          isSelected ? "border-primary/25 bg-background dark:bg-background/80" : "border-transparent group-hover:bg-background group-hover:border-border/60 dark:group-hover:bg-background/80"
-                                        )}>
-                                          {isDirectory ? (
-                                            <Folder className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                                          ) : (
-                                            <FileCode2 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
-                                          )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="truncate text-sm font-semibold tracking-tight text-foreground/95 dark:text-foreground/90">{item.name}</p>
-                                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 dark:text-muted-foreground/80">{isDirectory ? "Folder" : "File"}</p>
-                                        </div>
-                                        <ChevronRight className={cn(
-                                          "h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 text-muted-foreground/65",
-                                          isSelected && "opacity-100 text-primary"
-                                        )} />
-                                      </button>
-
-                                      {canAuthorRepositoryChanges && (
-                                        <div className="absolute right-10 flex items-center pr-2">
-                                          <button
-                                            type="button"
-                                            className={cn(
-                                              "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
-                                              busyAction === toPathBusyKey("delete-item", item.path)
-                                                ? "cursor-not-allowed opacity-70"
-                                                : "cursor-pointer hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10",
-                                            )}
-                                            onClick={(event) => {
-                                              event.stopPropagation()
-                                              if (busyAction === toPathBusyKey("delete-item", item.path)) return
-                                              void requestDeleteTreeItem(item)
-                                            }}
-                                            aria-label={`Delete ${isDirectory ? "folder" : "file"} ${item.name}`}
-                                            disabled={busyAction === toPathBusyKey("delete-item", item.path)}
-                                          >
-                                            {busyAction === toPathBusyKey("delete-item", item.path) ? (
-                                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            ) : (
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            )}
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                              <motion.div key="list" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-0.5">
+                                {visibleTreeItems.map((item, index) => (
+                                  <FileTreeItem
+                                    key={item.path}
+                                    item={item}
+                                    isSelected={selectedFilePath === item.path}
+                                    isLastRow={index === visibleTreeItems.length - 1}
+                                    canDelete={canAuthorRepositoryChanges}
+                                    busyAction={busyAction}
+                                    onOpenFile={openFile}
+                                    onOpenDirectory={openDirectory}
+                                    onRequestDelete={requestDeleteTreeItem}
+                                  />
+                                ))}
                                 {hasMoreTreeItems ? (
                                   <div className="flex items-center justify-center py-3">
                                     <Button
@@ -5231,7 +5327,7 @@ export function GitHubWorkspaceClient() {
                                 ) : null}
                               </motion.div>
                             ) : (
-                              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-32 flex-col items-center justify-center text-center p-6">
+                              <motion.div key="empty" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center text-center p-6">
                                 <Search className="h-8 w-8 text-muted-foreground/10 mb-2" />
                                 <p className="text-xs font-medium text-muted-foreground/50">No items found</p>
                               </motion.div>
@@ -5268,12 +5364,12 @@ export function GitHubWorkspaceClient() {
                     >
                       <AnimatePresence mode="wait">
                         {blobLoading ? (
-                          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex min-h-[400px] flex-col items-center justify-center gap-4">
+                          <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center gap-4">
                             <Loader2 className="h-8 w-8 animate-spin text-primary/20" />
                             <span className="text-sm font-medium text-muted-foreground/60">Loading file contents...</span>
                           </motion.div>
                         ) : selectedBlob ? (
-                          <motion.div key="content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                          <motion.div key="content" initial={ANIM_ENTRY_UP} animate={ANIM_FADE_IN_UP} className="space-y-6">
                             {/* File Metadata */}
                             <div className="flex flex-wrap items-center gap-3">
                               <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -5387,8 +5483,8 @@ export function GitHubWorkspaceClient() {
                                   >
                                     <motion.span
                                       key={copiedActionKey === "copy-file-content" ? "copied-file" : "copy-file"}
-                                      initial={{ scale: 0.9, opacity: 0.85 }}
-                                      animate={{ scale: 1, opacity: 1 }}
+                                      initial={ANIM_SCALE_OUT_90}
+                                      animate={ANIM_BADGE_IN}
                                       transition={{ duration: 0.16 }}
                                       className="inline-flex"
                                     >
@@ -5443,8 +5539,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "issues" && (<TabsContent value="issues" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -5538,7 +5634,7 @@ export function GitHubWorkspaceClient() {
                         {filteredIssues.map((issue) => (
                           <motion.div
                             key={issue.id}
-                            whileHover={{ y: -2 }}
+                            whileHover={ANIM_HOVER_LIFT}
                             className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
                           >
                             <div className="flex items-start gap-4">
@@ -5711,8 +5807,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "pulls" && (<TabsContent value="pulls" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -5801,7 +5897,7 @@ export function GitHubWorkspaceClient() {
                         return (
                           <motion.div
                             key={pullRequest.id}
-                            whileHover={{ y: -2 }}
+                            whileHover={ANIM_HOVER_LIFT}
                             className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
                           >
                           <div className="flex flex-col gap-6 md:flex-row md:items-start">
@@ -6019,8 +6115,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "branches" && (<TabsContent value="branches" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6052,7 +6148,7 @@ export function GitHubWorkspaceClient() {
                 <div className="grid gap-8 lg:grid-cols-3">
                   <div className="lg:col-span-2 space-y-8">
                     {canWriteCode && !hasConnectedGitHubWriteAccess && (
-                      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
+                      <motion.div initial={ANIM_ENTRY_SCALE} animate={ANIM_SCALE_IN}>
                         <InlineNotice 
                           tone="warning" 
                           title="Limited write access" 
@@ -6067,7 +6163,7 @@ export function GitHubWorkspaceClient() {
                       {branches.map((branch) => (
                         <motion.div
                           key={branch.name}
-                          whileHover={{ y: -2 }}
+                          whileHover={ANIM_HOVER_LIFT}
                           className={cn(
                             "group relative overflow-hidden rounded-[24px] border p-6 transition-all",
                             selectedBranch === branch.name 
@@ -6286,8 +6382,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "actions" && (<TabsContent value="actions" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6363,8 +6459,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "releases" && (<TabsContent value="releases" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6398,7 +6494,7 @@ export function GitHubWorkspaceClient() {
                     releases.map((release) => (
                       <motion.div
                         key={release.id}
-                        whileHover={{ y: -2 }}
+                        whileHover={ANIM_HOVER_LIFT}
                         className="group relative overflow-hidden rounded-[28px] border border-border/50 bg-background p-8 transition-all hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10"
                       >
                         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -6442,8 +6538,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "members" && (<TabsContent value="members" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6509,7 +6605,7 @@ export function GitHubWorkspaceClient() {
                     return (
                       <motion.div
                         key={member.id}
-                        whileHover={{ y: -2 }}
+                        whileHover={ANIM_HOVER_LIFT}
                         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                         className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/25 hover:shadow-lg hover:shadow-primary/8"
                       >
@@ -6814,8 +6910,8 @@ export function GitHubWorkspaceClient() {
 
             {activeTab === "settings" && (<TabsContent value="settings" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -9567,7 +9663,7 @@ function WorkspaceFact({
 }) {
   return (
     <motion.div
-      whileHover={{ y: -2, scale: 1.01 }}
+      whileHover={ANIM_HOVER_LIFT_SCALE}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-[20px] border border-border/70 bg-muted/6 px-4 py-3 shadow-[0_12px_32px_-32px_rgba(15,23,42,0.14)] transition-all duration-200 hover:border-primary/20 hover:bg-primary/4 hover:shadow-[0_18px_38px_-30px_rgba(15,23,42,0.2)]"
     >
@@ -9698,8 +9794,8 @@ function ActionRow({
             {!href && (
               <motion.span
                 key={isCopied ? "copied-action-row" : "copy-action-row"}
-                initial={{ scale: 0.92, opacity: 0.85 }}
-                animate={{ scale: 1, opacity: 1 }}
+                initial={ANIM_BADGE_OUT}
+                animate={ANIM_BADGE_IN}
                 transition={{ duration: 0.16 }}
                 className="mr-2 inline-flex"
               >
