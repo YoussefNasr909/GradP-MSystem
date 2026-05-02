@@ -204,19 +204,28 @@ export default function MyTeamClient() {
       <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex h-12 min-w-max items-center gap-1 rounded-2xl border border-border/70 bg-background/90 p-1.5 shadow-sm">
-            <TabsTrigger value="overview" className="h-9 rounded-xl px-4 text-sm font-medium">
+        <div className="overflow-x-auto pb-0.5">
+          <TabsList className="inline-flex h-12 min-w-max items-center gap-0.5 rounded-2xl border border-border/60 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm">
+            <TabsTrigger
+              value="overview"
+              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+            >
               Overview
             </TabsTrigger>
-            <TabsTrigger value="members" className="h-9 rounded-xl px-4 text-sm font-medium">
+            <TabsTrigger
+              value="members"
+              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+            >
               Members
               <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px] font-bold">
                 {team.memberCount}
               </Badge>
             </TabsTrigger>
             {isLeader && (
-              <TabsTrigger value="invitations" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="invitations"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Invitations
                 {pendingInvitesCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
@@ -226,12 +235,18 @@ export default function MyTeamClient() {
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="supervisors" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="supervisors"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Supervisors
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="requests" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="requests"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Join Requests
                 {pendingRequestsCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-amber-500/15 px-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
@@ -241,7 +256,10 @@ export default function MyTeamClient() {
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="settings" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="settings"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Settings
               </TabsTrigger>
             )}
