@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
+  memo,
   startTransition,
   useCallback,
   useEffect,
@@ -868,7 +869,7 @@ type TreeItem = {
   downloadUrl: string | null
 }
 
-const FileTreeItem = React.memo(function FileTreeItem({
+const FileTreeItem = memo(function FileTreeItem({
   item,
   isSelected,
   isLastRow,
@@ -953,7 +954,7 @@ const FileTreeItem = React.memo(function FileTreeItem({
   )
 })
 
-const CommitListItem = React.memo(function CommitListItem({
+const CommitListItem = memo(function CommitListItem({
   commit,
   isSelected,
   branchName,
