@@ -1970,7 +1970,7 @@ export function GitHubWorkspaceClient() {
   useEffect(() => {
     if (!workspace?.team) return
     const team = workspace.team
-    const ownerLogin = callbackOwnerHint ?? workspace.githubConnection.login ?? workspace.repository?.owner.login ?? ""
+    const fallbackOwner = callbackOwnerHint ?? workspace.githubConnection.login ?? workspace.repository?.owner.login ?? ""
     const suggestedInstallation = pickSuggestedInstallation(
       availableInstallations,
       callbackInstallationHint,
@@ -1979,32 +1979,48 @@ export function GitHubWorkspaceClient() {
       workspace.repository?.owner.login,
     )
 
-    setCreateRepositoryForm((current) => ({
-      ...current,
-      installationId:
+    setCreateRepositoryForm((current) => {
+      const nextInstallationId =
         isKnownInstallationId(availableInstallations, callbackInstallationHint) ||
         !availableInstallations.length
           ? callbackInstallationHint || current.installationId
           : isKnownInstallationId(availableInstallations, current.installationId)
             ? current.installationId
-            : suggestedInstallation?.id || current.installationId,
-      owner: current.owner || ownerLogin || suggestedInstallation?.accountLogin || "",
-      ownerType: suggestedInstallation?.accountType ?? current.ownerType,
-      repoName: current.repoName || team.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      description: current.description || team.bio,
-      defaultBranch: current.defaultBranch || workspace.repositoryRecord?.defaultBranch || "main",
-    }))
-    setConnectRepositoryForm((current) => ({
-      ...current,
-      installationId:
+            : suggestedInstallation?.id || current.installationId
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === nextInstallationId,
+      )
+      const nextOwner = selectedInstallation?.accountLogin ?? fallbackOwner ?? current.owner ?? ""
+
+      return {
+        ...current,
+        installationId: nextInstallationId,
+        owner: nextOwner,
+        ownerType: selectedInstallation?.accountType ?? suggestedInstallation?.accountType ?? current.ownerType,
+        repoName: current.repoName || team.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        description: current.description || team.bio,
+        defaultBranch: current.defaultBranch || workspace.repositoryRecord?.defaultBranch || "main",
+      }
+    })
+    setConnectRepositoryForm((current) => {
+      const nextInstallationId =
         isKnownInstallationId(availableInstallations, callbackInstallationHint) ||
         !availableInstallations.length
           ? callbackInstallationHint || current.installationId
           : isKnownInstallationId(availableInstallations, current.installationId)
             ? current.installationId
-            : suggestedInstallation?.id || current.installationId,
-      owner: current.owner || ownerLogin || suggestedInstallation?.accountLogin || "",
-    }))
+            : suggestedInstallation?.id || current.installationId
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === nextInstallationId,
+      )
+      const nextOwner = selectedInstallation?.accountLogin ?? fallbackOwner ?? current.owner ?? ""
+
+      return {
+        ...current,
+        installationId: nextInstallationId,
+        owner: nextOwner,
+      }
+    })
   }, [
     availableInstallations,
     callbackInstallationHint,
@@ -2175,11 +2191,15 @@ export function GitHubWorkspaceClient() {
     try {
       setSetupDialogError("")
       setBusyAction("create-repository")
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === createRepositoryForm.installationId,
+      )
+
       await githubApi.createRepository({
         teamId: workspace.team.id,
         installationId: createRepositoryForm.installationId,
-        owner: createRepositoryForm.owner,
-        ownerType: createRepositoryForm.ownerType,
+        owner: selectedInstallation?.accountLogin ?? createRepositoryForm.owner.trim(),
+        ownerType: selectedInstallation?.accountType ?? createRepositoryForm.ownerType,
         repoName: createRepositoryForm.repoName,
         description: createRepositoryForm.description,
         visibility: createRepositoryForm.visibility,
@@ -2205,10 +2225,14 @@ export function GitHubWorkspaceClient() {
     try {
       setSetupDialogError("")
       setBusyAction("connect-repository")
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === connectRepositoryForm.installationId,
+      )
+
       await githubApi.connectRepository({
         teamId: workspace.team.id,
         installationId: connectRepositoryForm.installationId,
-        owner: connectRepositoryForm.owner,
+        owner: selectedInstallation?.accountLogin ?? connectRepositoryForm.owner.trim(),
         repoName: connectRepositoryForm.repoName,
       })
       toast.success("Existing repository connected.")
@@ -8691,8 +8715,16 @@ function NoRepositoryState({
   const connectedGitHubIdentity =
     workspace.githubConnection.login ?? workspace.githubConnection.displayName ?? "Not connected yet"
   const setupTeamName = workspace.team?.name ?? "Current team"
-  const createOwnerLockedToInstallation =
-    createRepositoryForm.ownerType === "USER" && Boolean(selectedCreateInstallation?.accountLogin)
+  const createOwnerLockedToInstallation = Boolean(selectedCreateInstallation?.accountLogin)
+  const connectOwnerLockedToInstallation = Boolean(selectedConnectInstallation?.accountLogin)
+  const createOwnerMismatch = Boolean(
+    selectedCreateInstallation?.accountLogin &&
+      normalizeGitHubMatchValue(createRepositoryForm.owner) !== normalizeGitHubMatchValue(selectedCreateInstallation.accountLogin),
+  )
+  const connectOwnerMismatch = Boolean(
+    selectedConnectInstallation?.accountLogin &&
+      normalizeGitHubMatchValue(connectRepositoryForm.owner) !== normalizeGitHubMatchValue(selectedConnectInstallation.accountLogin),
+  )
 
   return (
     <>
@@ -8981,14 +9013,24 @@ function NoRepositoryState({
                           {selectedCreateInstallation.accountLogin ?? "the selected GitHub account"}.
                         </p>
                       ) : null}
+                      {createOwnerMismatch && selectedCreateInstallation?.accountLogin ? (
+                        <p className="text-sm leading-6 text-destructive">
+                          Selected installation belongs to {selectedCreateInstallation.accountLogin}, so the owner login must also be {selectedCreateInstallation.accountLogin}.
+                        </p>
+                      ) : null}
 
                       <div className="grid gap-4 md:grid-cols-3">
                         <Field
                           label="Owner type"
-                          description="Choose `Organization` only if the repository should live inside a GitHub organization."
+                          description={
+                            selectedCreateInstallation?.accountLogin
+                              ? "Locked to the account type of the selected GitHub App installation."
+                              : "Choose `Organization` only if the repository should live inside a GitHub organization."
+                          }
                         >
                           <Select
                             value={createRepositoryForm.ownerType}
+                            disabled={Boolean(selectedCreateInstallation?.accountLogin)}
                             onValueChange={(value: "USER" | "ORGANIZATION") =>
                               setCreateRepositoryForm((current) => ({
                                 ...current,
@@ -9156,13 +9198,18 @@ function NoRepositoryState({
                           <Field
                             label="Owner login"
                             hint="Required"
-                            description="Use the exact GitHub username or organization slug that owns the existing repository."
+                            description={
+                              connectOwnerLockedToInstallation
+                                ? "Locked to the GitHub account or organization that owns the selected installation."
+                                : "Use the exact GitHub username or organization slug that owns the existing repository."
+                            }
                           >
                             <Input
                               value={connectRepositoryForm.owner}
                               onChange={(event) =>
                                 setConnectRepositoryForm((current) => ({ ...current, owner: event.target.value }))
                               }
+                              disabled={connectOwnerLockedToInstallation}
                               placeholder="team-org or owner account"
                               className="h-11 rounded-2xl"
                             />
@@ -9187,6 +9234,11 @@ function NoRepositoryState({
                           <p className="text-xs leading-5 text-muted-foreground">
                             Using installation #{selectedConnectInstallation.id} on{" "}
                             {selectedConnectInstallation.accountLogin ?? "the selected GitHub account"}.
+                          </p>
+                        ) : null}
+                        {connectOwnerMismatch && selectedConnectInstallation?.accountLogin ? (
+                          <p className="text-sm leading-6 text-destructive">
+                            Selected installation belongs to {selectedConnectInstallation.accountLogin}, so the owner login must also be {selectedConnectInstallation.accountLogin}.
                           </p>
                         ) : null}
 
@@ -9221,6 +9273,7 @@ function NoRepositoryState({
                     !createRepositoryForm.installationId ||
                     !createRepositoryForm.owner.trim() ||
                     !createRepositoryForm.repoName.trim() ||
+                    createOwnerMismatch ||
                     busyAction === "create-repository"
                   }
                 >
@@ -9239,6 +9292,7 @@ function NoRepositoryState({
                     !connectRepositoryForm.installationId ||
                     !connectRepositoryForm.owner.trim() ||
                     !connectRepositoryForm.repoName.trim() ||
+                    connectOwnerMismatch ||
                     busyAction === "connect-repository"
                   }
                 >
