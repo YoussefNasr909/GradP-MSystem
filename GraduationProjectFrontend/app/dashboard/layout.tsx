@@ -147,18 +147,7 @@ if (incomplete) {
           <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
             <Breadcrumbs />
 
-            <AnimatePresence initial={false}>
-              <motion.div
-                key={pathname}
-                initial={false}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="min-w-0"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            <div className="min-w-0">{children}</div>
           </div>
         </main>
       </div>
