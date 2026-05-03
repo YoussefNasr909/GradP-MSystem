@@ -565,10 +565,11 @@ export default function MeetingsPage() {
   }, [accessToken, loadPage])
 
   useEffect(() => {
-    if (!selectedMeeting) return
-    const fresh = meetings.find((m) => m.id === selectedMeeting.id)
-    setSelectedMeeting(fresh ?? null)
-  }, [meetings, selectedMeeting?.id])
+    setSelectedMeeting((current) => {
+      if (!current) return current
+      return meetings.find((meeting) => meeting.id === current.id) ?? null
+    })
+  }, [meetings])
 
   useEffect(() => {
     setForm((c) => ({ ...c, timezone: browserTimeZone }))
@@ -1198,7 +1199,7 @@ export default function MeetingsPage() {
                         <div className="min-w-0 text-sm">
                           <p className="font-semibold">Schedule conflict detected</p>
                           <p className="mt-0.5 opacity-80">
-                            This time overlaps with <strong>"{conflictMeeting.title}"</strong>{" "}
+                            This time overlaps with <strong>&ldquo;{conflictMeeting.title}&rdquo;</strong>{" "}
                             ({formatMeetingRange(conflictMeeting)}). You can still save, but consider adjusting the time.
                           </p>
                         </div>
@@ -1209,7 +1210,7 @@ export default function MeetingsPage() {
                         <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
                         <div className="text-sm">
                           <p className="font-semibold">Past date selected</p>
-                          <p className="mt-0.5 opacity-80">This meeting is scheduled in the past. Make sure that's intentional.</p>
+                          <p className="mt-0.5 opacity-80">This meeting is scheduled in the past. Make sure that&apos;s intentional.</p>
                         </div>
                       </div>
                     )}

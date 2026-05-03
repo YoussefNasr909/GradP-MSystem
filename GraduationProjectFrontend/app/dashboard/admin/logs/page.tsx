@@ -334,7 +334,7 @@ export default function AdminLogsPage() {
         <Card className="p-12 text-center max-w-md border-border/50">
           <Lock className="h-20 w-20 mx-auto mb-6 text-red-500" />
           <h2 className="text-3xl font-bold mb-3">Access Denied</h2>
-          <p className="text-muted-foreground text-lg">You don't have permission to access the system logs.</p>
+          <p className="text-muted-foreground text-lg">You don&apos;t have permission to access the system logs.</p>
         </Card>
       </motion.div>
     )

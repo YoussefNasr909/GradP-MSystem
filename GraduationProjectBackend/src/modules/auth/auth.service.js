@@ -148,23 +148,6 @@ async function verifySecondFactorOrThrow(settings, { code, recoveryCode }) {
   throw httpError(400, "INVALID_TWO_FACTOR_CODE", "Invalid authenticator or recovery code.");
 }
 
-async function sendLoginAlert(user) {
-  const settings = await prisma.userSettings.findUnique({
-    where: { userId: user.id },
-    select: { loginAlerts: true },
-  });
-
-  if (settings?.loginAlerts === false) return;
-
-  await notify({
-    userId: user.id,
-    type: "SYSTEM",
-    title: "New login to your account",
-    message: `Your ProjectHub account was signed in on ${new Date().toLocaleString("en-US")}.`,
-    actionUrl: "/dashboard/settings?tab=security",
-    forceEmail: true,
-  });
-}
 
 // -------------------- services --------------------
 
@@ -536,7 +519,6 @@ export async function loginService({ email, password, rememberMe }) {
   }
 
   const token = makeJwtToken(user.id, Boolean(rememberMe));
-  await sendLoginAlert(user);
 
   return {
     token,
@@ -722,7 +704,6 @@ export async function verifyTwoFactorLoginService({ challengeToken, code, recove
   }
 
   const token = makeJwtToken(user.id, Boolean(challenge.rememberMe));
-  await sendLoginAlert(user);
 
   return {
     token,

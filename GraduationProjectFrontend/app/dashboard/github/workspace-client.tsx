@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
+  memo,
   startTransition,
   useCallback,
   useEffect,
@@ -75,6 +76,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { TeamRequiredLoadingState, TeamRequiredState } from "@/components/team-required-guard"
 import { githubApi } from "@/lib/api/github"
 import { ApiRequestError } from "@/lib/api/http"
@@ -276,6 +278,36 @@ function splitCsv(value: string) {
     .filter(Boolean)
 }
 
+// ─── Stable animation variant objects ────────────────────────────────────────
+// Defined at module level so they're never re-created on component renders.
+// Passing inline objects like initial={{ opacity: 0 }} allocates a new object
+// every render; hoisting them here eliminates that cost entirely.
+const ANIM_FADE_IN          = { opacity: 1 } as const
+const ANIM_FADE_OUT         = { opacity: 0 } as const
+const ANIM_FADE_IN_UP       = { opacity: 1, y: 0 } as const
+const ANIM_FADE_OUT_DOWN    = { opacity: 0, y: 10 } as const
+const ANIM_FADE_IN_UP_SM    = { opacity: 1, y: 0 } as const
+const ANIM_FADE_OUT_UP_SM   = { opacity: 0, y: -10 } as const
+const ANIM_SCALE_IN         = { opacity: 1, scale: 1 } as const
+const ANIM_SCALE_OUT        = { opacity: 0.85, scale: 0.9 } as const
+const ANIM_SCALE_IN_SOFT    = { opacity: 1, scale: 1 } as const
+const ANIM_SCALE_OUT_SOFT   = { opacity: 0.98, scale: 0.99 } as const
+const ANIM_HOVER_LIFT       = { y: -2 } as const
+const ANIM_HOVER_LIFT_CARD  = { y: -4, scale: 1.02 } as const
+const ANIM_TAP_CARD         = { scale: 0.98 } as const
+const ANIM_TAP_SOFT         = { scale: 0.995 } as const
+const ANIM_BADGE_IN         = { scale: 1, opacity: 1 } as const
+const ANIM_BADGE_OUT        = { scale: 0.92, opacity: 0.85 } as const
+const ANIM_ENTRY_UP         = { opacity: 0, y: 10 } as const
+const ANIM_ENTRY_UP_SM      = { opacity: 0, y: 12 } as const
+const ANIM_ENTRY_DOWN       = { opacity: 0, y: -10 } as const
+const ANIM_ENTRY_SCALE      = { opacity: 0, scale: 0.98 } as const
+const ANIM_ENTRY_SCALE_SOFT = { opacity: 0, scale: 0.99 } as const
+const ANIM_ENTRY_FADE       = { opacity: 0 } as const
+const ANIM_HOVER_LIFT_SCALE = { y: -2, scale: 1.01 } as const
+const ANIM_SCALE_OUT_90     = { scale: 0.9, opacity: 0.85 } as const
+// ─────────────────────────────────────────────────────────────────────────────
+
 function formatRelative(value?: string | null) {
   if (!value) return "Not available"
   return formatDistanceToNow(new Date(value), { addSuffix: true })
@@ -288,6 +320,46 @@ function useDebouncedValue<T>(value: T, delayMs = 250) {
     return () => window.clearTimeout(timer)
   }, [delayMs, value])
   return debounced
+}
+
+/**
+ * A controlled search Input that shows keystrokes instantly (local state)
+ * while deferring the parent state update via startTransition so the
+ * expensive filtering/re-render never blocks the input from feeling responsive.
+ */
+function DeferredSearchInput({
+  value,
+  onDeferredChange,
+  placeholder,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: string
+  onDeferredChange: (value: string) => void
+  placeholder?: string
+  className?: string
+  "aria-label"?: string
+}) {
+  const [localValue, setLocalValue] = useState(value)
+
+  // Sync when the parent resets the value externally (e.g. clear-search)
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
+
+  return (
+    <Input
+      value={localValue}
+      onChange={(e) => {
+        const next = e.target.value
+        setLocalValue(next)
+        startTransition(() => onDeferredChange(next))
+      }}
+      placeholder={placeholder}
+      className={className}
+      aria-label={ariaLabel}
+    />
+  )
 }
 
 function formatRepoSize(sizeInKb?: number | null) {
@@ -659,8 +731,8 @@ function StatCard({
 
   return (
     <motion.button
-      whileHover={{ y: -4, scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={ANIM_HOVER_LIFT_CARD}
+      whileTap={ANIM_TAP_CARD}
       onClick={onClick}
       className={cn(
         "group relative overflow-hidden rounded-[28px] border bg-background p-6 text-left transition-all duration-300",
@@ -783,6 +855,338 @@ function getMemberRepositoryAccessState({
   }
 }
 
+// ─── Memoized list-row components ────────────────────────────────────────────
+// Extracted so React.memo can skip re-renders for unchanged rows.
+// With up to 200 tree rows and 60 commit rows on screen at once, skipping
+// unaffected rows when selection changes is a significant win.
+
+type TreeItem = {
+  name: string
+  path: string
+  type: string
+  size: number | null
+  sha: string | null
+  url: string | null
+  downloadUrl: string | null
+}
+
+const FileTreeItem = memo(function FileTreeItem({
+  item,
+  isSelected,
+  isLastRow,
+  canDelete,
+  busyAction,
+  onOpenFile,
+  onOpenDirectory,
+  onRequestDelete,
+}: {
+  item: TreeItem
+  isSelected: boolean
+  isLastRow: boolean
+  canDelete: boolean
+  busyAction: string
+  onOpenFile: (path: string) => void
+  onOpenDirectory: (path: string) => void
+  onRequestDelete: (item: { path: string; type: string; name: string }) => void
+}) {
+  const isDirectory = item.type === "dir"
+  const deleteKey = toPathBusyKey("delete-item", item.path)
+  const isDeleting = busyAction === deleteKey
+
+  return (
+    <div className={cn("group relative flex items-center gap-1 rounded-xl transition-all duration-200", !isLastRow && "border-b border-border/35")}>
+      <button
+        type="button"
+        onClick={() => (isDirectory ? onOpenDirectory(item.path) : onOpenFile(item.path))}
+        className={cn(
+          "flex flex-1 items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-left transition-all duration-200 [content-visibility:auto]",
+          isSelected
+            ? "bg-primary/12 text-primary ring-1 ring-primary/25 dark:bg-primary/20"
+            : "text-foreground/90 hover:border-border/50 hover:bg-muted/45 hover:text-foreground dark:text-foreground/85 dark:hover:bg-muted/35",
+        )}
+      >
+        <div className={cn(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
+          isSelected ? "border-primary/25 bg-background dark:bg-background/80" : "border-transparent group-hover:bg-background group-hover:border-border/60 dark:group-hover:bg-background/80"
+        )}>
+          {isDirectory ? (
+            <Folder className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          ) : (
+            <FileCode2 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold tracking-tight text-foreground/95 dark:text-foreground/90">{item.name}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 dark:text-muted-foreground/80">{isDirectory ? "Folder" : "File"}</p>
+        </div>
+        <ChevronRight className={cn(
+          "h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 text-muted-foreground/65",
+          isSelected && "opacity-100 text-primary"
+        )} />
+      </button>
+
+      {canDelete && (
+        <div className="absolute right-10 flex items-center pr-2">
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
+              isDeleting
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10",
+            )}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (isDeleting) return
+              onRequestDelete(item)
+            }}
+            aria-label={`Delete ${isDirectory ? "folder" : "file"} ${item.name}`}
+            disabled={isDeleting}
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+})
+
+const CommitListItem = memo(function CommitListItem({
+  commit,
+  isSelected,
+  branchName,
+  onSelect,
+}: {
+  commit: ApiGitHubCommit
+  isSelected: boolean
+  branchName: string
+  onSelect: (sha: string) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(commit.sha)}
+      className={cn(
+        "group relative w-full rounded-2xl border p-4 text-left transition-all duration-250",
+        isSelected
+          ? "border-primary/35 bg-primary/12 shadow-xl shadow-primary/15 ring-1 ring-primary/30 dark:border-primary/45 dark:bg-primary/20 dark:ring-primary/40"
+          : "border-border/40 bg-muted/2 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/4 hover:shadow-md",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <Avatar className="h-9 w-9 border border-border/50 shadow-sm">
+          <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
+          <AvatarFallback className="text-[10px] font-bold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="outline" className="h-5 rounded-full border-border/50 bg-background/50 px-2 text-[10px] font-bold text-muted-foreground shadow-none">
+              {commit.sha.slice(0, 7)}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="h-5 rounded-full border-primary/20 bg-primary/8 px-2 text-[10px] font-bold text-primary shadow-none"
+            >
+              {branchName}
+            </Badge>
+            <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(commit.author.date)}</span>
+          </div>
+          <p className={cn(
+            "line-clamp-2 text-sm font-bold leading-snug tracking-tight transition-colors",
+            isSelected ? "text-primary" : "text-foreground/90 group-hover:text-foreground"
+          )}>
+            {getCommitSubject(commit.message)}
+          </p>
+          <p className="truncate text-[11px] font-medium text-muted-foreground/70">
+            by <span className="text-foreground/60">@{commit.author.login || commit.author.name}</span>
+          </p>
+        </div>
+      </div>
+    </button>
+  )
+})
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── Isolated confirmation dialog panels ─────────────────────────────────────
+// Input state lives here so typing never triggers a parent re-render.
+
+const ConfirmationDialogPanel = memo(function ConfirmationDialogPanel({
+  dialog,
+  busyAction,
+  onClose,
+  onConfirm,
+}: {
+  dialog: ConfirmationDialogState
+  busyAction: string
+  onClose: () => void
+  onConfirm: (inputValue: string) => void
+}) {
+  const [inputValue, setInputValue] = useState("")
+
+  // Reset input each time the dialog opens
+  useEffect(() => {
+    if (dialog.open) setInputValue("")
+  }, [dialog.open])
+
+  const confirmValues = dialog.confirmationValues ?? []
+  const isBusy = busyAction === dialog.busyKey
+  const isMatchConfirmed = confirmValues.length
+    ? confirmValues.some((v) => {
+        const cs = dialog.confirmationCaseSensitive
+        return (cs ? v.trim() : v.trim().toLowerCase()) ===
+               (cs ? inputValue.trim() : inputValue.trim().toLowerCase())
+      })
+    : true
+
+  return (
+    <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{dialog.title}</DialogTitle>
+        <DialogDescription>{dialog.description}</DialogDescription>
+      </DialogHeader>
+      <div className={cn(
+        "rounded-[22px] border p-4",
+        dialog.tone === "danger" ? "border-red-200/70 bg-red-50/80" : "border-amber-200/70 bg-amber-50/80",
+      )}>
+        <div className="flex items-start gap-3">
+          <AlertCircle className={cn("mt-0.5 h-5 w-5 shrink-0", dialog.tone === "danger" ? "text-red-700" : "text-amber-700")} />
+          <div className="space-y-3">
+            <p className={cn("text-sm leading-6", dialog.tone === "danger" ? "text-red-900" : "text-amber-900")}>
+              Review this change before you continue.
+            </p>
+            {dialog.notes.length ? (
+              <ul className={cn("space-y-2 text-sm leading-6", dialog.tone === "danger" ? "text-red-800" : "text-amber-800")}>
+                {dialog.notes.map((note) => (
+                  <li key={note} className="flex items-start gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-current" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        </div>
+      </div>
+      {confirmValues.length ? (
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-foreground">
+            {dialog.confirmationLabel ?? "Type confirmation text"}
+          </Label>
+          {confirmValues[0] ? (
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
+              {confirmValues[0]}
+            </div>
+          ) : null}
+          <Input
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder={dialog.confirmationPlaceholder ?? ""}
+            className="h-11 rounded-xl"
+            autoFocus
+          />
+        </div>
+      ) : null}
+      <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          className={cn(
+            "w-full sm:w-auto",
+            dialog.tone === "danger" && "bg-red-600 text-white hover:bg-red-700",
+            dialog.tone === "warning" && "bg-amber-500 text-amber-950 hover:bg-amber-400",
+          )}
+          onClick={() => onConfirm(inputValue)}
+          disabled={!dialog.action || isBusy || !isMatchConfirmed}
+        >
+          {isBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : dialog.tone === "danger" ? (
+            <Trash2 className="mr-2 h-4 w-4" />
+          ) : (
+            <AlertCircle className="mr-2 h-4 w-4" />
+          )}
+          {dialog.confirmLabel}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+})
+
+const BranchDeleteDialogPanel = memo(function BranchDeleteDialogPanel({
+  branch,
+  busyAction,
+  onClose,
+  onConfirm,
+}: {
+  branch: { name: string } | null
+  busyAction: string
+  onClose: () => void
+  onConfirm: (inputValue: string) => void
+}) {
+  const [inputValue, setInputValue] = useState("")
+
+  // Reset input each time a branch is selected for deletion
+  useEffect(() => {
+    setInputValue("")
+  }, [branch?.name])
+
+  const branchName = branch?.name ?? ""
+  const isBusy = busyAction === `delete-branch-${branchName}`
+
+  return (
+    <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Delete branch</DialogTitle>
+        <DialogDescription>
+          This removes the branch from GitHub. Default and protected branches stay blocked for safety.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="rounded-[22px] border border-red-200 bg-red-50/50 p-4 dark:border-red-500/20 dark:bg-red-500/5">
+        <p className="font-medium text-red-900 dark:text-red-200">{branchName || "Unknown branch"}</p>
+        <p className="mt-2 text-sm leading-6 text-red-800 dark:text-red-200/80">
+          Make sure this branch is no longer needed before deleting it. The branch history will stay in GitHub commits and pull requests, but the branch name itself will be removed.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-foreground">Type the branch name to confirm</Label>
+        <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
+          {branchName}
+        </div>
+        <Input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={branchName}
+          className="h-11 rounded-xl"
+          autoFocus
+        />
+      </div>
+      <DialogFooter className="flex-col gap-2 sm:flex-row">
+        <Button className="w-full sm:w-auto" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
+          onClick={() => onConfirm(inputValue)}
+          disabled={!branch || isBusy || inputValue.trim() !== branchName}
+        >
+          {isBusy ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="mr-2 h-4 w-4" />
+          )}
+          Delete Branch
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+})
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function GitHubWorkspaceClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -844,7 +1248,6 @@ export function GitHubWorkspaceClient() {
   const [callbackInstallationHint, setCallbackInstallationHint] = useState<string | null>(callbackInstallationId)
   const [callbackOwnerHint, setCallbackOwnerHint] = useState<string | null>(callbackOwner)
   const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState>(initialConfirmationDialogState)
-  const [confirmationInputValue, setConfirmationInputValue] = useState("")
 
   const [selectedBranch, setSelectedBranch] = useState("")
   const [currentPath, setCurrentPath] = useState("")
@@ -866,7 +1269,6 @@ export function GitHubWorkspaceClient() {
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [branchForm, setBranchForm] = useState({ name: "", fromBranch: "", startEmpty: false, confirmEmptyStart: false })
   const [branchToDelete, setBranchToDelete] = useState<ApiGitHubBranch | null>(null)
-  const [branchDeleteConfirmationText, setBranchDeleteConfirmationText] = useState("")
 
   const [issueDialogOpen, setIssueDialogOpen] = useState(false)
   const [issueForm, setIssueForm] = useState(initialIssueForm)
@@ -1006,7 +1408,10 @@ export function GitHubWorkspaceClient() {
     }
   }, [activeTeamId])
 
-  const selectedBranchMeta = branches.find((branch) => branch.name === selectedBranch) ?? null
+  const selectedBranchMeta = useMemo(
+    () => branches.find((branch) => branch.name === selectedBranch) ?? null,
+    [branches, selectedBranch],
+  )
   const canManageRepository = Boolean(workspace?.permissions.canManageRepository)
   const canSyncWorkspace = Boolean(workspace?.permissions.canSync)
   const canDisconnectConnectedRepository = Boolean(workspace?.permissions.canDisconnectRepository)
@@ -1026,9 +1431,9 @@ export function GitHubWorkspaceClient() {
   const canRunLeaderWriteActions = canManageRepository && hasConnectedGitHubWriteAccess
   const isTeamLeader = Boolean(workspace?.team?.leader?.id && currentUser?.id && workspace.team.leader.id === currentUser.id)
 
-  const filteredIssues = useMemo(() => issues, [issues])
+  const filteredIssues = issues
 
-  const filteredPullRequests = useMemo(() => pullRequests, [pullRequests])
+  const filteredPullRequests = pullRequests
 
   const filteredMembers = useMemo(() => {
     const query = deferredMemberSearch.trim().toLowerCase()
@@ -1044,7 +1449,7 @@ export function GitHubWorkspaceClient() {
   const visibleMembers = useMemo(() => filteredMembers.slice(0, memberRenderLimit), [filteredMembers, memberRenderLimit])
   const hasMoreMembers = filteredMembers.length > visibleMembers.length
 
-  const filteredCommits = useMemo(() => commits, [commits])
+  const filteredCommits = commits
   const commitSearchQuery = deferredCommitSearch.trim()
   const visibleCommits = useMemo(() => filteredCommits.slice(0, commitRenderLimit), [filteredCommits, commitRenderLimit])
   const hasMoreCommits = filteredCommits.length > visibleCommits.length
@@ -1092,27 +1497,54 @@ export function GitHubWorkspaceClient() {
   const totalTreeItemLabel = `${treeItems.length} total item${treeItems.length === 1 ? "" : "s"}`
   const commitPageStart = commits.length ? (commitPage - 1) * RECENT_COMMITS_PAGE_SIZE + 1 : 0
   const commitPageEnd = commits.length ? commitPageStart + commits.length - 1 : 0
-  const teamMembers = workspace?.team?.members ?? []
+  const teamMembers = useMemo(() => workspace?.team?.members ?? [], [workspace?.team?.members])
   const teamMemberCount = workspace?.team?.memberCount ?? teamMembers.length
-  const teamMembersWithGitHubCount = teamMembers.filter((member) => Boolean(member.user?.githubUsername)).length
+  const teamMembersWithGitHubCount = useMemo(
+    () => teamMembers.filter((member) => Boolean(member.user?.githubUsername)).length,
+    [teamMembers],
+  )
   const missingGitHubCount = Math.max(teamMemberCount - teamMembersWithGitHubCount, 0)
   const collaboratorCount = repositoryAccessState.collaborators.length
-  const collaboratorWriteCount = repositoryAccessState.collaborators.filter((collaborator) => collaborator.hasWriteAccess).length
+  const collaboratorWriteCount = useMemo(
+    () => repositoryAccessState.collaborators.filter((collaborator) => collaborator.hasWriteAccess).length,
+    [repositoryAccessState.collaborators],
+  )
   const pendingInvitationCount = repositoryAccessState.invitations.length
-  const openIssueCount = workspace?.repository?.openIssues ?? issues.filter((issue) => issue.state === "open").length
-  const openPullRequestCount = workspace?.stats?.openPullRequests ?? pullRequests.filter((pullRequest) => pullRequest.state === "open").length
-  const linkedTaskCount = issues.filter((issue) => issue.linkedTask).length
+  const openIssueCount = useMemo(
+    () => workspace?.repository?.openIssues ?? issues.filter((issue) => issue.state === "open").length,
+    [workspace?.repository?.openIssues, issues],
+  )
+  const openPullRequestCount = useMemo(
+    () => workspace?.stats?.openPullRequests ?? pullRequests.filter((pullRequest) => pullRequest.state === "open").length,
+    [workspace?.stats?.openPullRequests, pullRequests],
+  )
+  const linkedTaskCount = useMemo(
+    () => issues.filter((issue) => issue.linkedTask).length,
+    [issues],
+  )
   const repoBackedTasks = useMemo(
     () => workspaceTasks.filter((task) => task.origin === "GPMS" && task.integrationMode === "GITHUB"),
     [workspaceTasks],
   )
   const repoBackedTaskCount = repoBackedTasks.length
-  const repoBackedTasksWaitingAcceptance = repoBackedTasks.filter((task) => task.awaitingAcceptance).length
-  const repoBackedTasksInReview = repoBackedTasks.filter((task) => task.status === "REVIEW").length
-  const repoBackedTasksAwaitingMerge = repoBackedTasks.filter((task) => task.status === "APPROVED").length
-  const repoBackedTasksBlocked = repoBackedTasks.filter(
-    (task) => task.status !== "DONE" && Boolean(task.github?.reviewGate) && !task.github?.reviewGate?.ready,
-  ).length
+  const repoBackedTasksWaitingAcceptance = useMemo(
+    () => repoBackedTasks.filter((task) => task.awaitingAcceptance).length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksInReview = useMemo(
+    () => repoBackedTasks.filter((task) => task.status === "REVIEW").length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksAwaitingMerge = useMemo(
+    () => repoBackedTasks.filter((task) => task.status === "APPROVED").length,
+    [repoBackedTasks],
+  )
+  const repoBackedTasksBlocked = useMemo(
+    () => repoBackedTasks.filter(
+      (task) => task.status !== "DONE" && Boolean(task.github?.reviewGate) && !task.github?.reviewGate?.ready,
+    ).length,
+    [repoBackedTasks],
+  )
   const nextRepoTask = useMemo(
     () =>
       repoBackedTasks.find((task) => task.status !== "DONE") ??
@@ -1152,42 +1584,34 @@ export function GitHubWorkspaceClient() {
   const isUploadInProgress = busyAction === "upload-folder"
 
   const closeConfirmationDialog = useCallback(() => {
-    setConfirmationInputValue("")
     setConfirmationDialog(initialConfirmationDialogState)
   }, [])
 
   const openConfirmationDialog = useCallback(
     (config: Omit<ConfirmationDialogState, "open">) => {
-      setConfirmationInputValue("")
-      setConfirmationDialog({
-        open: true,
-        ...config,
-      })
+      setConfirmationDialog({ open: true, ...config })
     },
     [],
   )
 
-  const runConfirmedAction = useCallback(async () => {
+  const runConfirmedAction = useCallback(async (inputValue: string) => {
     const action = confirmationDialog.action
     if (!action) return
     if (confirmationDialog.confirmationValues?.length) {
-      const inputValue = confirmationDialog.confirmationCaseSensitive
-        ? confirmationInputValue.trim()
-        : confirmationInputValue.trim().toLowerCase()
+      const iv = confirmationDialog.confirmationCaseSensitive ? inputValue.trim() : inputValue.trim().toLowerCase()
       const hasMatch = confirmationDialog.confirmationValues.some((value) => {
         const candidate = confirmationDialog.confirmationCaseSensitive ? value.trim() : value.trim().toLowerCase()
-        return candidate === inputValue
+        return candidate === iv
       })
       if (!hasMatch) return
     }
     closeConfirmationDialog()
-    await action(confirmationInputValue.trim())
+    await action(inputValue.trim())
   }, [
     closeConfirmationDialog,
     confirmationDialog.action,
     confirmationDialog.confirmationCaseSensitive,
     confirmationDialog.confirmationValues,
-    confirmationInputValue,
   ])
 
   const applyWorkspaceSummary = useCallback((data: ApiGitHubWorkspaceSummary) => {
@@ -1970,7 +2394,7 @@ export function GitHubWorkspaceClient() {
   useEffect(() => {
     if (!workspace?.team) return
     const team = workspace.team
-    const ownerLogin = callbackOwnerHint ?? workspace.githubConnection.login ?? workspace.repository?.owner.login ?? ""
+    const fallbackOwner = callbackOwnerHint ?? workspace.githubConnection.login ?? workspace.repository?.owner.login ?? ""
     const suggestedInstallation = pickSuggestedInstallation(
       availableInstallations,
       callbackInstallationHint,
@@ -1979,32 +2403,48 @@ export function GitHubWorkspaceClient() {
       workspace.repository?.owner.login,
     )
 
-    setCreateRepositoryForm((current) => ({
-      ...current,
-      installationId:
+    setCreateRepositoryForm((current) => {
+      const nextInstallationId =
         isKnownInstallationId(availableInstallations, callbackInstallationHint) ||
         !availableInstallations.length
           ? callbackInstallationHint || current.installationId
           : isKnownInstallationId(availableInstallations, current.installationId)
             ? current.installationId
-            : suggestedInstallation?.id || current.installationId,
-      owner: current.owner || ownerLogin || suggestedInstallation?.accountLogin || "",
-      ownerType: suggestedInstallation?.accountType ?? current.ownerType,
-      repoName: current.repoName || team.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-      description: current.description || team.bio,
-      defaultBranch: current.defaultBranch || workspace.repositoryRecord?.defaultBranch || "main",
-    }))
-    setConnectRepositoryForm((current) => ({
-      ...current,
-      installationId:
+            : suggestedInstallation?.id || current.installationId
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === nextInstallationId,
+      )
+      const nextOwner = selectedInstallation?.accountLogin ?? fallbackOwner ?? current.owner ?? ""
+
+      return {
+        ...current,
+        installationId: nextInstallationId,
+        owner: nextOwner,
+        ownerType: selectedInstallation?.accountType ?? suggestedInstallation?.accountType ?? current.ownerType,
+        repoName: current.repoName || team.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        description: current.description || team.bio,
+        defaultBranch: current.defaultBranch || workspace.repositoryRecord?.defaultBranch || "main",
+      }
+    })
+    setConnectRepositoryForm((current) => {
+      const nextInstallationId =
         isKnownInstallationId(availableInstallations, callbackInstallationHint) ||
         !availableInstallations.length
           ? callbackInstallationHint || current.installationId
           : isKnownInstallationId(availableInstallations, current.installationId)
             ? current.installationId
-            : suggestedInstallation?.id || current.installationId,
-      owner: current.owner || ownerLogin || suggestedInstallation?.accountLogin || "",
-    }))
+            : suggestedInstallation?.id || current.installationId
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === nextInstallationId,
+      )
+      const nextOwner = selectedInstallation?.accountLogin ?? fallbackOwner ?? current.owner ?? ""
+
+      return {
+        ...current,
+        installationId: nextInstallationId,
+        owner: nextOwner,
+      }
+    })
   }, [
     availableInstallations,
     callbackInstallationHint,
@@ -2175,11 +2615,15 @@ export function GitHubWorkspaceClient() {
     try {
       setSetupDialogError("")
       setBusyAction("create-repository")
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === createRepositoryForm.installationId,
+      )
+
       await githubApi.createRepository({
         teamId: workspace.team.id,
         installationId: createRepositoryForm.installationId,
-        owner: createRepositoryForm.owner,
-        ownerType: createRepositoryForm.ownerType,
+        owner: selectedInstallation?.accountLogin ?? createRepositoryForm.owner.trim(),
+        ownerType: selectedInstallation?.accountType ?? createRepositoryForm.ownerType,
         repoName: createRepositoryForm.repoName,
         description: createRepositoryForm.description,
         visibility: createRepositoryForm.visibility,
@@ -2205,10 +2649,14 @@ export function GitHubWorkspaceClient() {
     try {
       setSetupDialogError("")
       setBusyAction("connect-repository")
+      const selectedInstallation = availableInstallations.find(
+        (installation) => installation.id === connectRepositoryForm.installationId,
+      )
+
       await githubApi.connectRepository({
         teamId: workspace.team.id,
         installationId: connectRepositoryForm.installationId,
-        owner: connectRepositoryForm.owner,
+        owner: selectedInstallation?.accountLogin ?? connectRepositoryForm.owner.trim(),
         repoName: connectRepositoryForm.repoName,
       })
       toast.success("Existing repository connected.")
@@ -2383,12 +2831,12 @@ export function GitHubWorkspaceClient() {
     }
   }
 
-  const handleDeleteBranch = async () => {
+  const handleDeleteBranch = async (inputValue: string) => {
     if (!branchToDelete) return
 
     const branchName = branchToDelete.name
     const fallbackBranch = workspace?.repositoryRecord?.defaultBranch ?? workspace?.repository?.defaultBranch ?? "main"
-    if (branchDeleteConfirmationText.trim() !== branchName) {
+    if (inputValue.trim() !== branchName) {
       toast.error(`Type "${branchName}" exactly to confirm branch deletion.`)
       return
     }
@@ -2398,7 +2846,6 @@ export function GitHubWorkspaceClient() {
       await githubApi.deleteBranch(branchName, activeTeamId)
       toast.success(`Branch ${branchName} deleted.`)
       setBranchToDelete(null)
-      setBranchDeleteConfirmationText("")
 
       if (selectedBranch === branchName) {
         setSelectedBranch(fallbackBranch)
@@ -2895,14 +3342,14 @@ export function GitHubWorkspaceClient() {
     }
   }
 
-  const openFile = (path: string) => {
+  const openFile = useCallback((path: string) => {
     setSelectedFilePath(path)
     setIsEditingCode(false)
     setCodeActionNotice(null)
     void loadPathActivity(path)
-  }
+  }, [loadPathActivity])
 
-  const openDirectory = (path: string) => {
+  const openDirectory = useCallback((path: string) => {
     setCurrentPath(path)
     setSelectedFilePath("")
     setSelectedBlob(null)
@@ -2910,7 +3357,7 @@ export function GitHubWorkspaceClient() {
     setIsEditingCode(false)
     setCodeActionNotice(null)
     void loadPathActivity(path)
-  }
+  }, [loadPathActivity])
 
   const handleOpenBranchDialog = () => {
     setCodeActionNotice(null)
@@ -3719,8 +4166,8 @@ export function GitHubWorkspaceClient() {
     >
       {callbackNotice ? (
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={ANIM_ENTRY_DOWN}
+          animate={ANIM_FADE_IN_UP}
           className={cn(
             "rounded-[24px] border p-5 mb-6 shadow-sm",
             callbackNotice.tone === "error"
@@ -3770,8 +4217,8 @@ export function GitHubWorkspaceClient() {
 
       {repositoryConnected && (missingGitHubCount || teamInviteCandidates.length || pendingInvitationCount || !workspace.githubConnection.isConnected) ? (
         <motion.div
-          initial={{ opacity: 0, scale: 0.98 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={ANIM_ENTRY_SCALE}
+          animate={ANIM_SCALE_IN}
           className="rounded-[24px] border border-rose-500/20 bg-rose-500/5 p-6 mb-6 dark:border-rose-500/30 dark:bg-rose-500/10"
         >
           <div className="flex items-start gap-4">
@@ -3849,8 +4296,8 @@ export function GitHubWorkspaceClient() {
             <CardContent className="relative space-y-6 p-5 sm:p-6 lg:p-7">
               <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-start">
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={ANIM_ENTRY_UP}
+                  animate={ANIM_FADE_IN_UP}
                   transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
                   className="space-y-5"
                 >
@@ -3933,7 +4380,7 @@ export function GitHubWorkspaceClient() {
                   </div>
 
                   <motion.div
-                    whileHover={{ y: -2 }}
+                    whileHover={ANIM_HOVER_LIFT}
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="flex flex-col gap-3 rounded-[24px] border border-border/70 bg-muted/4 p-4 transition-all duration-200 hover:border-primary/25 hover:bg-primary/5 sm:flex-row sm:items-center sm:justify-between"
                   >
@@ -4036,8 +4483,8 @@ export function GitHubWorkspaceClient() {
                 </motion.div>
 
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={ANIM_ENTRY_UP_SM}
+                  animate={ANIM_FADE_IN_UP}
                   transition={{ delay: 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                   className="space-y-4 rounded-[24px] border border-border/70 bg-muted/6 p-4 shadow-sm"
                 >
@@ -4114,8 +4561,8 @@ export function GitHubWorkspaceClient() {
                         <Button className={quickActionButtonClass} variant="outline" onClick={() => void handleCopy("HTTPS clone URL", workspace?.repositoryRecord?.cloneUrlHttps, "copy-clone")}>
                           <motion.span
                             key={copiedActionKey === "copy-clone" ? "copied-clone" : "copy-clone"}
-                            initial={{ scale: 0.92, opacity: 0.85 }}
-                            animate={{ scale: 1, opacity: 1 }}
+                            initial={ANIM_BADGE_OUT}
+                            animate={ANIM_BADGE_IN}
                             transition={{ duration: 0.16 }}
                             className="mr-2 inline-flex"
                           >
@@ -4215,7 +4662,7 @@ export function GitHubWorkspaceClient() {
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as WorkspaceTab)} className="space-y-8">
+          <Tabs value={activeTab} onValueChange={(value) => startTransition(() => setActiveTab(value as WorkspaceTab))} className="space-y-8">
             <div className="sticky top-0 z-20 -mx-4 mb-2 overflow-x-auto no-scrollbar bg-background/80 px-4 py-3 backdrop-blur-md transition-all duration-300 md:-mx-8 md:px-8">
               <TabsList className="flex h-auto w-max items-center justify-start gap-1.5 bg-transparent p-0 pr-2">
                 <TabsTrigger value="overview" className={workspaceTabTriggerClass}>
@@ -4291,10 +4738,10 @@ export function GitHubWorkspaceClient() {
               </TabsList>
             </div>
 
-            <TabsContent value="overview" className="mt-0 space-y-8 outline-none">
+            {activeTab === "overview" && (<TabsContent value="overview" forceMount className="mt-0 space-y-8 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 className="grid gap-8 xl:grid-cols-[1fr_minmax(320px,360px)]"
               >
@@ -4415,8 +4862,8 @@ export function GitHubWorkspaceClient() {
                           {commits.slice(0, 3).map((commit) => (
                             <motion.button
                               key={`overview-${commit.sha}`}
-                              whileHover={{ y: -2 }}
-                              whileTap={{ scale: 0.995 }}
+                              whileHover={ANIM_HOVER_LIFT}
+                              whileTap={ANIM_TAP_SOFT}
                               onClick={() => {
                                 setSelectedCommitSha(commit.sha)
                                 setActiveTab("commits")
@@ -4490,12 +4937,12 @@ export function GitHubWorkspaceClient() {
 
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="commits" className="mt-0 outline-none">
+            {activeTab === "commits" && (<TabsContent value="commits" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -4557,9 +5004,9 @@ export function GitHubWorkspaceClient() {
                       </Select>
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                        <Input
+                        <DeferredSearchInput
                           value={commitSearch}
-                          onChange={(event) => setCommitSearch(event.target.value)}
+                          onDeferredChange={setCommitSearch}
                           placeholder="Filter commits by message, author, or SHA..."
                           aria-label="Filter commits"
                           className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
@@ -4593,53 +5040,15 @@ export function GitHubWorkspaceClient() {
                     <div className="space-y-4">
                       <ScrollArea className="h-[52vh] min-h-[320px] sm:h-[calc(100vh-22rem)] sm:min-h-[400px]">
                         <div className="space-y-3 p-2">
-                          {visibleCommits.map((commit) => {
-                            const isSelected = selectedCommitSha === commit.sha
-
-                            return (
-                              <button
-                                key={commit.sha}
-                                type="button"
-                                onClick={() => setSelectedCommitSha(commit.sha)}
-                                className={cn(
-                                  "group relative w-full rounded-2xl border p-4 text-left transition-all duration-250",
-                                  isSelected
-                                    ? "border-primary/35 bg-primary/12 shadow-xl shadow-primary/15 ring-1 ring-primary/30 dark:border-primary/45 dark:bg-primary/20 dark:ring-primary/40"
-                                    : "border-border/40 bg-muted/2 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/4 hover:shadow-md",
-                                )}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <Avatar className="h-9 w-9 border border-border/50 shadow-sm">
-                                    <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
-                                    <AvatarFallback className="text-[10px] font-bold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <Badge variant="outline" className="h-5 rounded-full border-border/50 bg-background/50 px-2 text-[10px] font-bold text-muted-foreground shadow-none">
-                                        {commit.sha.slice(0, 7)}
-                                      </Badge>
-                                      <Badge
-                                        variant="outline"
-                                        className="h-5 rounded-full border-primary/20 bg-primary/8 px-2 text-[10px] font-bold text-primary shadow-none"
-                                      >
-                                        {selectedBranch || defaultBranchName}
-                                      </Badge>
-                                      <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(commit.author.date)}</span>
-                                    </div>
-                                    <p className={cn(
-                                      "line-clamp-2 text-sm font-bold leading-snug tracking-tight transition-colors",
-                                      isSelected ? "text-primary" : "text-foreground/90 group-hover:text-foreground"
-                                    )}>
-                                      {getCommitSubject(commit.message)}
-                                    </p>
-                                    <p className="truncate text-[11px] font-medium text-muted-foreground/70">
-                                      by <span className="text-foreground/60">@{commit.author.login || commit.author.name}</span>
-                                    </p>
-                                  </div>
-                                </div>
-                              </button>
-                            )
-                          })}
+                          {visibleCommits.map((commit) => (
+                            <CommitListItem
+                              key={commit.sha}
+                              commit={commit}
+                              isSelected={selectedCommitSha === commit.sha}
+                              branchName={selectedBranch || defaultBranchName}
+                              onSelect={setSelectedCommitSha}
+                            />
+                          ))}
                           {hasMoreCommits ? (
                             <div className="px-2 pb-2">
                               <Button
@@ -4708,7 +5117,7 @@ export function GitHubWorkspaceClient() {
                       <span className="text-sm font-medium text-muted-foreground/60">Loading commit details...</span>
                     </div>
                   ) : selectedCommit ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+                    <motion.div initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-8">
                       <div className="rounded-2xl border border-border/50 bg-muted/10 p-4">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
@@ -4854,12 +5263,12 @@ export function GitHubWorkspaceClient() {
                 </SectionCard>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="code" className="mt-0 outline-none">
+            {activeTab === "code" && (<TabsContent value="code" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={ANIM_ENTRY_SCALE_SOFT}
+                animate={ANIM_SCALE_IN}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -4906,7 +5315,7 @@ export function GitHubWorkspaceClient() {
                 </div>
 
                 {codeActionNotice && (
-                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+                  <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP}>
                     <InlineNotice tone={codeActionNotice.tone} title={codeActionNotice.title} message={codeActionNotice.message} />
                   </motion.div>
                 )}
@@ -4980,9 +5389,9 @@ export function GitHubWorkspaceClient() {
 
                             <div className="relative">
                               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                              <Input
+                              <DeferredSearchInput
                                 value={codeSearch}
-                                onChange={(event) => setCodeSearch(event.target.value)}
+                                onDeferredChange={setCodeSearch}
                                 placeholder="Search files..."
                                 aria-label="Search files in explorer"
                                 className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
@@ -5051,77 +5460,25 @@ export function GitHubWorkspaceClient() {
                         <div className="p-2">
                           <AnimatePresence mode="wait">
                             {treeLoading ? (
-                              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-32 flex-col items-center justify-center gap-3">
+                              <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center gap-3">
                                 <Loader2 className="h-5 w-5 animate-spin text-primary/30" />
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Reading tree...</span>
                               </motion.div>
                             ) : filteredTreeItems.length ? (
-                              <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-0.5">
-                                {visibleTreeItems.map((item, index) => {
-                                  const isDirectory = item.type === "dir"
-                                  const isSelected = selectedFilePath === item.path
-                                  const isLastRow = index === visibleTreeItems.length - 1
-                                  return (
-                                    <div key={item.path} className={cn("group relative flex items-center gap-1 rounded-xl transition-all duration-200", !isLastRow && "border-b border-border/35")}>
-                                      <button
-                                        type="button"
-                                        onClick={() => (isDirectory ? openDirectory(item.path) : openFile(item.path))}
-                                        className={cn(
-                                          "flex flex-1 items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-left transition-all duration-200 [content-visibility:auto]",
-                                          isSelected
-                                            ? "bg-primary/12 text-primary ring-1 ring-primary/25 dark:bg-primary/20"
-                                            : "text-foreground/90 hover:border-border/50 hover:bg-muted/45 hover:text-foreground dark:text-foreground/85 dark:hover:bg-muted/35",
-                                        )}
-                                      >
-                                        <div className={cn(
-                                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
-                                          isSelected ? "border-primary/25 bg-background dark:bg-background/80" : "border-transparent group-hover:bg-background group-hover:border-border/60 dark:group-hover:bg-background/80"
-                                        )}>
-                                          {isDirectory ? (
-                                            <Folder className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                                          ) : (
-                                            <FileCode2 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
-                                          )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                          <p className="truncate text-sm font-semibold tracking-tight text-foreground/95 dark:text-foreground/90">{item.name}</p>
-                                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 dark:text-muted-foreground/80">{isDirectory ? "Folder" : "File"}</p>
-                                        </div>
-                                        <ChevronRight className={cn(
-                                          "h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 text-muted-foreground/65",
-                                          isSelected && "opacity-100 text-primary"
-                                        )} />
-                                      </button>
-
-                                      {canAuthorRepositoryChanges && (
-                                        <div className="absolute right-10 flex items-center pr-2">
-                                          <button
-                                            type="button"
-                                            className={cn(
-                                              "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
-                                              busyAction === toPathBusyKey("delete-item", item.path)
-                                                ? "cursor-not-allowed opacity-70"
-                                                : "cursor-pointer hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10",
-                                            )}
-                                            onClick={(event) => {
-                                              event.stopPropagation()
-                                              if (busyAction === toPathBusyKey("delete-item", item.path)) return
-                                              void requestDeleteTreeItem(item)
-                                            }}
-                                            aria-label={`Delete ${isDirectory ? "folder" : "file"} ${item.name}`}
-                                            disabled={busyAction === toPathBusyKey("delete-item", item.path)}
-                                          >
-                                            {busyAction === toPathBusyKey("delete-item", item.path) ? (
-                                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                            ) : (
-                                              <Trash2 className="h-3.5 w-3.5" />
-                                            )}
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
+                              <motion.div key="list" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-0.5">
+                                {visibleTreeItems.map((item, index) => (
+                                  <FileTreeItem
+                                    key={item.path}
+                                    item={item}
+                                    isSelected={selectedFilePath === item.path}
+                                    isLastRow={index === visibleTreeItems.length - 1}
+                                    canDelete={canAuthorRepositoryChanges}
+                                    busyAction={busyAction ?? ""}
+                                    onOpenFile={openFile}
+                                    onOpenDirectory={openDirectory}
+                                    onRequestDelete={requestDeleteTreeItem}
+                                  />
+                                ))}
                                 {hasMoreTreeItems ? (
                                   <div className="flex items-center justify-center py-3">
                                     <Button
@@ -5137,7 +5494,7 @@ export function GitHubWorkspaceClient() {
                                 ) : null}
                               </motion.div>
                             ) : (
-                              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex h-32 flex-col items-center justify-center text-center p-6">
+                              <motion.div key="empty" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center text-center p-6">
                                 <Search className="h-8 w-8 text-muted-foreground/10 mb-2" />
                                 <p className="text-xs font-medium text-muted-foreground/50">No items found</p>
                               </motion.div>
@@ -5174,12 +5531,12 @@ export function GitHubWorkspaceClient() {
                     >
                       <AnimatePresence mode="wait">
                         {blobLoading ? (
-                          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex min-h-[400px] flex-col items-center justify-center gap-4">
+                          <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center gap-4">
                             <Loader2 className="h-8 w-8 animate-spin text-primary/20" />
                             <span className="text-sm font-medium text-muted-foreground/60">Loading file contents...</span>
                           </motion.div>
                         ) : selectedBlob ? (
-                          <motion.div key="content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                          <motion.div key="content" initial={ANIM_ENTRY_UP} animate={ANIM_FADE_IN_UP} className="space-y-6">
                             {/* File Metadata */}
                             <div className="flex flex-wrap items-center gap-3">
                               <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -5293,8 +5650,8 @@ export function GitHubWorkspaceClient() {
                                   >
                                     <motion.span
                                       key={copiedActionKey === "copy-file-content" ? "copied-file" : "copy-file"}
-                                      initial={{ scale: 0.9, opacity: 0.85 }}
-                                      animate={{ scale: 1, opacity: 1 }}
+                                      initial={ANIM_SCALE_OUT_90}
+                                      animate={ANIM_BADGE_IN}
                                       transition={{ duration: 0.16 }}
                                       className="inline-flex"
                                     >
@@ -5345,12 +5702,12 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="issues" className="mt-0 outline-none">
+            {activeTab === "issues" && (<TabsContent value="issues" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -5388,9 +5745,9 @@ export function GitHubWorkspaceClient() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                        <Input 
-                          value={issueSearch} 
-                          onChange={(event) => setIssueSearch(event.target.value)} 
+                        <DeferredSearchInput
+                          value={issueSearch}
+                          onDeferredChange={setIssueSearch}
                           placeholder="Filter issues by title or number..." 
                             aria-label="Filter issues"
                           className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
@@ -5444,7 +5801,7 @@ export function GitHubWorkspaceClient() {
                         {filteredIssues.map((issue) => (
                           <motion.div
                             key={issue.id}
-                            whileHover={{ y: -2 }}
+                            whileHover={ANIM_HOVER_LIFT}
                             className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
                           >
                             <div className="flex items-start gap-4">
@@ -5613,12 +5970,12 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="pulls" className="mt-0 outline-none">
+            {activeTab === "pulls" && (<TabsContent value="pulls" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -5655,9 +6012,9 @@ export function GitHubWorkspaceClient() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <Input 
-                        value={pullSearch} 
-                        onChange={(event) => setPullSearch(event.target.value)} 
+                      <DeferredSearchInput
+                        value={pullSearch}
+                        onDeferredChange={setPullSearch}
                         placeholder="Filter pull requests by title, number or author..." 
                           aria-label="Filter pull requests"
                         className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
@@ -5707,7 +6064,7 @@ export function GitHubWorkspaceClient() {
                         return (
                           <motion.div
                             key={pullRequest.id}
-                            whileHover={{ y: -2 }}
+                            whileHover={ANIM_HOVER_LIFT}
                             className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
                           >
                           <div className="flex flex-col gap-6 md:flex-row md:items-start">
@@ -5921,12 +6278,12 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="branches" className="mt-0 outline-none">
+            {activeTab === "branches" && (<TabsContent value="branches" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -5958,7 +6315,7 @@ export function GitHubWorkspaceClient() {
                 <div className="grid gap-8 lg:grid-cols-3">
                   <div className="lg:col-span-2 space-y-8">
                     {canWriteCode && !hasConnectedGitHubWriteAccess && (
-                      <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
+                      <motion.div initial={ANIM_ENTRY_SCALE} animate={ANIM_SCALE_IN}>
                         <InlineNotice 
                           tone="warning" 
                           title="Limited write access" 
@@ -5973,7 +6330,7 @@ export function GitHubWorkspaceClient() {
                       {branches.map((branch) => (
                         <motion.div
                           key={branch.name}
-                          whileHover={{ y: -2 }}
+                          whileHover={ANIM_HOVER_LIFT}
                           className={cn(
                             "group relative overflow-hidden rounded-[24px] border p-6 transition-all",
                             selectedBranch === branch.name 
@@ -6049,7 +6406,6 @@ export function GitHubWorkspaceClient() {
                                   size="icon"
                                   className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition-all"
                                   onClick={() => {
-                                    setBranchDeleteConfirmationText("")
                                     setBranchToDelete(branch)
                                   }}
                                   disabled={busyAction === `delete-branch-${branch.name}`}
@@ -6188,12 +6544,12 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="actions" className="mt-0 outline-none">
+            {activeTab === "actions" && (<TabsContent value="actions" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6265,12 +6621,12 @@ export function GitHubWorkspaceClient() {
                   )}
                 </SectionCard>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="releases" className="mt-0 outline-none">
+            {activeTab === "releases" && (<TabsContent value="releases" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6304,7 +6660,7 @@ export function GitHubWorkspaceClient() {
                     releases.map((release) => (
                       <motion.div
                         key={release.id}
-                        whileHover={{ y: -2 }}
+                        whileHover={ANIM_HOVER_LIFT}
                         className="group relative overflow-hidden rounded-[28px] border border-border/50 bg-background p-8 transition-all hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10"
                       >
                         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
@@ -6344,12 +6700,12 @@ export function GitHubWorkspaceClient() {
                   )}
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="members" className="mt-0 outline-none">
+            {activeTab === "members" && (<TabsContent value="members" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-8"
               >
@@ -6371,9 +6727,9 @@ export function GitHubWorkspaceClient() {
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <Input 
-                        value={memberSearch} 
-                        onChange={(event) => setMemberSearch(event.target.value)} 
+                      <DeferredSearchInput
+                        value={memberSearch}
+                        onDeferredChange={setMemberSearch}
                         placeholder="Search team members..." 
                         aria-label="Search team members"
                         className="h-10 rounded-xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background w-full sm:w-[240px]" 
@@ -6415,7 +6771,7 @@ export function GitHubWorkspaceClient() {
                     return (
                       <motion.div
                         key={member.id}
-                        whileHover={{ y: -2 }}
+                        whileHover={ANIM_HOVER_LIFT}
                         transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                         className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/25 hover:shadow-lg hover:shadow-primary/8"
                       >
@@ -6716,12 +7072,12 @@ export function GitHubWorkspaceClient() {
                   </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
 
-            <TabsContent value="settings" className="mt-0 outline-none">
+            {activeTab === "settings" && (<TabsContent value="settings" forceMount className="mt-0 outline-none">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={ANIM_ENTRY_UP}
+                animate={ANIM_FADE_IN_UP}
                 transition={{ duration: 0.4 }}
                 className="space-y-6"
               >
@@ -6967,7 +7323,7 @@ export function GitHubWorkspaceClient() {
                 </div>
                 </div>
               </motion.div>
-            </TabsContent>
+            </TabsContent>)}
           </Tabs>
 
           <Dialog
@@ -7077,166 +7433,24 @@ export function GitHubWorkspaceClient() {
           </Dialog>
 
           <Dialog open={confirmationDialog.open} onOpenChange={(open) => (!open ? closeConfirmationDialog() : null)}>
-            <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>{confirmationDialog.title}</DialogTitle>
-                <DialogDescription>{confirmationDialog.description}</DialogDescription>
-              </DialogHeader>
-              <div
-                className={cn(
-                  "rounded-[22px] border p-4",
-                  confirmationDialog.tone === "danger"
-                    ? "border-red-200/70 bg-red-50/80"
-                    : "border-amber-200/70 bg-amber-50/80",
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <AlertCircle
-                    className={cn(
-                      "mt-0.5 h-5 w-5 shrink-0",
-                      confirmationDialog.tone === "danger" ? "text-red-700" : "text-amber-700",
-                    )}
-                  />
-                  <div className="space-y-3">
-                    <p
-                      className={cn(
-                        "text-sm leading-6",
-                        confirmationDialog.tone === "danger" ? "text-red-900" : "text-amber-900",
-                      )}
-                    >
-                      Review this change before you continue.
-                    </p>
-                    {confirmationDialog.notes.length ? (
-                      <ul
-                        className={cn(
-                          "space-y-2 text-sm leading-6",
-                          confirmationDialog.tone === "danger" ? "text-red-800" : "text-amber-800",
-                        )}
-                      >
-                        {confirmationDialog.notes.map((note) => (
-                          <li key={note} className="flex items-start gap-2">
-                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-current" />
-                            <span>{note}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              {confirmationDialog.confirmationValues?.length ? (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground">
-                    {confirmationDialog.confirmationLabel ?? "Type confirmation text"}
-                  </Label>
-                  {confirmationDialog.confirmationValues[0] ? (
-                    <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
-                      {confirmationDialog.confirmationValues[0]}
-                    </div>
-                  ) : null}
-                  <Input
-                    value={confirmationInputValue}
-                    onChange={(event) => setConfirmationInputValue(event.target.value)}
-                    placeholder={confirmationDialog.confirmationPlaceholder ?? ""}
-                    className="h-11 rounded-xl"
-                  />
-                </div>
-              ) : null}
-              <DialogFooter className="flex-col gap-2 sm:flex-row">
-                <Button className="w-full sm:w-auto" variant="outline" onClick={closeConfirmationDialog}>
-                  Cancel
-                </Button>
-                <Button
-                  className={cn(
-                    "w-full sm:w-auto",
-                    confirmationDialog.tone === "danger" && "bg-red-600 text-white hover:bg-red-700",
-                    confirmationDialog.tone === "warning" && "bg-amber-500 text-amber-950 hover:bg-amber-400",
-                  )}
-                  onClick={() => void runConfirmedAction()}
-                  disabled={
-                    !confirmationDialog.action ||
-                    busyAction === confirmationDialog.busyKey ||
-                    (confirmationDialog.confirmationValues?.length
-                      ? !confirmationDialog.confirmationValues.some((value) =>
-                          (confirmationDialog.confirmationCaseSensitive
-                            ? value.trim()
-                            : value.trim().toLowerCase()) ===
-                          (confirmationDialog.confirmationCaseSensitive
-                            ? confirmationInputValue.trim()
-                            : confirmationInputValue.trim().toLowerCase()),
-                        )
-                      : false)
-                  }
-                >
-                  {busyAction === confirmationDialog.busyKey ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : confirmationDialog.tone === "danger" ? (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  ) : (
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                  )}
-                  {confirmationDialog.confirmLabel}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            <ConfirmationDialogPanel
+              dialog={confirmationDialog}
+              busyAction={busyAction ?? ""}
+              onClose={closeConfirmationDialog}
+              onConfirm={(iv) => void runConfirmedAction(iv)}
+            />
           </Dialog>
 
           <Dialog
             open={Boolean(branchToDelete)}
-            onOpenChange={(open) => {
-              if (!open) {
-                setBranchToDelete(null)
-                setBranchDeleteConfirmationText("")
-              }
-            }}
+            onOpenChange={(open) => { if (!open) setBranchToDelete(null) }}
           >
-            <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Delete branch</DialogTitle>
-                <DialogDescription>
-                  This removes the branch from GitHub. Default and protected branches stay blocked for safety.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="rounded-[22px] border border-red-200 bg-red-50/50 p-4 dark:border-red-500/20 dark:bg-red-500/5">
-                <p className="font-medium text-red-900 dark:text-red-200">{branchToDelete?.name ?? "Unknown branch"}</p>
-                <p className="mt-2 text-sm leading-6 text-red-800 dark:text-red-200/80">
-                  Make sure this branch is no longer needed before deleting it. The branch history will stay in GitHub commits and pull requests, but the branch name itself will be removed.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-foreground">Type the branch name to confirm</Label>
-                <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 font-mono text-xs text-foreground">
-                  {branchToDelete?.name ?? ""}
-                </div>
-                <Input
-                  value={branchDeleteConfirmationText}
-                  onChange={(event) => setBranchDeleteConfirmationText(event.target.value)}
-                  placeholder={branchToDelete?.name ?? ""}
-                  className="h-11 rounded-xl"
-                />
-              </div>
-              <DialogFooter className="flex-col gap-2 sm:flex-row">
-                <Button className="w-full sm:w-auto" variant="outline" onClick={() => setBranchToDelete(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  className="w-full bg-red-600 text-white hover:bg-red-700 sm:w-auto"
-                  onClick={() => void handleDeleteBranch()}
-                  disabled={
-                    !branchToDelete ||
-                    busyAction === `delete-branch-${branchToDelete?.name ?? ""}` ||
-                    branchDeleteConfirmationText.trim() !== (branchToDelete?.name ?? "")
-                  }
-                >
-                  {busyAction === `delete-branch-${branchToDelete?.name ?? ""}` ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  )}
-                  Delete Branch
-                </Button>
-              </DialogFooter>
-            </DialogContent>
+            <BranchDeleteDialogPanel
+              branch={branchToDelete}
+              busyAction={busyAction ?? ""}
+              onClose={() => setBranchToDelete(null)}
+              onConfirm={(iv) => void handleDeleteBranch(iv)}
+            />
           </Dialog>
 
           <Dialog
@@ -8474,16 +8688,64 @@ function WorkspaceShell({
 
 function WorkspaceSkeleton() {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-44 rounded-[32px] border border-border/60 bg-muted/30" />
-      <div className="grid gap-4 md:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div key={index} className="h-28 rounded-[28px] border border-border/60 bg-muted/20" />
+    <div className="space-y-6">
+      {/* Spinner banner */}
+      <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Loading workspace…</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2.5">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-4 w-80" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-24" />
+        </div>
+      </div>
+
+      {/* Main card */}
+      <div className="rounded-[32px] border border-border/60 bg-muted/40 p-5 space-y-4 animate-pulse">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-3.5 w-72" />
+          </div>
+          <Skeleton className="h-8 w-20 rounded-lg" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="rounded-xl border border-border/40 p-3 space-y-2">
+              <Skeleton className="h-3.5 w-16" />
+              <Skeleton className="h-6 w-10" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-2 overflow-hidden">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-9 w-20 rounded-lg shrink-0" />
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="h-[360px] rounded-[28px] border border-border/60 bg-muted/20 sm:h-[420px] xl:h-[520px]" />
-        <div className="h-[360px] rounded-[28px] border border-border/60 bg-muted/20 sm:h-[420px] xl:h-[520px]" />
+
+      {/* Content rows */}
+      <div className="space-y-3">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-2xl border border-border/50 bg-muted/40 p-4 flex items-center gap-4 animate-pulse">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+            <Skeleton className="h-7 w-16 rounded-lg" />
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -8691,8 +8953,16 @@ function NoRepositoryState({
   const connectedGitHubIdentity =
     workspace.githubConnection.login ?? workspace.githubConnection.displayName ?? "Not connected yet"
   const setupTeamName = workspace.team?.name ?? "Current team"
-  const createOwnerLockedToInstallation =
-    createRepositoryForm.ownerType === "USER" && Boolean(selectedCreateInstallation?.accountLogin)
+  const createOwnerLockedToInstallation = Boolean(selectedCreateInstallation?.accountLogin)
+  const connectOwnerLockedToInstallation = Boolean(selectedConnectInstallation?.accountLogin)
+  const createOwnerMismatch = Boolean(
+    selectedCreateInstallation?.accountLogin &&
+      normalizeGitHubMatchValue(createRepositoryForm.owner) !== normalizeGitHubMatchValue(selectedCreateInstallation.accountLogin),
+  )
+  const connectOwnerMismatch = Boolean(
+    selectedConnectInstallation?.accountLogin &&
+      normalizeGitHubMatchValue(connectRepositoryForm.owner) !== normalizeGitHubMatchValue(selectedConnectInstallation.accountLogin),
+  )
 
   return (
     <>
@@ -8981,14 +9251,24 @@ function NoRepositoryState({
                           {selectedCreateInstallation.accountLogin ?? "the selected GitHub account"}.
                         </p>
                       ) : null}
+                      {createOwnerMismatch && selectedCreateInstallation?.accountLogin ? (
+                        <p className="text-sm leading-6 text-destructive">
+                          Selected installation belongs to {selectedCreateInstallation.accountLogin}, so the owner login must also be {selectedCreateInstallation.accountLogin}.
+                        </p>
+                      ) : null}
 
                       <div className="grid gap-4 md:grid-cols-3">
                         <Field
                           label="Owner type"
-                          description="Choose `Organization` only if the repository should live inside a GitHub organization."
+                          description={
+                            selectedCreateInstallation?.accountLogin
+                              ? "Locked to the account type of the selected GitHub App installation."
+                              : "Choose `Organization` only if the repository should live inside a GitHub organization."
+                          }
                         >
                           <Select
                             value={createRepositoryForm.ownerType}
+                            disabled={Boolean(selectedCreateInstallation?.accountLogin)}
                             onValueChange={(value: "USER" | "ORGANIZATION") =>
                               setCreateRepositoryForm((current) => ({
                                 ...current,
@@ -9156,13 +9436,18 @@ function NoRepositoryState({
                           <Field
                             label="Owner login"
                             hint="Required"
-                            description="Use the exact GitHub username or organization slug that owns the existing repository."
+                            description={
+                              connectOwnerLockedToInstallation
+                                ? "Locked to the GitHub account or organization that owns the selected installation."
+                                : "Use the exact GitHub username or organization slug that owns the existing repository."
+                            }
                           >
                             <Input
                               value={connectRepositoryForm.owner}
                               onChange={(event) =>
                                 setConnectRepositoryForm((current) => ({ ...current, owner: event.target.value }))
                               }
+                              disabled={connectOwnerLockedToInstallation}
                               placeholder="team-org or owner account"
                               className="h-11 rounded-2xl"
                             />
@@ -9187,6 +9472,11 @@ function NoRepositoryState({
                           <p className="text-xs leading-5 text-muted-foreground">
                             Using installation #{selectedConnectInstallation.id} on{" "}
                             {selectedConnectInstallation.accountLogin ?? "the selected GitHub account"}.
+                          </p>
+                        ) : null}
+                        {connectOwnerMismatch && selectedConnectInstallation?.accountLogin ? (
+                          <p className="text-sm leading-6 text-destructive">
+                            Selected installation belongs to {selectedConnectInstallation.accountLogin}, so the owner login must also be {selectedConnectInstallation.accountLogin}.
                           </p>
                         ) : null}
 
@@ -9221,6 +9511,7 @@ function NoRepositoryState({
                     !createRepositoryForm.installationId ||
                     !createRepositoryForm.owner.trim() ||
                     !createRepositoryForm.repoName.trim() ||
+                    createOwnerMismatch ||
                     busyAction === "create-repository"
                   }
                 >
@@ -9239,6 +9530,7 @@ function NoRepositoryState({
                     !connectRepositoryForm.installationId ||
                     !connectRepositoryForm.owner.trim() ||
                     !connectRepositoryForm.repoName.trim() ||
+                    connectOwnerMismatch ||
                     busyAction === "connect-repository"
                   }
                 >
@@ -9443,7 +9735,7 @@ function WorkspaceFact({
 }) {
   return (
     <motion.div
-      whileHover={{ y: -2, scale: 1.01 }}
+      whileHover={ANIM_HOVER_LIFT_SCALE}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-[20px] border border-border/70 bg-muted/6 px-4 py-3 shadow-[0_12px_32px_-32px_rgba(15,23,42,0.14)] transition-all duration-200 hover:border-primary/20 hover:bg-primary/4 hover:shadow-[0_18px_38px_-30px_rgba(15,23,42,0.2)]"
     >
@@ -9574,8 +9866,8 @@ function ActionRow({
             {!href && (
               <motion.span
                 key={isCopied ? "copied-action-row" : "copy-action-row"}
-                initial={{ scale: 0.92, opacity: 0.85 }}
-                animate={{ scale: 1, opacity: 1 }}
+                initial={ANIM_BADGE_OUT}
+                animate={ANIM_BADGE_IN}
                 transition={{ duration: 0.16 }}
                 className="mr-2 inline-flex"
               >

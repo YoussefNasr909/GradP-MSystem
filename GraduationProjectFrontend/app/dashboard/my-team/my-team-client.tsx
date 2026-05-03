@@ -64,6 +64,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const STAGES: ApiTeamStage[] = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"]
 const STACK_SUGGESTIONS = ["Next.js", "React", "Node.js", "TypeScript", "Python", "FastAPI", "PostgreSQL", "Tailwind CSS"]
@@ -143,9 +144,8 @@ export default function MyTeamClient() {
     }
   }
 
-  if (!hasHydrated) return <CenteredCard title="Loading your workspace" body="Preparing the right team experience for your role." />
+  if (!hasHydrated || isLoading) return <TeamPageSkeleton />
   if (isAdmin) return <AdminTeamWorkspace />
-  if (isLoading) return <CenteredCard title="Loading your team" body="Fetching the live team state from the backend." />
   if (error) return <CenteredCard title="Couldn't load your team" body={error} onRetry={refresh} />
 
   if (isStudent && !data?.team) {
@@ -204,19 +204,28 @@ export default function MyTeamClient() {
       <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
 
       <Tabs defaultValue="overview" className="space-y-5">
-        <div className="overflow-x-auto">
-          <TabsList className="inline-flex h-12 min-w-max items-center gap-1 rounded-2xl border border-border/70 bg-background/90 p-1.5 shadow-sm">
-            <TabsTrigger value="overview" className="h-9 rounded-xl px-4 text-sm font-medium">
+        <div className="overflow-x-auto pb-0.5">
+          <TabsList className="inline-flex h-12 min-w-max items-center gap-0.5 rounded-2xl border border-border/60 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm">
+            <TabsTrigger
+              value="overview"
+              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+            >
               Overview
             </TabsTrigger>
-            <TabsTrigger value="members" className="h-9 rounded-xl px-4 text-sm font-medium">
+            <TabsTrigger
+              value="members"
+              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+            >
               Members
               <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px] font-bold">
                 {team.memberCount}
               </Badge>
             </TabsTrigger>
             {isLeader && (
-              <TabsTrigger value="invitations" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="invitations"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Invitations
                 {pendingInvitesCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
@@ -226,12 +235,18 @@ export default function MyTeamClient() {
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="supervisors" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="supervisors"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Supervisors
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="requests" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="requests"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Join Requests
                 {pendingRequestsCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-amber-500/15 px-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
@@ -241,7 +256,10 @@ export default function MyTeamClient() {
               </TabsTrigger>
             )}
             {isLeader && (
-              <TabsTrigger value="settings" className="h-9 rounded-xl px-4 text-sm font-medium">
+              <TabsTrigger
+                value="settings"
+                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+              >
                 Settings
               </TabsTrigger>
             )}
@@ -668,7 +686,7 @@ function StudentTeamExperience({
                   <div className="space-y-1">
                     <p className="font-semibold text-foreground/80">No Doctor Assigned</p>
                     <p className="text-xs text-muted-foreground">
-                      Your team doesn't have an assigned Doctor yet.
+                      Your team doesn&apos;t have an assigned Doctor yet.
                     </p>
                   </div>
                   {currentMember?.teamRole === "LEADER" && (
@@ -692,7 +710,7 @@ function StudentTeamExperience({
                     </div>
                     <CardTitle className="text-lg tracking-tight">Teaching Assistant</CardTitle>
                   </div>
-                  <CardDescription>Assisting in your project's technical guidance.</CardDescription>
+                  <CardDescription>Assisting in your project&apos;s technical guidance.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center gap-4">
@@ -726,7 +744,7 @@ function StudentTeamExperience({
                   <div className="space-y-1">
                     <p className="font-semibold text-foreground/80">No TA Assigned</p>
                     <p className="text-xs text-muted-foreground">
-                      Your team doesn't have an assigned TA yet.
+                      Your team doesn&apos;t have an assigned TA yet.
                     </p>
                   </div>
                 </CardContent>
@@ -750,11 +768,14 @@ function StudentTeamExperience({
 function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader: boolean; onRefresh: () => Promise<void> }) {
   const [busy, setBusy] = useState("")
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const copyCode = async () => {
-    if (!team.inviteCode) return
+    if (!team.inviteCode || copied) return
     await navigator.clipboard.writeText(team.inviteCode)
+    setCopied(true)
     toast.success("Invite code copied.")
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const leaveTeam = async () => {
@@ -818,12 +839,81 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
 
             {isLeader && team.inviteCode && (
               <div className="flex items-center gap-2">
-                <div className="flex h-10 items-center rounded-xl border border-border/60 bg-background/70 px-3 font-mono text-sm tracking-[0.2em]">
-                  {team.inviteCode}
+                {/* Invite code pill — text swaps to "Copied!" */}
+                <div className={`relative flex h-10 items-center overflow-hidden rounded-xl border px-3 font-mono text-sm tracking-[0.2em] transition-all duration-300 ${
+                  copied
+                    ? "border-green-500/40 bg-green-500/[0.06] text-green-700 dark:text-green-400"
+                    : "border-border/60 bg-background/70"
+                }`}>
+                  <AnimatePresence mode="wait" initial={false}>
+                    {copied ? (
+                      <motion.span
+                        key="copied-label"
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
+                        className="font-sans text-xs font-semibold tracking-wide"
+                      >
+                        Copied!
+                      </motion.span>
+                    ) : (
+                      <motion.span
+                        key="invite-code"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
+                      >
+                        {team.inviteCode}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
-                <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl border-border/60" onClick={() => void copyCode()}>
-                  <Copy className="h-4 w-4" />
-                </Button>
+
+                {/* Copy button — bounces on copy, turns green, swaps icon */}
+                <motion.div
+                  whileTap={{ scale: 0.82 }}
+                  animate={copied ? { scale: [1, 1.18, 0.95, 1] } : { scale: 1 }}
+                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] as const }}
+                >
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={`h-10 w-10 rounded-xl transition-all duration-300 ${
+                      copied
+                        ? "border-green-500/40 bg-green-500/10 text-green-600 hover:bg-green-500/15 dark:text-green-400"
+                        : "border-border/60 hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                    }`}
+                    onClick={() => void copyCode()}
+                  >
+                    <AnimatePresence mode="wait" initial={false}>
+                      {copied ? (
+                        <motion.span
+                          key="check-icon"
+                          initial={{ scale: 0.3, opacity: 0, rotate: -45 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          exit={{ scale: 0.3, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
+                          className="flex items-center justify-center"
+                        >
+                          <Check className="h-4 w-4" />
+                        </motion.span>
+                      ) : (
+                        <motion.span
+                          key="copy-icon"
+                          initial={{ scale: 0.3, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.3, opacity: 0 }}
+                          transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] as const }}
+                          className="flex items-center justify-center"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </motion.span>
+                      )}
+                    </AnimatePresence>
+                  </Button>
+                </motion.div>
               </div>
             )}
 
@@ -1419,7 +1509,7 @@ function JoinRequestsCard({ requests, onRefresh }: { requests: ApiTeamJoinReques
               <Users className="h-5 w-5" />
             </div>
             <p className="mt-3 text-sm font-medium">No pending requests</p>
-            <p className="mt-1 text-xs text-muted-foreground">When students request to join your team, they'll appear here for review.</p>
+            <p className="mt-1 text-xs text-muted-foreground">When students request to join your team, they&apos;ll appear here for review.</p>
           </div>
         ) : (
           requests.map((request) => (
@@ -2634,8 +2724,159 @@ function InfoLine({
   return <ChecklistLine icon={icon} title={title} description={description} />
 }
 
+function TeamPageSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6 xl:p-8">
+      <div className="flex items-center gap-2.5 text-sm font-medium text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Loading your team…</span>
+      </div>
+
+      {/* Hero card */}
+      <div className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-sm">
+        <div className="space-y-5 p-5 sm:p-6 md:p-7">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                ))}
+              </div>
+              <Skeleton className="h-10 w-72 sm:w-96" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full max-w-2xl" />
+                <Skeleton className="h-4 w-3/4 max-w-lg" />
+              </div>
+            </div>
+            <Skeleton className="h-11 w-44 shrink-0 rounded-xl" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-6 w-20 rounded-full" />
+            ))}
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-[24px] border border-border/60 p-4 space-y-3">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-7 w-20" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content grid */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-border/70 bg-background p-6 shadow-sm space-y-4">
+            <Skeleton className="h-6 w-44" />
+            <Skeleton className="h-3.5 w-64" />
+            <Skeleton className="h-28 w-full rounded-2xl" />
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-16 rounded-2xl" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-3xl border border-border/70 bg-background p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-3.5 w-56" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <div key={i} className="rounded-2xl border border-border/60 p-5 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-12 w-12 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3.5 w-40" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
+                  <Skeleton className="h-10 w-full rounded-xl" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-border/70 bg-background p-6 shadow-sm space-y-5">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-3.5 w-52" />
+            </div>
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-14 w-14 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="h-3.5 w-32" />
+              </div>
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-4/5" />
+            <div className="space-y-2.5">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-2xl" />
+              ))}
+            </div>
+          </div>
+          <div className="rounded-3xl border border-border/70 bg-background p-6 shadow-sm space-y-4">
+            <Skeleton className="h-6 w-36" />
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-12 w-12 rounded-full shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-3.5 w-20" />
+              </div>
+            </div>
+            <Skeleton className="h-14 w-full rounded-2xl" />
+            <Skeleton className="h-14 w-full rounded-2xl" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CenteredCard({ title, body, onRetry }: { title: string; body: string; onRetry?: () => Promise<void> | void }) {
-  return <div className="container mx-auto max-w-3xl p-4 md:p-6"><Card className="p-6 text-center sm:p-8"><h2 className="text-xl font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{body}</p>{onRetry && <Button className="mt-4 w-full sm:w-auto" onClick={() => void onRetry()}>Try Again</Button>}</Card></div>
+  const reduceMotion = Boolean(useReducedMotion())
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center p-6">
+      <motion.div
+        initial={reduceMotion ? {} : { opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] as const }}
+        className="w-full max-w-sm text-center"
+      >
+        <div className={`mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl ${
+          onRetry ? "bg-destructive/10" : "bg-muted/60"
+        }`}>
+          {onRetry
+            ? <AlertCircle className="h-7 w-7 text-destructive" />
+            : <Users className="h-7 w-7 text-muted-foreground" />
+          }
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+        <p className="mt-3 text-sm leading-7 text-muted-foreground">{body}</p>
+        {onRetry && (
+          <Button className="mt-8 h-11 rounded-xl px-8" onClick={() => void onRetry()}>
+            Try Again
+          </Button>
+        )}
+      </motion.div>
+    </div>
+  )
 }
 
 function StudentMetricCard({

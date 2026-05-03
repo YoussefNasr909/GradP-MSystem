@@ -852,6 +852,250 @@ export type Paginated<T> = {
   items: T[]
 }
 
+export type ApiChatRelation =
+  | "TEAM_MEMBER"
+  | "TEAM_LEADER"
+  | "TEAM_DOCTOR"
+  | "TEAM_TA"
+  | "SUPERVISED_TEAM_LEADER"
+  | "STUDENT_PEER"
+  | "STAFF_PEER"
+
+export type ApiChatMessageStatus = "SENT" | "DELIVERED" | "SEEN" | "DELETED"
+
+export type ApiChatUser = {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  role: Role
+  academicId: string | null
+  avatarUrl: string | null
+  bio: string | null
+}
+
+export type ApiChatTeamSummary = {
+  id: string
+  name: string
+}
+
+export type ApiChatMessage = {
+  id: string
+  conversationId: string
+  senderId: string
+  recipientId: string
+  content: string
+  fileUrl: string | null
+  fileName: string | null
+  fileSize: number | null
+  fileType: string | null
+  isDeleted: boolean
+  deletedAt: string | null
+  deliveredAt: string | null
+  seenAt: string | null
+  createdAt: string
+  updatedAt: string
+  status: ApiChatMessageStatus
+}
+
+export type ApiChatConversationSummary = {
+  id: string
+  participant: ApiChatUser
+  relation: ApiChatRelation | null
+  team: ApiChatTeamSummary | null
+  lastMessage: ApiChatMessage | null
+  unreadCount: number
+  clearedAt: string | null
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiChatContact = {
+  user: ApiChatUser
+  relation: ApiChatRelation
+  team: ApiChatTeamSummary | null
+  conversationId: string | null
+}
+
+export type ApiChatSearchResult = ApiChatContact
+
+export type ApiChatBootstrap = {
+  conversations: ApiChatConversationSummary[]
+  contacts: ApiChatContact[]
+  unreadCount: number
+}
+
+export type ApiChatConversationMessages = {
+  conversation: ApiChatConversationSummary
+  messages: ApiChatMessage[]
+}
+
+export type ApiChatSendResult = {
+  conversation: ApiChatConversationSummary
+  message: ApiChatMessage
+  recipientOnline: boolean
+  recipientViewingConversation: boolean
+}
+
+export type ApiChatSeenResult = {
+  conversation: ApiChatConversationSummary
+  seenMessageIds: string[]
+  unreadCount: number
+}
+
+export type ApiChatDeleteMessageResult = {
+  conversationId: string
+  message: ApiChatMessage
+}
+
+export type ApiChatEditMessageResult = ApiChatDeleteMessageResult
+
+export type ApiChatClearResult = {
+  conversation: ApiChatConversationSummary
+  conversationId: string
+  clearedAt: string
+  unreadCount: number
+}
+
+export type ApiTeamGroupChatMessage = {
+  id: string
+  conversationId: string
+  content: string
+  senderId: string
+  sender: ApiChatUser
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiTeamGroupChatConversationSummary = {
+  id: string
+  team: ApiChatTeamSummary
+  isPinned: boolean
+  lastMessage: ApiTeamGroupChatMessage | null
+  unreadCount: number
+  participantCount: number
+  clearedAt: string | null
+  lastSeenAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiTeamGroupChatBootstrap = {
+  conversations: ApiTeamGroupChatConversationSummary[]
+}
+
+export type ApiTeamGroupChatConversationMessages = {
+  conversation: ApiTeamGroupChatConversationSummary
+  messages: ApiTeamGroupChatMessage[]
+}
+
+export type ApiTeamGroupChatSendResult = {
+  conversation: ApiTeamGroupChatConversationSummary
+  message: ApiTeamGroupChatMessage
+}
+
+export type ApiTeamGroupChatSeenResult = {
+  conversation: ApiTeamGroupChatConversationSummary
+}
+
+export type ApiRiskStatus = "OPEN" | "MONITORING" | "RESOLVED"
+export type ApiRiskApprovalStatus = "PENDING" | "APPROVED" | "REVISION_REQUESTED"
+export type ApiRiskChance = "LOW" | "MEDIUM" | "HIGH"
+export type ApiRiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+
+export type ApiRisk = {
+  id: string
+  team: ApiChatTeamSummary
+  title: string
+  description: string
+  category: string
+  chance: ApiRiskChance
+  impact: ApiRiskChance
+  severity: ApiRiskSeverity | null
+  status: ApiRiskStatus
+  approvalStatus: ApiRiskApprovalStatus
+  mitigation: string
+  monitoringNotes: string
+  resolutionNotes: string
+  approvalNote: string
+  approvedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: ApiChatUser | null
+  monitor: ApiChatUser | null
+  approvedBy: ApiChatUser | null
+  permissions: {
+    canEdit: boolean
+    canMonitor: boolean
+    canApprove: boolean
+    canRequestRevision: boolean
+  }
+}
+
+export type ApiDiscussionCategory = "technical" | "team" | "resources" | "general"
+
+export type ApiDiscussionAuthor = {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  avatarUrl: string | null
+  role: Role
+  roleLabel: string
+}
+
+export type ApiDiscussionComment = {
+  id: string
+  content: string
+  parentCommentId: string | null
+  replyCount: number
+  replies: ApiDiscussionComment[]
+  createdAt: string
+  updatedAt: string
+  author: ApiDiscussionAuthor
+}
+
+export type ApiDiscussionSummary = {
+  id: string
+  title: string
+  content: string
+  category: ApiDiscussionCategory
+  tags: string[]
+  likeCount: number
+  viewCount: number
+  commentCount: number
+  isPinned: boolean
+  createdAt: string
+  updatedAt: string
+  author: ApiDiscussionAuthor
+  viewerHasLiked: boolean
+  viewerHasViewed: boolean
+}
+
+export type ApiDiscussionDetail = ApiDiscussionSummary & {
+  comments: ApiDiscussionComment[]
+}
+
+export type ApiDiscussionFeed = {
+  items: ApiDiscussionSummary[]
+  stats: {
+    totalDiscussions: number
+    activeToday: number
+    yourPosts: number
+    replies: number
+  }
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
+}
+
 
 
 export type ApiCalendarProvider = "GOOGLE" | "OUTLOOK"

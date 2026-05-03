@@ -1,2 +1,28 @@
-# Documentation
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentation (generated/local)
 docs/
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.*
+env.local
+!.env.example
+
+# Generated and upload directories
+uploads/
+node_modules/
+dist/
+build/

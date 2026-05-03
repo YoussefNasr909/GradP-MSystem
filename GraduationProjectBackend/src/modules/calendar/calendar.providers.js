@@ -285,7 +285,7 @@ export async function syncMeetingToProvider(meeting, integration, attendeeList) 
 export async function deleteMeetingFromProvider(meeting, integration) {
   if (!meeting.externalEventId) return;
   const accessToken = await getValidAccessToken(integration);
-  
+
   if (integration.provider === "GOOGLE") {
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(meeting.externalCalendarId || integration.externalCalendarId || "primary")}/events/${encodeURIComponent(meeting.externalEventId)}?sendUpdates=all`;
     await fetchJson(url, accessToken, { method: "DELETE" });

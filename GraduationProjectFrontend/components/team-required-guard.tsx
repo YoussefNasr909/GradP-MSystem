@@ -172,7 +172,7 @@ export function TeamRequiredGuard({ children, pageName, pageDescription, icon }:
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <Shield className="h-8 w-8" />
           </div>
-          <h2 className="text-xl font-semibold">Couldn't verify your team access</h2>
+          <h2 className="text-xl font-semibold">Couldn&apos;t verify your team access</h2>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
             <Button onClick={() => void refresh()}>Try Again</Button>

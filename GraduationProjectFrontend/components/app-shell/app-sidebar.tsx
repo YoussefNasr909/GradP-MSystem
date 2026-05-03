@@ -19,7 +19,6 @@ import {
   GraduationCap,
   ChevronDown,
   Workflow,
-  Settings,
   CheckCircle2,
   Crown,
   Calendar,
@@ -139,12 +138,6 @@ const navigationGroups = [
       { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor"] },
       { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
-      {
-        name: "Settings",
-        href: "/dashboard/settings",
-        icon: Settings,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
     ],
   },
   {

@@ -1,40 +1,35 @@
+import { Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function Loading() {
   return (
     <div className="space-y-6">
+      {/* Header row */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Skeleton className="h-10 w-56" />
-          <Skeleton className="h-4 w-80" />
+          <Skeleton className="h-9 w-52 bg-muted-foreground/10" />
+          <Skeleton className="h-4 w-72 bg-muted-foreground/10" />
         </div>
-        <Skeleton className="h-10 w-28" />
+        <Skeleton className="h-9 w-28 bg-muted-foreground/10" />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        {[1, 2, 3, 4, 5].map((item) => (
-          <Card key={item} className="p-4">
-            <Skeleton className="h-20 w-full" />
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-3">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Card key={i} className="p-3 sm:p-4">
+            <Skeleton className="h-7 w-7 rounded-xl bg-muted-foreground/10" />
+            <Skeleton className="mt-2 h-7 w-10 bg-muted-foreground/10" />
+            <Skeleton className="mt-1 h-3 w-16 bg-muted-foreground/10" />
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        {[1, 2, 3, 4, 5].map((column) => (
-          <Card key={column} className="p-4">
-            <div className="mb-4 flex items-center justify-between">
-              <Skeleton className="h-5 w-24" />
-              <Skeleton className="h-5 w-8" />
-            </div>
-            <div className="space-y-3">
-              {[1, 2, 3].map((task) => (
-                <Skeleton key={task} className="h-28 w-full" />
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Loading spinner */}
+      <Card className="flex items-center justify-center gap-3 p-12 text-muted-foreground">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        <span className="text-sm">Loading tasks...</span>
+      </Card>
     </div>
   )
 }
