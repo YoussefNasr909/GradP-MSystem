@@ -10,6 +10,9 @@ import {
   deleteSubmissionService,
   getSDLCSummaryService,
   advanceStageService,
+  unlockSubmissionService,
+  attachDefenseMeetingService,
+  bulkApproveSubmissionsService,
 } from "./submissions.service.js";
 
 function resolveBackendOrigin(req) {
@@ -53,6 +56,21 @@ export async function gradeSubmission(req, res) {
 
 export async function taReviewSubmission(req, res) {
   const result = await taReviewSubmissionService(req.user, req.validated.params.id, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function unlockSubmission(req, res) {
+  const result = await unlockSubmissionService(req.user, req.validated.params.id, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function attachDefenseMeeting(req, res) {
+  const result = await attachDefenseMeetingService(req.user, req.validated.params.id, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function bulkApproveSubmissions(req, res) {
+  const result = await bulkApproveSubmissionsService(req.user, req.validated.body);
   res.json({ ok: true, data: result });
 }
 

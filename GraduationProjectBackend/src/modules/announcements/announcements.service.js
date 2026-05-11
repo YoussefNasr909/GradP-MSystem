@@ -92,7 +92,56 @@ export async function listAnnouncementsService(actor) {
   return rows.map(shape);
 }
 
-export async function createAnnouncementService(actor, { title, content, teamId, pinned }) {
+/**
+ * Resolve an "audience" filter to a concrete list of supervised team IDs.
+ * audience: "all" | "byStage" | "overdue" | "needsProposalApproval"
+ */
+async function resolveAudienceTeamIds(actor, audience, audienceParam) {
+  const supervisedIds = await getSupervisedTeamIds(actor);
+  if (supervisedIds.length === 0) return [];
+
+  if (!audience || audience === "all") return supervisedIds;
+
+  if (audience === "byStage") {
+    if (!audienceParam) return supervisedIds;
+    const matched = await prisma.team.findMany({
+      where: { id: { in: supervisedIds }, stage: audienceParam },
+      select: { id: true },
+    });
+    return matched.map((t) => t.id);
+  }
+
+  if (audience === "overdue") {
+    // Teams with at least one TeamDeliverableDeadline in the past
+    const overdueDeadlines = await prisma.teamDeliverableDeadline.findMany({
+      where: { teamId: { in: supervisedIds }, dueDate: { lt: new Date() } },
+      select: { teamId: true },
+    });
+    return Array.from(new Set(overdueDeadlines.map((d) => d.teamId)));
+  }
+
+  if (audience === "needsProposalApproval") {
+    // Teams whose proposal isn't APPROVED yet
+    const props = await prisma.proposal.findMany({
+      where: { teamId: { in: supervisedIds }, status: { not: "APPROVED" } },
+      select: { teamId: true },
+    });
+    // Also include teams with NO proposal at all
+    const haveProposalIds = new Set(props.map((p) => p.teamId));
+    const teamsWithoutProposal = supervisedIds.filter((id) => !haveProposalIds.has(id));
+    const allProps = await prisma.proposal.findMany({
+      where: { teamId: { in: supervisedIds } },
+      select: { teamId: true },
+    });
+    const everSeen = new Set(allProps.map((p) => p.teamId));
+    const noProposal = supervisedIds.filter((id) => !everSeen.has(id));
+    return Array.from(new Set([...props.map((p) => p.teamId), ...noProposal]));
+  }
+
+  return supervisedIds;
+}
+
+export async function createAnnouncementService(actor, { title, content, teamId, pinned, audience, audienceParam }) {
   if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
     throw new AppError("Only supervisors can post announcements.", 403, "ANNOUNCEMENT_FORBIDDEN");
   }
@@ -122,7 +171,14 @@ export async function createAnnouncementService(actor, { title, content, teamId,
   });
 
   // Determine target teams for notifications
-  const supervisedIds = teamId ? [teamId] : await getSupervisedTeamIds(actor);
+  let supervisedIds;
+  if (teamId) {
+    supervisedIds = [teamId];
+  } else if (audience && audience !== "all") {
+    supervisedIds = await resolveAudienceTeamIds(actor, audience, audienceParam);
+  } else {
+    supervisedIds = await getSupervisedTeamIds(actor);
+  }
 
   if (supervisedIds.length > 0) {
     const teams = await prisma.team.findMany({
@@ -166,6 +222,24 @@ export async function updateAnnouncementService(actor, id, { title, content, pin
     select,
   });
   return shape(updated);
+}
+
+/**
+ * Returns the team objects (id + name + stage) that would be targeted by an
+ * announcement with the given audience filter. Used to preview "who will see this"
+ * in the create dialog.
+ */
+export async function previewAudienceService(actor, { audience, audienceParam }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
+    return [];
+  }
+  const ids = await resolveAudienceTeamIds(actor, audience, audienceParam);
+  if (ids.length === 0) return [];
+  return prisma.team.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, stage: true },
+    orderBy: { name: "asc" },
+  });
 }
 
 export async function deleteAnnouncementService(actor, id) {

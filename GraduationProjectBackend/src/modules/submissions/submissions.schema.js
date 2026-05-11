@@ -63,6 +63,36 @@ export const gradeSubmissionSchema = z.object({
     grade: z.coerce.number().int().min(0).max(100),
     feedback: z.string().trim().min(3).max(2000).optional(),
     rubric: rubricSchema,
+    reason: z.string().trim().max(500).optional(),
+  }),
+});
+
+// Unlock an approved submission for re-grading
+export const unlockSubmissionSchema = z.object({
+  params: z.object({ id: z.string().trim().min(1) }),
+  query:  z.object({}).optional().default({}),
+  body: z.object({
+    reason: z.string().trim().min(5).max(500),
+  }),
+});
+
+// Attach (or detach) a defense meeting to a DEPLOYMENT-phase submission
+export const attachDefenseSchema = z.object({
+  params: z.object({ id: z.string().trim().min(1) }),
+  query:  z.object({}).optional().default({}),
+  body: z.object({
+    meetingId: z.string().trim().min(1).nullable(),
+  }),
+});
+
+// Bulk approve a list of submissions
+export const bulkApproveSchema = z.object({
+  params: z.object({}).optional().default({}),
+  query:  z.object({}).optional().default({}),
+  body: z.object({
+    submissionIds: z.array(z.string().trim().min(1)).min(1).max(50),
+    grade: z.coerce.number().int().min(0).max(100).optional(),
+    feedback: z.string().trim().max(2000).optional(),
   }),
 });
 

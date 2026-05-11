@@ -386,6 +386,8 @@ model User {
   authoredSupervisorNotes TeamSupervisorNote[] @relation("SupervisorNoteAuthor")
   setDeliverableDeadlines TeamDeliverableDeadline[] @relation("DeadlineSetter")
   authoredAnnouncements   Announcement[]      @relation("AnnouncementAuthor")
+  authoredSubmissionComments SubmissionComment[] @relation("SubmissionCommentAuthor")
+  createdRubricTemplates  TeamRubricTemplate[] @relation("RubricTemplateCreator")
   uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
   createdResources        TeamResource[]     @relation("ResourceCreator")
   createdRisks            Risk[]             @relation("RiskCreator")
@@ -488,6 +490,7 @@ model Team {
   supervisorNotes      TeamSupervisorNote[]
   deliverableDeadlines TeamDeliverableDeadline[]
   announcements        Announcement[]
+  rubricTemplates      TeamRubricTemplate[]
   groupConversation TeamGroupConversation?
 
   @@index([visibility, stage])
@@ -801,16 +804,26 @@ model Submission {
   // Rubric used for grading: [{ name, score, maxScore }]
   rubric            Json?
 
+  // Grade revision audit trail (every time the doctor changes the grade
+  // after the first finalize, the previous state is pushed here).
+  // Stored as an array of { grade, feedback, rubric, reviewedAt, reviewedBy, changedAt, reason }.
+  gradeHistory      Json?
+
+  // Defense meeting link (only required for DEPLOYMENT-phase deliverables).
+  defenseMeetingId  String?              @unique
+
   submittedAt       DateTime             @default(now())
   deadline          DateTime?
   late              Boolean              @default(false)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  team         Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  submittedBy  User? @relation("SubmissionSubmitter",   fields: [submittedByUserId],  references: [id], onDelete: SetNull)
-  reviewedBy   User? @relation("SubmissionReviewer",    fields: [reviewedByUserId],   references: [id], onDelete: SetNull)
-  taReviewedBy User? @relation("SubmissionTAReviewer",  fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  submittedBy    User?    @relation("SubmissionSubmitter",   fields: [submittedByUserId],  references: [id], onDelete: SetNull)
+  reviewedBy     User?    @relation("SubmissionReviewer",    fields: [reviewedByUserId],   references: [id], onDelete: SetNull)
+  taReviewedBy   User?    @relation("SubmissionTAReviewer",  fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
+  defenseMeeting Meeting? @relation("MeetingForSubmission",  fields: [defenseMeetingId],   references: [id], onDelete: SetNull)
+  comments       SubmissionComment[]
 
   @@index([teamId, deliverableType])
   @@index([teamId, sdlcPhase])
@@ -818,6 +831,43 @@ model Submission {
   @@index([submittedByUserId])
   @@index([reviewedByUserId])
   @@index([taReviewedByUserId])
+}
+
+// Conversation thread on a single submission.
+// Visible to: team members + the team's doctor + TA + admins.
+model SubmissionComment {
+  id           String   @id @default(cuid())
+  submissionId String
+  authorUserId String
+  authorRole   Role
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  author     User       @relation("SubmissionCommentAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
+  @@index([authorUserId])
+}
+
+// Per-team override of a deliverable's rubric template.
+// If a row exists for (teamId, deliverableType), the rubric editor
+// preloads this instead of the global default.
+model TeamRubricTemplate {
+  id              String          @id @default(cuid())
+  teamId          String
+  deliverableType DeliverableType
+  rubric          Json
+  createdByUserId String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation("RubricTemplateCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, deliverableType])
+  @@index([teamId])
 }
 
 model TeamDocument {
@@ -1075,6 +1125,7 @@ model Meeting {
   organizer            User               @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
   participants         MeetingParticipant[]
   approvals            MeetingApproval[]
+  defenseForSubmission Submission?         @relation("MeetingForSubmission")
 
   @@index([teamId, startAt])
   @@index([organizerId, startAt])

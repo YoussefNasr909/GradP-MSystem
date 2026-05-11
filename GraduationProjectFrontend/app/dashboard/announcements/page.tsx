@@ -19,7 +19,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
-import { announcementsApi, type Announcement } from "@/lib/api/supervisor-tools"
+import { announcementsApi, audienceApi, type Announcement, type AnnouncementAudience, type AudiencePreviewTeam } from "@/lib/api/supervisor-tools"
 import { toast } from "sonner"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 
@@ -48,6 +48,12 @@ export default function AnnouncementsPage() {
   const [pinned, setPinned] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Smart audience targeting
+  const [audience, setAudience] = useState<AnnouncementAudience>("all")
+  const [audienceParam, setAudienceParam] = useState<string>("REQUIREMENTS")
+  const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewTeam[]>([])
+  const [previewLoading, setPreviewLoading] = useState(false)
+
   const load = useCallback(async () => {
     setError(false)
     try {
@@ -69,6 +75,21 @@ export default function AnnouncementsPage() {
     setRefreshing(false)
   }
 
+  // Preview which teams the current audience selection would reach
+  useEffect(() => {
+    if (!dialogOpen || targetTeam !== "ALL" || !canPost) {
+      setAudiencePreview([])
+      return
+    }
+    let cancelled = false
+    setPreviewLoading(true)
+    audienceApi.preview(audience, audience === "byStage" ? audienceParam : undefined)
+      .then((teams) => { if (!cancelled) setAudiencePreview(teams) })
+      .catch(() => { if (!cancelled) setAudiencePreview([]) })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+  }, [dialogOpen, targetTeam, audience, audienceParam, canPost])
+
   async function handleCreate() {
     if (title.trim().length < 3 || content.trim().length < 5) {
       toast.error("Title (≥3 chars) and content (≥5 chars) are required")
@@ -81,10 +102,12 @@ export default function AnnouncementsPage() {
         content: content.trim(),
         teamId: targetTeam === "ALL" ? null : targetTeam,
         pinned,
+        audience: targetTeam === "ALL" ? audience : undefined,
+        audienceParam: targetTeam === "ALL" && audience === "byStage" ? audienceParam : undefined,
       })
       setItems((prev) => [created, ...prev])
       toast.success(targetTeam === "ALL"
-        ? "Announcement broadcast to all your supervised teams"
+        ? `Announcement sent to ${audiencePreview.length} team${audiencePreview.length === 1 ? "" : "s"}`
         : "Announcement sent to team")
       setDialogOpen(false)
       setTitle("")
@@ -198,15 +221,8 @@ export default function AnnouncementsPage() {
                 >
                   <Card className={cn(
                     "p-5 border-border/50 transition-all relative overflow-hidden",
-                    a.pinned && "border-pink-500/40 bg-pink-500/5",
+                    a.pinned && "border-pink-500/30 bg-pink-500/[0.04]",
                   )}>
-                    {a.pinned && (
-                      <div className="absolute top-3 right-3">
-                        <Badge variant="outline" className="border-pink-500/30 text-pink-500 gap-1 text-[10px]">
-                          <Pin className="h-3 w-3" /> Pinned
-                        </Badge>
-                      </div>
-                    )}
                     <div className="flex items-start gap-3">
                       <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border/40">
                         <AvatarImage src={a.author?.avatarUrl ?? undefined} />
@@ -227,6 +243,11 @@ export default function AnnouncementsPage() {
                               <Globe className="h-3 w-3" /> All supervised teams
                             </Badge>
                           )}
+                          {a.pinned && (
+                            <Badge className="gap-1 border-0 bg-pink-500/10 px-2 text-[10px] font-medium text-pink-600 shadow-none hover:bg-pink-500/10 dark:text-pink-300">
+                              <Pin className="h-3 w-3" /> Pinned
+                            </Badge>
+                          )}
                           <span className="text-xs text-muted-foreground">
                             {new Date(a.createdAt).toLocaleString()}
                           </span>
@@ -242,17 +263,19 @@ export default function AnnouncementsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className={cn("h-7 w-7", a.pinned && "text-pink-500")}
+                            className={cn("h-8 w-8 rounded-lg", a.pinned && "text-pink-500 hover:bg-pink-500/10")}
                             onClick={() => togglePin(a)}
                             title={a.pinned ? "Unpin" : "Pin"}
+                            aria-label={a.pinned ? "Unpin announcement" : "Pin announcement"}
                           >
                             <Pin className="h-3.5 w-3.5" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive"
+                            className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
                             onClick={() => handleDelete(a.id)}
+                            aria-label="Delete announcement"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -308,7 +331,7 @@ export default function AnnouncementsPage() {
                 <SelectContent>
                   <SelectItem value="ALL">
                     <span className="flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5" /> All supervised teams
+                      <Globe className="h-3.5 w-3.5" /> All supervised teams (filtered)
                     </span>
                   </SelectItem>
                   {supervisedTeams.map((t) => (
@@ -317,6 +340,54 @@ export default function AnnouncementsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {targetTeam === "ALL" && (
+              <div className="space-y-2 border-l-2 border-primary/30 pl-3">
+                <Label className="text-xs">Audience filter</Label>
+                <Select value={audience} onValueChange={(v) => setAudience(v as AnnouncementAudience)}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All my supervised teams</SelectItem>
+                    <SelectItem value="byStage">Teams in a specific SDLC stage</SelectItem>
+                    <SelectItem value="overdue">Teams with overdue deadlines</SelectItem>
+                    <SelectItem value="needsProposalApproval">Teams whose proposal isn&apos;t approved yet</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {audience === "byStage" && (
+                  <Select value={audienceParam} onValueChange={setAudienceParam}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"].map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
+                {/* Live preview */}
+                <div className="rounded-lg bg-muted/40 border border-border/40 p-2 text-xs">
+                  {previewLoading ? (
+                    <span className="text-muted-foreground">Calculating audience…</span>
+                  ) : audiencePreview.length === 0 ? (
+                    <span className="text-amber-600">⚠ This filter currently matches no teams.</span>
+                  ) : (
+                    <>
+                      <p className="font-medium mb-1">
+                        Will reach <b>{audiencePreview.length} team{audiencePreview.length === 1 ? "" : "s"}</b>:
+                      </p>
+                      <p className="text-muted-foreground line-clamp-2">
+                        {audiencePreview.map((t) => t.name).join(", ")}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
               <div>
                 <Label className="cursor-pointer flex items-center gap-2"><Pin className="h-3.5 w-3.5" /> Pin to top</Label>

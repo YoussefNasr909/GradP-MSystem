@@ -368,8 +368,16 @@ function buildFullName(u) {
   return `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim();
 }
 
-export async function getGradesOverview({ search, stage } = {}) {
+export async function getGradesOverview({ search, stage, actor, scope } = {}) {
+  // Doctor-scope filter: when `scope === "mine"` AND the actor is a doctor,
+  // restrict to teams they actually supervise. Admin always sees everything.
+  let teamWhere = {};
+  if (actor && actor.role === "DOCTOR" && scope === "mine") {
+    teamWhere = { doctorId: actor.id };
+  }
+
   const teams = await prisma.team.findMany({
+    where: teamWhere,
     select: {
       id: true,
       name: true,

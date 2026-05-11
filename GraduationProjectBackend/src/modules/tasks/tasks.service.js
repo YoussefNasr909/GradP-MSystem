@@ -1,6 +1,6 @@
 import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
-import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId } from "../teams/teams.repository.js";
+import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId, listTeams } from "../teams/teams.repository.js";
 import {
   bootstrapTaskGitHubArtifactsService,
   mergeTaskPullRequestService,
@@ -10,9 +10,11 @@ import {
 } from "../github/github.service.js";
 import {
   createTask,
+  expireOverdueTasksByTeams,
   expireOverdueTasksByTeam,
   findTaskById,
   listTasksByTeam,
+  listTasksByTeamIds,
   updateTaskById,
 } from "./tasks.repository.js";
 import { notify } from "../../common/utils/notify.js";
@@ -139,6 +141,14 @@ function canManageTaskTeam(actor, team) {
   return actor.role === ROLES.ADMIN || team?.leader?.id === actor.id;
 }
 
+function canReviewTaskTeam(actor, team) {
+  return (
+    canManageTaskTeam(actor, team) ||
+    team?.doctor?.id === actor.id ||
+    team?.ta?.id === actor.id
+  );
+}
+
 function canViewTaskTeam(actor, team) {
   if (!team) return false;
   if (canManageTaskTeam(actor, team)) return true;
@@ -194,6 +204,12 @@ function assertTaskAssignee(task, actor) {
 function assertTaskManager(task, actor) {
   if (!canManageTaskTeam(actor, task.team)) {
     throw new AppError("Only the team leader or an admin can manage this task workflow.", 403, "TASK_MANAGER_ONLY");
+  }
+}
+
+function assertTaskReviewer(task, actor) {
+  if (!canReviewTaskTeam(actor, task.team)) {
+    throw new AppError("Only an assigned reviewer can review this task.", 403, "TASK_REVIEWER_ONLY");
   }
 }
 
@@ -272,6 +288,29 @@ async function resolveActorTeamContext(actor, requestedTeamId) {
   }
 
   throw new AppError("This role is not supported for task access.", 403, "TASK_ROLE_UNSUPPORTED");
+}
+
+async function resolveActorTaskListTeamIds(actor, requestedTeamId) {
+  const normalizedRequestedTeamId = normalizeText(requestedTeamId) || null;
+
+  if (normalizedRequestedTeamId) {
+    const { team } = await resolveActorTeamContext(actor, normalizedRequestedTeamId);
+    return [team.id];
+  }
+
+  if (actor.role === ROLES.DOCTOR || actor.role === ROLES.TA || actor.role === ROLES.ADMIN) {
+    const teams = await listTeams(
+      actor.role === ROLES.DOCTOR
+        ? { doctorId: actor.id }
+        : actor.role === ROLES.TA
+          ? { taId: actor.id }
+          : {},
+    );
+    return teams.map((team) => team.id);
+  }
+
+  const { team } = await resolveActorTeamContext(actor, normalizedRequestedTeamId);
+  return [team.id];
 }
 
 function compareTasks(left, right) {
@@ -379,6 +418,7 @@ function toTaskResponse(task, actor) {
   const isAwaitingAcceptance = isGpmsManagedTask(task) && visibleStatus === "TODO" && !task.acceptedAt;
   const isAssignee = task.assigneeUserId === actor.id;
   const canManage = canManageTaskTeam(actor, task.team);
+  const canReview = canReviewTaskTeam(actor, task.team);
   const hasPastEndDate = Boolean(task.dueDate) && new Date(task.dueDate).getTime() < Date.now();
   const github = buildGitHubState(task);
   const reviewGate = github?.reviewGate ?? null;
@@ -426,10 +466,10 @@ function toTaskResponse(task, actor) {
         isAssignee &&
         task.status === "IN_PROGRESS" &&
         (!isRepoBackedTask(task) || Boolean(reviewGate?.ready)),
-      canApprove: isGpmsManagedTask(task) && canManage && task.status === "REVIEW",
+      canApprove: isGpmsManagedTask(task) && canReview && task.status === "REVIEW",
       canReject:
         isGpmsManagedTask(task) &&
-        canManage &&
+        canReview &&
         (task.status === "REVIEW" || canRejectGitHubApprovedTask),
       canEdit: isGpmsManagedTask(task) && canManage,
       canBootstrapGithub: canWriteRepoBackedTask(actor, task) && !task.githubIssueNumber,
@@ -505,11 +545,17 @@ function buildMissingGitHubReviewEvidenceMessage(task) {
 }
 
 export async function listTasksService(actor, filters) {
-  const { team } = await resolveActorTeamContext(actor, filters.teamId);
-  await expireOverdueTasksByTeam(team.id);
+  const teamIds = await resolveActorTaskListTeamIds(actor, filters.teamId);
+  if (teamIds.length === 0) return [];
+
+  if (teamIds.length === 1) {
+    await expireOverdueTasksByTeam(teamIds[0]);
+  } else {
+    await expireOverdueTasksByTeams(teamIds);
+  }
 
   const normalizedSearch = normalizeText(filters.search).toLowerCase();
-  const tasks = await listTasksByTeam(team.id);
+  const tasks = teamIds.length === 1 ? await listTasksByTeam(teamIds[0]) : await listTasksByTeamIds(teamIds);
 
   return tasks
     .filter((task) => {
@@ -715,7 +761,7 @@ export async function approveTaskService(actor, taskId, payload = {}) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskManager(task, actor);
+  assertTaskReviewer(task, actor);
 
   if (task.status !== "REVIEW") {
     throw new AppError("Only tasks in review can be approved.", 409, "TASK_NOT_IN_REVIEW");
@@ -781,7 +827,7 @@ export async function rejectTaskService(actor, taskId, payload) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskManager(task, actor);
+  assertTaskReviewer(task, actor);
 
   const canRejectCurrentStatus = task.status === "REVIEW" || (isRepoBackedTask(task) && task.status === "APPROVED");
   if (!canRejectCurrentStatus) {

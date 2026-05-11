@@ -82,6 +82,14 @@ export function listTasksByTeam(teamId, tx = prisma) {
   });
 }
 
+export function listTasksByTeamIds(teamIds, tx = prisma) {
+  return tx.task.findMany({
+    where: { teamId: { in: teamIds } },
+    orderBy: [{ createdAt: "desc" }],
+    select: taskSelect,
+  });
+}
+
 export function listRepoBackedTasksByTeam(teamId, tx = prisma) {
   return tx.task.findMany({
     where: {
@@ -151,6 +159,25 @@ export function expireOverdueTasksByTeam(teamId, now = new Date(), tx = prisma) 
   return tx.task.updateMany({
     where: {
       teamId,
+      integrationMode: "MANUAL",
+      origin: "GPMS",
+      status: "IN_PROGRESS",
+      dueDate: {
+        lt: now,
+      },
+    },
+    data: {
+      status: "TODO",
+      acceptedAt: null,
+      submittedForReviewAt: null,
+    },
+  });
+}
+
+export function expireOverdueTasksByTeams(teamIds, now = new Date(), tx = prisma) {
+  return tx.task.updateMany({
+    where: {
+      teamId: { in: teamIds },
       integrationMode: "MANUAL",
       origin: "GPMS",
       status: "IN_PROGRESS",

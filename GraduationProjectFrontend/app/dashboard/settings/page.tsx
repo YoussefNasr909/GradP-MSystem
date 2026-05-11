@@ -118,7 +118,7 @@ const DEFAULT_NOTIFICATIONS: UserSettings["notifications"] = {
 }
 
 const DEFAULT_APPEARANCE: UserSettings["appearance"] = {
-  theme: "system",
+  theme: "light",
   fontSize: 16,
   compactMode: false,
   reducedMotion: false,
@@ -231,7 +231,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams()
   const { currentUser, accessToken, rememberSession, setAuth, logout } = useAuthStore()
   const { settings, isLoading, isSaving, error, loadSettings, saveSettings } = useSettingsStore()
-  const { theme: activeTheme, setTheme } = useTheme()
+  const { theme: activeTheme, resolvedTheme, setTheme } = useTheme()
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed)
   const inAppNotifications = useUIStore((state) => state.inAppNotifications)
   const setInAppNotifications = useUIStore((state) => state.setInAppNotifications)
@@ -300,17 +300,24 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!settings) return
     setNotifications(settings.notifications)
-    setAppearance(settings.appearance)
+    const resolvedSavedTheme =
+      settings.appearance.theme === "system"
+        ? resolvedTheme === "dark"
+          ? "dark"
+          : "light"
+        : settings.appearance.theme
+    setAppearance({ ...settings.appearance, theme: resolvedSavedTheme })
     setPrivacy(settings.privacy)
     setSecurity(settings.security)
-  }, [settings])
+  }, [resolvedTheme, settings])
 
   // Keep appearance.theme in sync when theme changes from navbar
   useEffect(() => {
     if (!activeTheme) return
+    if (activeTheme !== "light" && activeTheme !== "dark") return
     setAppearance((current) => {
       if (current.theme === activeTheme) return current
-      return { ...current, theme: activeTheme as "light" | "dark" | "system" }
+      return { ...current, theme: activeTheme }
     })
   }, [activeTheme])
 
@@ -477,6 +484,8 @@ export default function SettingsPage() {
       setSavingSection(null)
     }
   }
+
+  const selectedTheme = activeTheme === "dark" || activeTheme === "light" ? activeTheme : appearance.theme
 
   const savePrivacy = async () => {
     setSavingSection("privacy")
@@ -901,10 +910,9 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <SectionHeader title="Theme" description="Choose the color mode ProjectHub should use." />
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <ThemeButton icon={Sun} label="Light" selected={(activeTheme ?? appearance.theme) === "light"} onClick={() => { setTheme("light"); setAppearance((current) => ({ ...current, theme: "light" })) }} />
-                  <ThemeButton icon={Moon} label="Dark" selected={(activeTheme ?? appearance.theme) === "dark"} onClick={() => { setTheme("dark"); setAppearance((current) => ({ ...current, theme: "dark" })) }} />
-                  <ThemeButton icon={Monitor} label="System" selected={(activeTheme ?? appearance.theme) === "system"} onClick={() => { setTheme("system"); setAppearance((current) => ({ ...current, theme: "system" })) }} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ThemeButton icon={Sun} label="Light" selected={selectedTheme === "light"} onClick={() => { setTheme("light"); setAppearance((current) => ({ ...current, theme: "light" })) }} />
+                  <ThemeButton icon={Moon} label="Dark" selected={selectedTheme === "dark"} onClick={() => { setTheme("dark"); setAppearance((current) => ({ ...current, theme: "dark" })) }} />
                 </div>
 
                 <div className={panelClassName}>

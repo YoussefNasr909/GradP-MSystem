@@ -104,7 +104,14 @@ export interface Announcement {
 export const announcementsApi = {
   list: () => apiRequest<Announcement[]>("/announcements"),
 
-  create: (payload: { title: string; content: string; teamId?: string | null; pinned?: boolean }) =>
+  create: (payload: {
+    title: string
+    content: string
+    teamId?: string | null
+    pinned?: boolean
+    audience?: "all" | "byStage" | "overdue" | "needsProposalApproval"
+    audienceParam?: string
+  }) =>
     apiRequest<Announcement>("/announcements", { method: "POST", body: payload }),
 
   update: (id: string, payload: { title?: string; content?: string; pinned?: boolean }) =>
@@ -130,6 +137,97 @@ export interface ActivityEvent {
 export const activityApi = {
   forTeam: (teamId: string) =>
     apiRequest<ActivityEvent[]>(`/admin/teams/${encodeURIComponent(teamId)}/activity`),
+}
+
+// ─── Submission Comments ─────────────────────────────────────────────────────
+
+export interface SubmissionComment {
+  id: string
+  submissionId: string
+  authorUserId: string
+  authorRole: string
+  content: string
+  createdAt: string
+  updatedAt: string
+  author: SupervisorNoteUser | null
+}
+
+export const submissionCommentsApi = {
+  list: (submissionId: string) =>
+    apiRequest<SubmissionComment[]>(`/submission-comments?submissionId=${encodeURIComponent(submissionId)}`),
+
+  create: (submissionId: string, content: string) =>
+    apiRequest<SubmissionComment>("/submission-comments", {
+      method: "POST",
+      body: { submissionId, content },
+    }),
+
+  delete: (id: string) =>
+    apiRequest<{ ok: true }>(`/submission-comments/${id}`, { method: "DELETE" }),
+}
+
+// ─── Rubric Templates ────────────────────────────────────────────────────────
+
+export interface RubricTemplate {
+  id: string
+  teamId: string
+  deliverableType: DeliverableType
+  rubric: { name: string; score: number; maxScore: number }[]
+  createdByUserId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const rubricTemplatesApi = {
+  list: (teamId: string) =>
+    apiRequest<RubricTemplate[]>(`/rubric-templates?teamId=${encodeURIComponent(teamId)}`),
+
+  upsert: (payload: { teamId: string; deliverableType: DeliverableType; rubric: { name: string; score: number; maxScore: number }[] }) =>
+    apiRequest<RubricTemplate>("/rubric-templates", { method: "POST", body: payload }),
+
+  delete: (id: string) =>
+    apiRequest<{ ok: true }>(`/rubric-templates/${id}`, { method: "DELETE" }),
+}
+
+// ─── Audience Preview (for smart announcement targeting) ─────────────────────
+
+export type AnnouncementAudience = "all" | "byStage" | "overdue" | "needsProposalApproval"
+
+export interface AudiencePreviewTeam {
+  id: string
+  name: string
+  stage: string
+}
+
+export const audienceApi = {
+  preview: (audience: AnnouncementAudience, audienceParam?: string) => {
+    const q = new URLSearchParams({ audience })
+    if (audienceParam) q.set("audienceParam", audienceParam)
+    return apiRequest<AudiencePreviewTeam[]>(`/announcements/audience-preview?${q.toString()}`)
+  },
+}
+
+// ─── Meeting conflict checker ────────────────────────────────────────────────
+
+export interface MeetingConflict {
+  id: string
+  title: string
+  startAt: string
+  endAt: string
+  mode: string
+  status: string
+  team: { id: string; name: string } | null
+  participants: { userId: string | null; displayName: string | null }[]
+}
+
+export const meetingConflictApi = {
+  check: (startAt: string, endAt: string, userIds: string[]) => {
+    const q = new URLSearchParams({
+      startAt, endAt,
+      userIds: userIds.join(","),
+    })
+    return apiRequest<MeetingConflict[]>(`/meetings/conflict-check?${q.toString()}`)
+  },
 }
 
 // ─── PDF Report Card ─────────────────────────────────────────────────────────

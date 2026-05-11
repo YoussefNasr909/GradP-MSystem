@@ -47,7 +47,11 @@ import {
   FileText,
   MessageSquare,
   Award,
+  Unlock,
+  Calendar,
+  Send,
 } from "lucide-react"
+import Link from "next/link"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { motion } from "framer-motion"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
@@ -59,8 +63,13 @@ import {
   type ApiSubmissionStatus,
   type RubricItem,
 } from "@/lib/api/submissions"
+import {
+  submissionCommentsApi,
+  type SubmissionComment,
+} from "@/lib/api/supervisor-tools"
 import type { ApiTeamStage } from "@/lib/api/types"
 import { toast } from "sonner"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const DELIVERABLE_META: Record<
   ApiDeliverableType,
@@ -126,6 +135,118 @@ function formatFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function commentInitials(n: string) {
+  return n.split(" ").map(p => p[0]).join("").toUpperCase().slice(0, 2)
+}
+
+// ─── Submission Comments Thread ──────────────────────────────────────────────
+function SubmissionCommentsThread({ submissionId }: { submissionId: string }) {
+  const { currentUser } = useAuthStore()
+  const [comments, setComments] = useState<SubmissionComment[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [input,    setInput]    = useState("")
+  const [posting,  setPosting]  = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    submissionCommentsApi.list(submissionId)
+      .then((c) => { if (!cancelled) setComments(c) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [submissionId])
+
+  async function handlePost() {
+    if (input.trim().length === 0) return
+    setPosting(true)
+    try {
+      const c = await submissionCommentsApi.create(submissionId, input.trim())
+      setComments((prev) => [...prev, c])
+      setInput("")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to post comment")
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this comment?")) return
+    try {
+      await submissionCommentsApi.delete(id)
+      setComments((prev) => prev.filter((c) => c.id !== id))
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete")
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border/40 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+        <MessageSquare className="h-3.5 w-3.5" /> Discussion
+        {comments.length > 0 && <Badge variant="secondary" className="text-[10px]">{comments.length}</Badge>}
+      </p>
+
+      {loading ? (
+        <div className="space-y-2">
+          <div className="h-12 bg-muted/40 rounded animate-pulse" />
+          <div className="h-12 bg-muted/40 rounded animate-pulse" />
+        </div>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic mb-3">No comments yet. Start the conversation.</p>
+      ) : (
+        <div className="space-y-2 mb-3 max-h-72 overflow-y-auto">
+          {comments.map((c) => (
+            <div key={c.id} className="flex items-start gap-2.5">
+              <Avatar className="h-7 w-7 shrink-0">
+                <AvatarImage src={c.author?.avatarUrl ?? undefined} />
+                <AvatarFallback className="text-[9px]">{commentInitials(c.author?.fullName ?? "?")}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-xs font-semibold">{c.author?.fullName ?? "Unknown"}</span>
+                  <Badge variant="outline" className="text-[9px] capitalize">{c.authorRole.toLowerCase()}</Badge>
+                  <span className="text-[10px] text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</span>
+                  {c.authorUserId === currentUser?.id && (
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      className="ml-auto text-[10px] text-muted-foreground hover:text-destructive"
+                    >
+                      delete
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{c.content}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Write a comment..."
+          className="resize-none text-sm"
+          rows={2}
+          maxLength={2000}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              void handlePost()
+            }
+          }}
+        />
+        <Button size="sm" onClick={handlePost} disabled={posting || input.trim().length === 0}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+      <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl + Enter to post</p>
+    </div>
+  )
+}
+
 // ─── Submission Detail Dialog ────────────────────────────────────────────────
 function SubmissionDetailDialog({
   submissions,
@@ -168,6 +289,11 @@ function SubmissionDetailDialog({
   const [doctorRubric, setDoctorRubric] = useState<RubricItem[]>([])
   const [taRubric,     setTaRubric]     = useState<RubricItem[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Unlock dialog state
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [unlockReason, setUnlockReason] = useState("")
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -525,6 +651,115 @@ function SubmissionDetailDialog({
                   </motion.div>
                 )}
 
+                {/* ── Grade history (audit trail) ── */}
+                {submission.gradeHistory && submission.gradeHistory.length > 0 && (
+                  <div className="rounded-xl border border-border/40 p-3">
+                    <button
+                      onClick={() => setHistoryOpen((v) => !v)}
+                      className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                    >
+                      <Clock className="h-3 w-3" />
+                      {historyOpen ? "Hide" : "Show"} grade history ({submission.gradeHistory.length} entr{submission.gradeHistory.length === 1 ? "y" : "ies"})
+                    </button>
+                    {historyOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        className="mt-3 space-y-2"
+                      >
+                        {submission.gradeHistory.map((h, i) => (
+                          <div key={i} className="text-xs p-2 rounded-lg bg-muted/40">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-[10px] capitalize">{h.event}</Badge>
+                              <span className="text-muted-foreground">{new Date(h.at).toLocaleString()}</span>
+                              <span className="text-muted-foreground">· by {h.byName}</span>
+                            </div>
+                            {h.event === "unlocked" && (
+                              <>
+                                <p>Reverted from grade <b>{h.snapshotGrade}/100</b></p>
+                                {h.reason && <p className="text-muted-foreground italic mt-1">Reason: {h.reason}</p>}
+                              </>
+                            )}
+                            {h.event === "regraded" && (
+                              <>
+                                <p>Changed from <b>{h.previousGrade}/100</b> → <b>{h.newGrade}/100</b></p>
+                                {h.reason && <p className="text-muted-foreground italic mt-1">Reason: {h.reason}</p>}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Defense meeting (DEPLOYMENT phase only) ── */}
+                {submission.sdlcPhase === "DEPLOYMENT" && (
+                  <div className="rounded-xl border border-border/40 p-3 bg-purple-50/30 dark:bg-purple-950/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5" /> Defense Meeting
+                      </p>
+                    </div>
+                    {submission.defenseMeeting ? (
+                      <div className="text-sm space-y-1">
+                        <p className="font-semibold">{submission.defenseMeeting.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(submission.defenseMeeting.startAt).toLocaleString()} · {submission.defenseMeeting.mode} · status: <b>{submission.defenseMeeting.status}</b>
+                        </p>
+                        {submission.defenseMeeting.joinUrl && (
+                          <a
+                            href={submission.defenseMeeting.joinUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                          >
+                            Open meeting link <Eye className="h-3 w-3" />
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        No defense meeting linked yet.
+                        {(isDoctor || userRole === "TA") && (
+                          <Link
+                            href={`/dashboard/meetings?createForSubmission=${submission.id}&teamId=${submission.teamId}`}
+                            className="block mt-2 text-primary hover:underline"
+                          >
+                            Schedule defense meeting →
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                    {submission.sdlcPhase === "DEPLOYMENT" && submission.defenseMeeting && submission.defenseMeeting.status !== "COMPLETED" && submission.status !== "APPROVED" && (
+                      <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-2">
+                        ⚠ Grade can&apos;t be finalized until the defense meeting is marked COMPLETED.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Comments thread ── */}
+                <SubmissionCommentsThread submissionId={submission.id} />
+
+                {/* ── Unlock approved grade (doctor only) ── */}
+                {canGrade && isDoctor && submission.status === "APPROVED" && isLatest && (
+                  <div className="pt-6 border-t mt-8">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="w-full border-amber-500/30 text-amber-700 dark:text-amber-500 hover:bg-amber-500/10"
+                      onClick={() => { setOpen(false); setUnlockOpen(true) }}
+                    >
+                      <Unlock className="h-5 w-5 mr-2" />
+                      Unlock to revise grade
+                    </Button>
+                    <p className="text-[10px] text-muted-foreground text-center mt-2">
+                      Use this if the grade needs to be revised after the fact. The current grade will be archived.
+                    </p>
+                  </div>
+                )}
+
                 {/* ── Actions (branch by role) ── */}
                 {canGrade && submission.status !== "APPROVED" && isLatest && (
                   <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-8">
@@ -722,6 +957,62 @@ function SubmissionDetailDialog({
                 onClick={() => setTaReviewDialogOpen(false)}
                 disabled={loading}
               >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unlock Dialog */}
+      <Dialog open={unlockOpen} onOpenChange={setUnlockOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Unlock className="h-5 w-5 text-amber-500" />
+              Unlock Grade
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              The current grade of <b>{submission.grade}/100</b> will be archived. You can then assign a new grade.
+            </p>
+            <div>
+              <Label>Reason (min 5 chars)</Label>
+              <Textarea
+                value={unlockReason}
+                onChange={(e) => setUnlockReason(e.target.value)}
+                placeholder="e.g. Student appealed the grade — found a calculation error in rubric."
+                className="mt-1.5 resize-none"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  if (unlockReason.trim().length < 5) {
+                    toast.error("Reason must be at least 5 characters")
+                    return
+                  }
+                  setLoading(true)
+                  try {
+                    const updated = await submissionsApi.unlock(submission.id, { reason: unlockReason.trim() })
+                    onGraded(updated)
+                    setUnlockOpen(false)
+                    setUnlockReason("")
+                    toast.success("Submission unlocked for revision")
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to unlock")
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+                disabled={loading}
+                className="flex-1 bg-amber-600 hover:bg-amber-700"
+              >
+                {loading ? "Unlocking..." : "Unlock"}
+              </Button>
+              <Button variant="outline" onClick={() => setUnlockOpen(false)} disabled={loading}>
                 Cancel
               </Button>
             </div>

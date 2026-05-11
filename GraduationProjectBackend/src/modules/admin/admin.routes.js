@@ -43,14 +43,17 @@ router.get("/logs/activity", allowRoles(ROLES.ADMIN), async (req, res, next) => 
   }
 });
 
-// GET /admin/grades-overview?search=...&stage=DESIGN
-// Visible to admin AND doctors (they need to see team grades).
+// GET /admin/grades-overview?search=...&stage=DESIGN&scope=mine
+// Visible to admin AND doctors. Doctors can pass `scope=mine` to see only
+// the teams they actually supervise.
 router.get("/grades-overview", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
   try {
-    const { search, stage } = req.query;
+    const { search, stage, scope } = req.query;
     const result = await getGradesOverview({
       search: search || undefined,
       stage: stage || undefined,
+      scope: scope || undefined,
+      actor: req.user,
     });
     res.json({ ok: true, data: result });
   } catch (err) {

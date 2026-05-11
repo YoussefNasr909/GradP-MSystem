@@ -121,8 +121,21 @@ function StatCard({
 
 // ─── Team Row Card ──────────────────────────────────────────────────────────
 
-function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
+function TeamRow({
+  row,
+  index,
+  selectedIds,
+  onToggleSelect,
+  isDoctorView,
+}: {
+  row: GradesOverviewRow
+  index: number
+  selectedIds: Set<string>
+  onToggleSelect: (id: string) => void
+  isDoctorView: boolean
+}) {
   const [downloading, setDownloading] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   async function handleDownloadPdf() {
     setDownloading(true)
     try {
@@ -134,6 +147,8 @@ function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
       setDownloading(false)
     }
   }
+
+  const pendingDoctorSubs = row.submissions.filter((s) => s.status === "UNDER_REVIEW")
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -268,6 +283,51 @@ function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
             </div>
           </div>
         )}
+
+        {/* Pending submissions awaiting doctor's final grade (only visible to doctor) */}
+        {isDoctorView && pendingDoctorSubs.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-border/40">
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setExpanded((v) => !v) }}
+            >
+              {expanded ? "Hide" : "Show"} {pendingDoctorSubs.length} pending submission{pendingDoctorSubs.length === 1 ? "" : "s"}
+            </button>
+            {expanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="mt-2 space-y-1.5"
+              >
+                {pendingDoctorSubs.map((s) => (
+                  <label
+                    key={s.id}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg border border-border/40 cursor-pointer transition-colors",
+                      selectedIds.has(s.id) ? "bg-amber-500/10 border-amber-500/40" : "hover:bg-muted/40",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => onToggleSelect(s.id)}
+                    />
+                    <Badge variant="outline" className="text-[10px]">{s.deliverableType}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {s.taRecommendedGrade !== null
+                        ? <>TA recommended: <span className="font-semibold text-foreground">{s.taRecommendedGrade}/100</span></>
+                        : "No TA recommendation"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      {s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : ""}
+                    </span>
+                  </label>
+                ))}
+              </motion.div>
+            )}
+          </div>
+        )}
       </Card>
     </motion.div>
   )
@@ -285,16 +345,30 @@ export default function GradesOverviewPage() {
   const [refreshing, setRefreshing] = useState(false)
 
   const canView = currentUser?.role === "admin" || currentUser?.role === "doctor"
+  const isDoctor = currentUser?.role === "doctor"
+
+  // Doctors default to "my teams" scope; admins default to "all"
+  const [scope, setScope] = useState<"mine" | "all">(isDoctor ? "mine" : "all")
+
+  // Bulk-approve state
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set())
+  const [bulkApproving, setBulkApproving] = useState(false)
 
   const fetchData = useCallback(async () => {
     setError(false)
     try {
-      const res = await gradesOverviewApi.get({ search: search || undefined, stage: stageFilter })
+      const res = await gradesOverviewApi.get({
+        search: search || undefined,
+        stage: stageFilter,
+        scope: isDoctor ? scope : undefined,
+      })
       setData(res)
+      // Clear any selections that no longer exist after filter change
+      setSelectedSubmissionIds(new Set())
     } catch {
       setError(true)
     }
-  }, [search, stageFilter])
+  }, [search, stageFilter, isDoctor, scope])
 
   useEffect(() => {
     if (!canView) return
@@ -439,6 +513,28 @@ export default function GradesOverviewPage() {
               ))}
             </SelectContent>
           </Select>
+          {isDoctor && (
+            <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
+              <button
+                onClick={() => setScope("mine")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  scope === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                My teams
+              </button>
+              <button
+                onClick={() => setScope("all")}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                  scope === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                All teams
+              </button>
+            </div>
+          )}
           {(search || stageFilter !== "all") && (
             <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStageFilter("all") }}>
               <Filter className="h-4 w-4 mr-1.5" />
@@ -447,6 +543,73 @@ export default function GradesOverviewPage() {
           )}
         </div>
       </Card>
+
+      {/* Bulk approve banner — appears when there are UNDER_REVIEW submissions awaiting doctor */}
+      {isDoctor && data && (() => {
+        const pendingDoctorIds = data.rows.flatMap((r) =>
+          r.submissions.filter((s) => s.status === "UNDER_REVIEW").map((s) => s.id),
+        )
+        if (pendingDoctorIds.length === 0 && selectedSubmissionIds.size === 0) return null
+        const allSelected = pendingDoctorIds.length > 0 && pendingDoctorIds.every((id) => selectedSubmissionIds.has(id))
+        return (
+          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className={cn(
+              "p-4 border-amber-500/30 bg-amber-500/5",
+              selectedSubmissionIds.size > 0 && "border-amber-500/50",
+            )}>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={allSelected}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedSubmissionIds(new Set(pendingDoctorIds))
+                      else setSelectedSubmissionIds(new Set())
+                    }}
+                  />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {selectedSubmissionIds.size > 0
+                        ? `${selectedSubmissionIds.size} submission${selectedSubmissionIds.size === 1 ? "" : "s"} selected`
+                        : `${pendingDoctorIds.length} submission${pendingDoctorIds.length === 1 ? "" : "s"} awaiting your final grade`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Bulk approval uses each TA&apos;s recommended grade (or 85 if none).
+                    </p>
+                  </div>
+                </div>
+                {selectedSubmissionIds.size > 0 && (
+                  <Button
+                    size="sm"
+                    className="bg-amber-600 hover:bg-amber-700"
+                    disabled={bulkApproving}
+                    onClick={async () => {
+                      setBulkApproving(true)
+                      try {
+                        const ids = Array.from(selectedSubmissionIds)
+                        const { submissionsApi } = await import("@/lib/api/submissions")
+                        const result = await submissionsApi.bulkApprove({ submissionIds: ids })
+                        toast.success(
+                          `Approved ${result.approved.length}${result.skipped.length > 0 ? ` (skipped ${result.skipped.length})` : ""}`,
+                        )
+                        setSelectedSubmissionIds(new Set())
+                        await fetchData()
+                      } catch (e: any) {
+                        toast.error(e?.message ?? "Bulk approve failed")
+                      } finally {
+                        setBulkApproving(false)
+                      }
+                    }}
+                  >
+                    {bulkApproving ? "Approving…" : `Approve ${selectedSubmissionIds.size} selected`}
+                  </Button>
+                )}
+              </div>
+            </Card>
+          </motion.div>
+        )
+      })()}
 
       {/* Team rows */}
       {loading ? (
@@ -470,7 +633,20 @@ export default function GradesOverviewPage() {
         <div className="space-y-3">
           <AnimatePresence mode="popLayout" initial={false}>
             {data.rows.map((row, i) => (
-              <TeamRow key={row.teamId} row={row} index={i} />
+              <TeamRow
+                key={row.teamId}
+                row={row}
+                index={i}
+                isDoctorView={isDoctor}
+                selectedIds={selectedSubmissionIds}
+                onToggleSelect={(id) => {
+                  setSelectedSubmissionIds((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(id)) next.delete(id); else next.add(id)
+                    return next
+                  })
+                }}
+              />
             ))}
           </AnimatePresence>
         </div>

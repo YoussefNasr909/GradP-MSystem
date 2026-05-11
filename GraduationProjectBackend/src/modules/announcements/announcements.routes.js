@@ -9,6 +9,7 @@ import {
   createAnnouncementService,
   updateAnnouncementService,
   deleteAnnouncementService,
+  previewAudienceService,
 } from "./announcements.service.js";
 
 const createSchema = z.object({
@@ -19,6 +20,8 @@ const createSchema = z.object({
     content: z.string().trim().min(5).max(5000),
     teamId:  z.string().trim().min(1).optional().nullable(),
     pinned:  z.boolean().optional(),
+    audience: z.enum(["all", "byStage", "overdue", "needsProposalApproval"]).optional(),
+    audienceParam: z.string().trim().optional(),
   }),
 });
 
@@ -47,6 +50,20 @@ router.get("/", async (req, res, next) => {
     res.json({ ok: true, data });
   } catch (err) { next(err); }
 });
+
+router.get(
+  "/audience-preview",
+  allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN),
+  async (req, res, next) => {
+    try {
+      const data = await previewAudienceService(req.user, {
+        audience: req.query.audience,
+        audienceParam: req.query.audienceParam,
+      });
+      res.json({ ok: true, data });
+    } catch (err) { next(err); }
+  },
+);
 
 router.post(
   "/",

@@ -48,6 +48,24 @@ export const submissionSelect = {
   // Rubric (Json [{ name, score, maxScore }])
   rubric: true,
 
+  // Grade audit trail (Json [{event, ...}])
+  gradeHistory: true,
+
+  // Defense meeting link (DEPLOYMENT-phase only)
+  defenseMeetingId: true,
+  defenseMeeting: {
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      startAt: true,
+      endAt: true,
+      mode: true,
+      joinUrl: true,
+      location: true,
+    },
+  },
+
   createdAt: true,
   updatedAt: true,
   submittedByUserId: true,

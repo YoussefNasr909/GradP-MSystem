@@ -212,10 +212,11 @@ export const analyticsApi = {
 }
 
 export const gradesOverviewApi = {
-  get: (params?: { search?: string; stage?: string }) => {
+  get: (params?: { search?: string; stage?: string; scope?: "mine" | "all" }) => {
     const q = new URLSearchParams()
     if (params?.search) q.set("search", params.search)
     if (params?.stage && params.stage !== "all") q.set("stage", params.stage)
+    if (params?.scope === "mine") q.set("scope", "mine")
     const qs = q.toString()
     return apiRequest<GradesOverviewResponse>(qs ? `/admin/grades-overview?${qs}` : "/admin/grades-overview")
   },
