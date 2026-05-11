@@ -94,15 +94,18 @@ const navigationGroups = [
         icon: Calendar,
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
-      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "ta", "leader"] },
+      // Proposals — created by leader, reviewed by doctor only (TA is not in the proposal loop)
+      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "leader", "member"] },
       {
         name: "Submissions",
         href: "/dashboard/submissions",
         icon: Upload,
         roles: ["leader", "member", "doctor", "ta"],
       },
+      // Review Work — TA-only (their main job: first-pass review of tasks/PRs)
       { name: "Review Work", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta"] },
-      { name: "Evaluations", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor", "ta"] },
+      // Grades Overview (formerly Evaluations) — admin + doctor only (final grade owner)
+      { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
       {
         name: "Meetings",
         href: "/dashboard/meetings",
@@ -135,7 +138,8 @@ const navigationGroups = [
     items: [
       { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor", "ta", "leader"] },
       { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor", "ta", "leader"] },
-      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor"] },
+      // Risks — created by leader, approved by doctor (TA is not the risk approver)
+      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
       { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
     ],

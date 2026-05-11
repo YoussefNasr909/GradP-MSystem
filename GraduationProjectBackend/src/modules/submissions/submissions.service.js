@@ -92,7 +92,19 @@ function toSubmissionResponse(submission) {
     reviewedBy: submission.reviewedBy
       ? { ...submission.reviewedBy, fullName: buildFullName(submission.reviewedBy) }
       : null,
+    taReviewedBy: submission.taReviewedBy
+      ? { ...submission.taReviewedBy, fullName: buildFullName(submission.taReviewedBy) }
+      : null,
   };
+}
+
+function normalizeRubric(rubric) {
+  if (!Array.isArray(rubric)) return null;
+  return rubric.map((item) => ({
+    name: String(item.name),
+    score: Number(item.score),
+    maxScore: Number(item.maxScore),
+  }));
 }
 
 export function getLatestPhaseSubmission(submissions = []) {
@@ -268,9 +280,75 @@ async function assertSupervisorForTeam(actor, teamId) {
   }
 }
 
-export async function gradeSubmissionService(actor, submissionId, { grade, feedback }) {
-  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
-    throw new AppError("Only supervisors can grade submissions.", 403, "SUBMISSION_GRADE_FORBIDDEN");
+/**
+ * TA first-pass review.
+ * TA submits a *recommendation* \u2014 grade is NOT final.
+ * Status moves to UNDER_REVIEW so the doctor knows to finalize.
+ */
+export async function taReviewSubmissionService(actor, submissionId, { recommendedGrade, feedback, rubric }) {
+  if (actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team TA can submit a first-pass review.", 403, "SUBMISSION_TA_REVIEW_FORBIDDEN");
+  }
+
+  const submission = await findSubmissionById(submissionId);
+  if (!submission) {
+    throw new AppError("Submission not found.", 404, "SUBMISSION_NOT_FOUND");
+  }
+
+  await assertSupervisorForTeam(actor, submission.teamId);
+
+  if (submission.status === "APPROVED") {
+    throw new AppError("This submission is already finalized by the doctor.", 409, "SUBMISSION_ALREADY_APPROVED");
+  }
+
+  const normalizedRubric = normalizeRubric(rubric);
+
+  const updated = await updateSubmission(submissionId, {
+    taRecommendedGrade: recommendedGrade,
+    taFeedback: feedback || null,
+    taReviewedByUserId: actor.id,
+    taReviewedAt: new Date(),
+    status: "UNDER_REVIEW",
+    ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
+  });
+
+  // Notify the doctor that a TA recommendation is ready
+  const team = await prisma.team.findUnique({
+    where: { id: submission.teamId },
+    select: { doctorId: true },
+  });
+  if (team?.doctorId) {
+    await notify({
+      userId: team.doctorId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "TA Review Ready for Final Grade",
+      message: `${buildFullName(actor)} reviewed "${submission.deliverableType}" and recommended ${recommendedGrade}/100. Awaiting your final grade.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  // Also let the submitter know review is in progress
+  const submitterUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
+  if (submitterUserId) {
+    await notify({
+      userId: submitterUserId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "Submission Under Review",
+      message: `Your "${submission.deliverableType}" submission has been reviewed by the TA and is awaiting the doctor's final grade.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  return toSubmissionResponse(updated);
+}
+
+/**
+ * Doctor final grade.
+ * Doctor sets the authoritative grade and approves the submission.
+ */
+export async function gradeSubmissionService(actor, submissionId, { grade, feedback, rubric }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can finalize the grade.", 403, "SUBMISSION_GRADE_FORBIDDEN");
   }
 
   const submission = await findSubmissionById(submissionId);
@@ -284,18 +362,21 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     throw new AppError("This submission is already approved.", 409, "SUBMISSION_ALREADY_APPROVED");
   }
 
+  const normalizedRubric = normalizeRubric(rubric);
+
   const updated = await updateSubmission(submissionId, {
     grade,
     feedback: feedback || null,
     status: "APPROVED",
     reviewedByUserId: actor.id,
     reviewedAt: new Date(),
+    ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
   });
 
   // Notify the submitter their submission was graded
   const submitterUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
   if (submitterUserId) {
-    const gradeText = grade !== null && grade !== undefined ? ` \u2014 Grade: ${grade}` : "";
+    const gradeText = ` \u2014 Grade: ${grade}/100`;
     await notify({
       userId: submitterUserId,
       type: "SUBMISSION_GRADED",

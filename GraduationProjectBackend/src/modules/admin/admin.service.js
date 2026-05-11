@@ -1,4 +1,4 @@
-import prisma from "../../config/db.js";
+import { prisma } from "../../loaders/dbLoader.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -348,4 +348,142 @@ export async function getUserActivity({ page = 1, limit = 50, search, role } = {
   const paginated = applyPagination(filtered, page, limit);
 
   return { activities: paginated, total, page, limit };
+}
+
+// ─── Grades Overview ─────────────────────────────────────────────────────────
+//
+// Returns one row per team with all their graded/pending submissions,
+// aggregated stats, and a weighted final score per SDLC phase.
+
+const PHASE_WEIGHTS = {
+  REQUIREMENTS:   0.15,
+  DESIGN:         0.20,
+  IMPLEMENTATION: 0.30,
+  TESTING:        0.15,
+  DEPLOYMENT:     0.20,
+  MAINTENANCE:    0.00,
+};
+
+function buildFullName(u) {
+  return `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim();
+}
+
+export async function getGradesOverview({ search, stage } = {}) {
+  const teams = await prisma.team.findMany({
+    select: {
+      id: true,
+      name: true,
+      stage: true,
+      leader:  { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      doctor:  { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      ta:      { select: { id: true, firstName: true, lastName: true, avatarUrl: true } },
+      members: { select: { user: { select: { id: true } } } },
+      submissions: {
+        select: {
+          id: true,
+          deliverableType: true,
+          sdlcPhase: true,
+          status: true,
+          grade: true,
+          taRecommendedGrade: true,
+          version: true,
+          submittedAt: true,
+          reviewedAt: true,
+          taReviewedAt: true,
+        },
+        orderBy: [{ sdlcPhase: "asc" }, { submittedAt: "desc" }],
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const rows = teams.map((team) => {
+    const graded   = team.submissions.filter((s) => s.status === "APPROVED" && s.grade !== null);
+    const pending  = team.submissions.filter((s) => s.status === "PENDING");
+    const under    = team.submissions.filter((s) => s.status === "UNDER_REVIEW");
+    const revision = team.submissions.filter((s) => s.status === "REVISION_REQUIRED");
+
+    const averageGrade = graded.length
+      ? Math.round(graded.reduce((sum, s) => sum + (s.grade ?? 0), 0) / graded.length)
+      : null;
+
+    // Phase scores = mean grade per phase for APPROVED submissions
+    const phaseScores = {};
+    for (const s of graded) {
+      if (!phaseScores[s.sdlcPhase]) {
+        phaseScores[s.sdlcPhase] = { total: 0, count: 0 };
+      }
+      phaseScores[s.sdlcPhase].total += s.grade ?? 0;
+      phaseScores[s.sdlcPhase].count += 1;
+    }
+    const phaseAverages = {};
+    Object.entries(phaseScores).forEach(([phase, { total, count }]) => {
+      phaseAverages[phase] = Math.round(total / count);
+    });
+
+    // Weighted final = sum(weight × phase_avg) / sum(weights with grades)
+    let weightedTotal = 0;
+    let usedWeights = 0;
+    Object.entries(phaseAverages).forEach(([phase, avg]) => {
+      const w = PHASE_WEIGHTS[phase] ?? 0;
+      weightedTotal += w * avg;
+      usedWeights += w;
+    });
+    const weightedFinal = usedWeights > 0 ? Math.round(weightedTotal / usedWeights) : null;
+
+    return {
+      teamId: team.id,
+      teamName: team.name,
+      stage: team.stage,
+      memberCount: team.members.length + 1,
+      leader:  team.leader  ? { ...team.leader,  fullName: buildFullName(team.leader)  } : null,
+      doctor:  team.doctor  ? { ...team.doctor,  fullName: buildFullName(team.doctor)  } : null,
+      ta:      team.ta      ? { ...team.ta,      fullName: buildFullName(team.ta)      } : null,
+      stats: {
+        approved:       graded.length,
+        pendingReview:  pending.length,
+        underReview:    under.length,
+        needsRevision:  revision.length,
+        total:          team.submissions.length,
+      },
+      averageGrade,
+      weightedFinal,
+      phaseAverages,
+      submissions: team.submissions,
+    };
+  });
+
+  let filtered = rows;
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(
+      (r) =>
+        r.teamName.toLowerCase().includes(q) ||
+        r.leader?.fullName?.toLowerCase().includes(q) ||
+        r.doctor?.fullName?.toLowerCase().includes(q),
+    );
+  }
+  if (stage && stage !== "all") {
+    filtered = filtered.filter((r) => r.stage === stage);
+  }
+
+  // Global stats across all teams (before search filter)
+  const allGraded = rows.flatMap((r) =>
+    r.submissions.filter((s) => s.status === "APPROVED" && s.grade !== null),
+  );
+  const globalAverage = allGraded.length
+    ? Math.round(allGraded.reduce((sum, s) => sum + (s.grade ?? 0), 0) / allGraded.length)
+    : 0;
+
+  const summary = {
+    totalTeams: rows.length,
+    teamsWithGrades: rows.filter((r) => r.averageGrade !== null).length,
+    globalAverage,
+    totalApproved:       allGraded.length,
+    totalPendingReview:  rows.reduce((s, r) => s + r.stats.pendingReview,  0),
+    totalUnderReview:    rows.reduce((s, r) => s + r.stats.underReview,    0),
+    totalNeedsRevision:  rows.reduce((s, r) => s + r.stats.needsRevision,  0),
+  };
+
+  return { rows: filtered, summary };
 }

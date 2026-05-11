@@ -99,3 +99,70 @@ export const adminLogsApi = {
   getUserActivity: (params?: Parameters<typeof buildActivityQuery>[0]) =>
     apiRequest<UserActivityResponse>(buildActivityQuery(params ?? {})),
 }
+
+// ─── Grades Overview (admin + doctor) ────────────────────────────────────────
+
+export interface GradesOverviewUserRef {
+  id: string
+  firstName: string
+  lastName: string
+  avatarUrl: string | null
+  fullName: string
+}
+
+export interface GradesOverviewSubmission {
+  id: string
+  deliverableType: string
+  sdlcPhase: string
+  status: string
+  grade: number | null
+  taRecommendedGrade: number | null
+  version: number
+  submittedAt: string
+  reviewedAt: string | null
+  taReviewedAt: string | null
+}
+
+export interface GradesOverviewRow {
+  teamId: string
+  teamName: string
+  stage: string
+  memberCount: number
+  leader: GradesOverviewUserRef | null
+  doctor: GradesOverviewUserRef | null
+  ta: GradesOverviewUserRef | null
+  stats: {
+    approved: number
+    pendingReview: number
+    underReview: number
+    needsRevision: number
+    total: number
+  }
+  averageGrade: number | null
+  weightedFinal: number | null
+  phaseAverages: Record<string, number>
+  submissions: GradesOverviewSubmission[]
+}
+
+export interface GradesOverviewResponse {
+  rows: GradesOverviewRow[]
+  summary: {
+    totalTeams: number
+    teamsWithGrades: number
+    globalAverage: number
+    totalApproved: number
+    totalPendingReview: number
+    totalUnderReview: number
+    totalNeedsRevision: number
+  }
+}
+
+export const gradesOverviewApi = {
+  get: (params?: { search?: string; stage?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.search) q.set("search", params.search)
+    if (params?.stage && params.stage !== "all") q.set("stage", params.stage)
+    const qs = q.toString()
+    return apiRequest<GradesOverviewResponse>(qs ? `/admin/grades-overview?${qs}` : "/admin/grades-overview")
+  },
+}

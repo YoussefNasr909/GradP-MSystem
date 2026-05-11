@@ -158,6 +158,15 @@ enum SubmissionStatus {
   APPROVED
 }
 
+enum ProposalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUESTED
+  APPROVED
+  REJECTED
+}
+
 enum DocumentCategory {
   DELIVERABLE
   DOCUMENTATION
@@ -371,6 +380,9 @@ model User {
   submittedWeeklyReports  WeeklyReport[]     @relation("WeeklyReportSubmitter")
   submittedSubmissions    Submission[]       @relation("SubmissionSubmitter")
   reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
+  taReviewedSubmissions   Submission[]       @relation("SubmissionTAReviewer")
+  authoredProposals       Proposal[]         @relation("ProposalAuthor")
+  reviewedProposals       Proposal[]         @relation("ProposalReviewer")
   uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
   createdResources        TeamResource[]     @relation("ResourceCreator")
   createdRisks            Risk[]             @relation("RiskCreator")
@@ -469,6 +481,7 @@ model Team {
   documents    TeamDocument[]
   meetings     Meeting[]
   risks         Risk[]
+  proposal      Proposal?
   groupConversation TeamGroupConversation?
 
   @@index([visibility, stage])
@@ -765,25 +778,40 @@ model Submission {
   artifactUrl       String?
   version           Int                  @default(1)
   submittedByUserId String?
+
+  // Two-step review flow:
+  // Step 1 — TA first-pass review (recommendation)
+  taRecommendedGrade  Int?
+  taFeedback          String?
+  taReviewedByUserId  String?
+  taReviewedAt        DateTime?
+
+  // Step 2 — Doctor final grade (authoritative)
   reviewedByUserId  String?
   reviewedAt        DateTime?
+  feedback          String?
+  grade             Int?
+
+  // Rubric used for grading: [{ name, score, maxScore }]
+  rubric            Json?
+
   submittedAt       DateTime             @default(now())
   deadline          DateTime?
   late              Boolean              @default(false)
-  feedback          String?
-  grade             Int?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  submittedBy User? @relation("SubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
-  reviewedBy  User? @relation("SubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  team         Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  submittedBy  User? @relation("SubmissionSubmitter",   fields: [submittedByUserId],  references: [id], onDelete: SetNull)
+  reviewedBy   User? @relation("SubmissionReviewer",    fields: [reviewedByUserId],   references: [id], onDelete: SetNull)
+  taReviewedBy User? @relation("SubmissionTAReviewer",  fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
 
   @@index([teamId, deliverableType])
   @@index([teamId, sdlcPhase])
   @@index([teamId, status])
   @@index([submittedByUserId])
   @@index([reviewedByUserId])
+  @@index([taReviewedByUserId])
 }
 
 model TeamDocument {
@@ -1111,4 +1139,49 @@ model CalendarIntegration {
 
   @@unique([userId, provider])
   @@index([provider, syncEnabled])
+}
+
+model Proposal {
+  id                String         @id @default(cuid())
+  teamId            String         @unique
+  authoredByUserId  String
+
+  // Core fields
+  title             String
+  abstract          String
+  problemStatement  String
+  objectives        String[]       @default([])
+  scope             String
+  methodology       String
+  technologies      String[]       @default([])
+  deliverables      String[]       @default([])
+  timeline          String?
+
+  // Optional attached file (e.g. signed PDF)
+  fileName          String?
+  fileSize          Int?
+  fileType          String?
+  fileUrl           String?
+
+  // Review workflow
+  status            ProposalStatus @default(DRAFT)
+  feedback          String?
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  submittedAt       DateTime?
+
+  // Versioning (for revisions)
+  version           Int            @default(1)
+  revisionCount     Int            @default(0)
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  authoredBy  User  @relation("ProposalAuthor",   fields: [authoredByUserId], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("ProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([authoredByUserId])
+  @@index([reviewedByUserId])
 }

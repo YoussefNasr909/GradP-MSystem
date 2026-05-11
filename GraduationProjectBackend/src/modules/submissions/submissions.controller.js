@@ -5,6 +5,7 @@ import {
   createSubmissionService,
   getSubmissionService,
   gradeSubmissionService,
+  taReviewSubmissionService,
   requestRevisionService,
   deleteSubmissionService,
   getSDLCSummaryService,
@@ -47,6 +48,11 @@ export async function getSubmission(req, res) {
 
 export async function gradeSubmission(req, res) {
   const result = await gradeSubmissionService(req.user, req.validated.params.id, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function taReviewSubmission(req, res) {
+  const result = await taReviewSubmissionService(req.user, req.validated.params.id, req.validated.body);
   res.json({ ok: true, data: result });
 }
 

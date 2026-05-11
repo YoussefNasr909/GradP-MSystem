@@ -22,6 +22,12 @@ export type ApiSubmissionUser = {
   avatarUrl: string | null
 }
 
+export type RubricItem = {
+  name: string
+  score: number
+  maxScore: number
+}
+
 export type ApiSubmission = {
   id: string
   teamId: string
@@ -43,13 +49,24 @@ export type ApiSubmission = {
   submittedAt: string
   deadline: string | null
   late: boolean
+
+  // TA first-pass review
+  taRecommendedGrade: number | null
+  taFeedback: string | null
+  taReviewedAt: string | null
+  taReviewedBy: ApiSubmissionUser | null
+
+  // Doctor final grade
   feedback: string | null
   grade: number | null
   reviewedAt: string | null
+  reviewedBy: ApiSubmissionUser | null
+
+  rubric: RubricItem[] | null
+
   createdAt: string
   updatedAt: string
   submittedBy: ApiSubmissionUser | null
-  reviewedBy: ApiSubmissionUser | null
   team: { id: string; name: string; stage: ApiTeamStage }
 }
 
@@ -94,6 +111,13 @@ export type CreateSubmissionPayload = {
 export type GradeSubmissionPayload = {
   grade: number
   feedback?: string
+  rubric?: RubricItem[]
+}
+
+export type TaReviewSubmissionPayload = {
+  recommendedGrade: number
+  feedback?: string
+  rubric?: RubricItem[]
 }
 
 export type RequestRevisionPayload = {
@@ -134,8 +158,13 @@ export const submissionsApi = {
 
   get: (id: string) => apiRequest<ApiSubmission>(`/submissions/${id}`),
 
+  /** Doctor only — finalize the grade for a submission. */
   grade: (id: string, payload: GradeSubmissionPayload) =>
     apiRequest<ApiSubmission>(`/submissions/${id}/grade`, { method: "PATCH", body: payload }),
+
+  /** TA only — submit a first-pass review with a recommended grade. */
+  taReview: (id: string, payload: TaReviewSubmissionPayload) =>
+    apiRequest<ApiSubmission>(`/submissions/${id}/ta-review`, { method: "PATCH", body: payload }),
 
   requestRevision: (id: string, payload: RequestRevisionPayload) =>
     apiRequest<ApiSubmission>(`/submissions/${id}/request-revision`, { method: "PATCH", body: payload }),

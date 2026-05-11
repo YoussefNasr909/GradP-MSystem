@@ -12,6 +12,7 @@ import {
   createSubmission,
   getSubmission,
   gradeSubmission,
+  taReviewSubmission,
   requestRevision,
   deleteSubmission,
   getSDLCSummary,
@@ -21,6 +22,7 @@ import {
   listSubmissionsSchema,
   submissionByIdSchema,
   gradeSubmissionSchema,
+  taReviewSubmissionSchema,
   requestRevisionSchema,
   sdlcSummarySchema,
   advanceStageSchema,
@@ -98,7 +100,12 @@ router.post("/advance-stage", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(ad
 router.get("/", validate(listSubmissionsSchema), listSubmissions);
 router.post("/", allowRoles(ROLES.LEADER), uploadSingle, createSubmission);
 router.get("/:id", validate(submissionByIdSchema), getSubmission);
-router.patch("/:id/grade", allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(gradeSubmissionSchema), gradeSubmission);
+
+// Two-step review flow:
+//  • TA first-pass review → records a recommended grade + feedback (status → UNDER_REVIEW)
+//  • Doctor final grade   → sets the authoritative grade (status → APPROVED)
+router.patch("/:id/ta-review", allowRoles(ROLES.TA, ROLES.ADMIN), validate(taReviewSubmissionSchema), taReviewSubmission);
+router.patch("/:id/grade",      allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(gradeSubmissionSchema),    gradeSubmission);
 router.patch("/:id/request-revision", allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(requestRevisionSchema), requestRevision);
 router.delete("/:id", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(submissionByIdSchema), deleteSubmission);
 

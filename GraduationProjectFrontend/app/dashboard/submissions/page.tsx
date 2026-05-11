@@ -46,6 +46,7 @@ import {
   RotateCcw,
   FileText,
   MessageSquare,
+  Award,
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { motion } from "framer-motion"
@@ -129,6 +130,7 @@ function SubmissionDetailDialog({
   initialVersionId,
   canGrade,
   canSubmit,
+  userRole,
   onGraded,
   onDeleted,
 }: {
@@ -136,6 +138,8 @@ function SubmissionDetailDialog({
   initialVersionId?: string
   canGrade: boolean
   canSubmit?: boolean
+  /** Uppercase role string. Drives whether TA-review or Doctor-grade flow is offered. */
+  userRole?: string
   onGraded: (updated: ApiSubmission) => void
   onDeleted?: (id: string) => void
 }) {
@@ -148,10 +152,16 @@ function SubmissionDetailDialog({
     }
   }, [open, initialVersionId, submissions])
 
-  const [gradeDialogOpen, setGradeDialogOpen] = useState(false)
+  const isTa     = userRole === "TA"
+  const isDoctor = userRole === "DOCTOR" || userRole === "ADMIN"
+
+  const [gradeDialogOpen,    setGradeDialogOpen]    = useState(false)
+  const [taReviewDialogOpen, setTaReviewDialogOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
   const [grade, setGrade] = useState("")
+  const [recommendedGrade, setRecommendedGrade] = useState("")
   const [gradeFeedback, setGradeFeedback] = useState("")
+  const [taFeedback, setTaFeedback] = useState("")
   const [revisionFeedback, setRevisionFeedback] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -204,9 +214,32 @@ function SubmissionDetailDialog({
       onGraded(updated)
       setGradeDialogOpen(false)
       setOpen(false)
-      toast.success("Submission graded successfully")
+      toast.success("Final grade saved")
     } catch (e: any) {
       toast.error(e.message || "Failed to grade submission")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleTaReview() {
+    const g = parseInt(recommendedGrade)
+    if (isNaN(g) || g < 0 || g > 100) {
+      toast.error("Recommended grade must be between 0 and 100")
+      return
+    }
+    setLoading(true)
+    try {
+      const updated = await submissionsApi.taReview(submission.id, {
+        recommendedGrade: g,
+        feedback: taFeedback || undefined,
+      })
+      onGraded(updated)
+      setTaReviewDialogOpen(false)
+      setOpen(false)
+      toast.success("First-pass review sent to doctor")
+    } catch (e: any) {
+      toast.error(e.message || "Failed to submit review")
     } finally {
       setLoading(false)
     }
@@ -414,26 +447,95 @@ function SubmissionDetailDialog({
                   </div>
                 )}
 
-                {submission.feedback && (
-                  <div className="p-5 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl">
-                    <div className="flex items-center gap-2 mb-3 text-blue-700 dark:text-blue-400">
-                      <MessageSquare className="h-4 w-4" />
-                      <h4 className="text-sm font-semibold">Supervisor Feedback</h4>
+                {/* ── TA First-Pass Review (recommendation) ── */}
+                {submission.taReviewedAt && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-5 bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900 rounded-xl"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
+                        <Star className="h-4 w-4 fill-cyan-500 text-cyan-500" />
+                        <h4 className="text-sm font-semibold">TA First-Pass Review</h4>
+                      </div>
+                      {submission.taRecommendedGrade !== null && (
+                        <Badge variant="outline" className="border-cyan-500/40 text-cyan-700 dark:text-cyan-400 font-semibold">
+                          Recommended: {submission.taRecommendedGrade}/100
+                        </Badge>
+                      )}
                     </div>
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{submission.feedback}</p>
-                  </div>
+                    {submission.taFeedback && (
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed mb-2">{submission.taFeedback}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Reviewed by {submission.taReviewedBy?.fullName || "TA"} · {new Date(submission.taReviewedAt).toLocaleString()}
+                    </p>
+                  </motion.div>
                 )}
 
+                {/* ── Doctor Final Grade (authoritative) ── */}
+                {(submission.feedback || submission.grade !== null) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-5 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl"
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-500">
+                        <Award className="h-4 w-4" />
+                        <h4 className="text-sm font-semibold">Doctor Final Grade</h4>
+                      </div>
+                      {submission.grade !== null && (
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-500 font-semibold">
+                          Final: {submission.grade}/100
+                        </Badge>
+                      )}
+                    </div>
+                    {submission.feedback && (
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed mb-2">{submission.feedback}</p>
+                    )}
+                    {submission.reviewedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Reviewed by {submission.reviewedBy?.fullName || "Doctor"} · {new Date(submission.reviewedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </motion.div>
+                )}
+
+                {/* ── Actions (branch by role) ── */}
                 {canGrade && submission.status !== "APPROVED" && isLatest && (
                   <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-8">
-                    <Button
-                      size="lg"
-                      className="flex-1 shadow-sm font-semibold"
-                      onClick={() => { setOpen(false); setGradeDialogOpen(true) }}
-                    >
-                      <CheckCircle2 className="h-5 w-5 mr-2" />
-                      Grade Submission
-                    </Button>
+                    {isTa && (
+                      <Button
+                        size="lg"
+                        className="flex-1 shadow-sm font-semibold bg-cyan-600 hover:bg-cyan-700"
+                        onClick={() => { setOpen(false); setTaReviewDialogOpen(true) }}
+                      >
+                        <Star className="h-5 w-5 mr-2" />
+                        {submission.taReviewedAt ? "Update Recommendation" : "Submit First-Pass Review"}
+                      </Button>
+                    )}
+                    {isDoctor && (
+                      <Button
+                        size="lg"
+                        className="flex-1 shadow-sm font-semibold bg-amber-600 hover:bg-amber-700"
+                        onClick={() => {
+                          // Pre-fill from TA recommendation if it exists
+                          if (submission.taRecommendedGrade !== null && !grade) {
+                            setGrade(String(submission.taRecommendedGrade))
+                          }
+                          if (submission.taFeedback && !gradeFeedback) {
+                            setGradeFeedback(submission.taFeedback)
+                          }
+                          setOpen(false)
+                          setGradeDialogOpen(true)
+                        }}
+                      >
+                        <Award className="h-5 w-5 mr-2" />
+                        Finalize Grade
+                      </Button>
+                    )}
                     <Button
                       size="lg"
                       variant="outline"
@@ -451,15 +553,31 @@ function SubmissionDetailDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Grade Dialog */}
+      {/* Grade Dialog (DOCTOR only — sets final grade) */}
       <Dialog open={gradeDialogOpen} onOpenChange={setGradeDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Grade Submission</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-amber-500" />
+              Finalize Grade
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            {submission.taRecommendedGrade !== null && (
+              <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900">
+                <p className="text-[11px] uppercase tracking-wider text-cyan-700 dark:text-cyan-400 font-semibold mb-1">
+                  TA Recommendation
+                </p>
+                <p className="text-sm">
+                  <span className="font-semibold">{submission.taRecommendedGrade}/100</span>
+                  {submission.taReviewedBy && (
+                    <span className="text-muted-foreground"> · {submission.taReviewedBy.fullName}</span>
+                  )}
+                </p>
+              </div>
+            )}
             <div>
-              <Label>Grade (0–100)</Label>
+              <Label>Final Grade (0–100)</Label>
               <Input
                 type="number"
                 min={0}
@@ -471,22 +589,74 @@ function SubmissionDetailDialog({
               />
             </div>
             <div>
-              <Label>Feedback (optional)</Label>
+              <Label>Final Feedback (optional)</Label>
               <Textarea
                 value={gradeFeedback}
                 onChange={(e) => setGradeFeedback(e.target.value)}
-                placeholder="Add feedback for the team..."
+                placeholder="Final feedback for the team..."
                 className="mt-1.5 resize-none"
                 rows={4}
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleGrade} disabled={loading} className="flex-1">
-                {loading ? "Grading..." : "Submit Grade"}
+              <Button onClick={handleGrade} disabled={loading} className="flex-1 bg-amber-600 hover:bg-amber-700">
+                {loading ? "Saving..." : "Finalize Grade"}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setGradeDialogOpen(false)}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TA Review Dialog (TA only — first-pass recommendation) */}
+      <Dialog open={taReviewDialogOpen} onOpenChange={setTaReviewDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="h-5 w-5 text-cyan-500 fill-cyan-500" />
+              First-Pass Review
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900 text-xs leading-relaxed text-cyan-900 dark:text-cyan-300">
+              You&apos;re submitting a <span className="font-semibold">recommendation</span> for the doctor to finalise.
+              They&apos;ll see your grade and feedback before assigning the official mark.
+            </div>
+            <div>
+              <Label>Recommended Grade (0–100)</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={recommendedGrade}
+                onChange={(e) => setRecommendedGrade(e.target.value)}
+                placeholder="e.g. 82"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label>Feedback to the Doctor & Team (optional)</Label>
+              <Textarea
+                value={taFeedback}
+                onChange={(e) => setTaFeedback(e.target.value)}
+                placeholder="What's strong, what's weak, what to look at..."
+                className="mt-1.5 resize-none"
+                rows={4}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleTaReview} disabled={loading} className="flex-1 bg-cyan-600 hover:bg-cyan-700">
+                {loading ? "Submitting..." : "Send to Doctor"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setTaReviewDialogOpen(false)}
                 disabled={loading}
               >
                 Cancel
@@ -723,6 +893,7 @@ function DeliverableRow({
   submissions,
   canSubmit,
   canGrade,
+  userRole,
   onCreated,
   onUpdated,
   onDeleted,
@@ -731,6 +902,7 @@ function DeliverableRow({
   submissions: ApiSubmission[]
   canSubmit: boolean
   canGrade: boolean
+  userRole?: string
   onCreated: (s: ApiSubmission) => void
   onUpdated: (s: ApiSubmission) => void
   onDeleted: (id: string) => void
@@ -824,6 +996,7 @@ function DeliverableRow({
               submissions={submissions}
               canGrade={canGrade}
               canSubmit={canSubmit}
+              userRole={userRole}
               onGraded={onUpdated}
               onDeleted={onDeleted}
             />
@@ -1068,11 +1241,12 @@ export default function SubmissionsPage() {
                         {s.late && <span className="text-destructive">Late</span>}
                       </p>
                     </div>
-                    <SubmissionDetailDialog 
-                      submissions={submissions.filter(x => x.deliverableType === s.deliverableType && x.teamId === s.teamId).sort((a,b)=>b.version - a.version)} 
+                    <SubmissionDetailDialog
+                      submissions={submissions.filter(x => x.deliverableType === s.deliverableType && x.teamId === s.teamId).sort((a,b)=>b.version - a.version)}
                       initialVersionId={s.id}
-                      canGrade={true} 
-                      onGraded={handleUpdated} 
+                      canGrade={true}
+                      userRole={userRole}
+                      onGraded={handleUpdated}
                     />
                   </div>
                 )
@@ -1142,6 +1316,7 @@ export default function SubmissionsPage() {
                           submissions={byDeliverable[dt]}
                           canSubmit={isLeader}
                           canGrade={isSupervisor || isAdmin}
+                          userRole={userRole}
                           onCreated={handleCreated}
                           onUpdated={handleUpdated}
                           onDeleted={handleDeleted}

@@ -18,6 +18,7 @@ import chatRouter from "../modules/chat/chat.routes.js";
 import teamChatRouter from "../modules/team-chat/team-chat.routes.js";
 import risksRouter from "../modules/risks/risks.routes.js";
 import adminRouter from "../modules/admin/admin.routes.js";
+import proposalsRouter from "../modules/proposals/proposals.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -41,4 +42,5 @@ router.use("/chat", chatRouter);
 router.use("/team-chats", teamChatRouter);
 router.use("/risks", risksRouter);
 router.use("/admin", adminRouter);
+router.use("/proposals", proposalsRouter);
 export default router;

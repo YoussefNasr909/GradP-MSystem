@@ -2,15 +2,14 @@ import { Router } from "express";
 import { auth } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 import { ROLES } from "../../common/constants/roles.js";
-import { getSystemLogs, getUserActivity } from "./admin.service.js";
+import { getSystemLogs, getUserActivity, getGradesOverview } from "./admin.service.js";
 
 const router = Router();
 
 router.use(auth);
-router.use(allowRoles(ROLES.ADMIN));
 
 // GET /admin/logs/system?page=1&limit=50&level=info&category=user&search=...
-router.get("/logs/system", async (req, res, next) => {
+router.get("/logs/system", allowRoles(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { page = "1", limit = "50", level, category, search } = req.query;
     const result = await getSystemLogs({
@@ -27,7 +26,7 @@ router.get("/logs/system", async (req, res, next) => {
 });
 
 // GET /admin/logs/activity?page=1&limit=50&search=...&role=doctor
-router.get("/logs/activity", async (req, res, next) => {
+router.get("/logs/activity", allowRoles(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { page = "1", limit = "50", search, role } = req.query;
     const result = await getUserActivity({
@@ -35,6 +34,21 @@ router.get("/logs/activity", async (req, res, next) => {
       limit: parseInt(limit, 10),
       search: search || undefined,
       role: role || undefined,
+    });
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/grades-overview?search=...&stage=DESIGN
+// Visible to admin AND doctors (they need to see team grades).
+router.get("/grades-overview", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
+  try {
+    const { search, stage } = req.query;
+    const result = await getGradesOverview({
+      search: search || undefined,
+      stage: stage || undefined,
     });
     res.json({ ok: true, data: result });
   } catch (err) {

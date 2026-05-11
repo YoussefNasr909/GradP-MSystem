@@ -30,14 +30,28 @@ export const submissionSelect = {
   submittedAt: true,
   deadline: true,
   late: true,
+
+  // TA first-pass review
+  taRecommendedGrade: true,
+  taFeedback: true,
+  taReviewedAt: true,
+  taReviewedByUserId: true,
+  taReviewedBy: { select: submissionUserSelect },
+
+  // Doctor final grade
   feedback: true,
   grade: true,
   reviewedAt: true,
+  reviewedByUserId: true,
+  reviewedBy: { select: submissionUserSelect },
+
+  // Rubric (Json [{ name, score, maxScore }])
+  rubric: true,
+
   createdAt: true,
   updatedAt: true,
-  submittedByUserId: true,   // ← required by notification triggers
+  submittedByUserId: true,
   submittedBy: { select: submissionUserSelect },
-  reviewedBy: { select: submissionUserSelect },
   team: { select: { id: true, name: true, stage: true } },
 };
 
