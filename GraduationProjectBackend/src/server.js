@@ -3,12 +3,14 @@ import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { dbConnect, dbDisconnect } from "./loaders/dbLoader.js";
 import { initSocket } from "./realtime/socket.js";
+import { startSupervisorDigestCron } from "./jobs/supervisor-digest.js";
 
 const app = createApp();
 const httpServer = http.createServer(app);
 
 await dbConnect();
 initSocket(httpServer);
+startSupervisorDigestCron();
 
 const server = httpServer.listen(env.port, () => {
   console.log(`🚀 Server running on http://localhost:${env.port}`);

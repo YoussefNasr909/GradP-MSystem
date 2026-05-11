@@ -25,11 +25,15 @@ import {
   BarChart3,
   Lock,
   Sparkles,
+  Download,
+  FileText,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { gradesOverviewApi } from "@/lib/api/admin-logs"
 import type { GradesOverviewRow, GradesOverviewResponse } from "@/lib/api/admin-logs"
+import { reportCardApi } from "@/lib/api/supervisor-tools"
+import { toast } from "sonner"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -118,6 +122,18 @@ function StatCard({
 // ─── Team Row Card ──────────────────────────────────────────────────────────
 
 function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
+  const [downloading, setDownloading] = useState(false)
+  async function handleDownloadPdf() {
+    setDownloading(true)
+    try {
+      await reportCardApi.download(row.teamId, row.teamName)
+      toast.success("Report card downloaded")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to download report card")
+    } finally {
+      setDownloading(false)
+    }
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -195,7 +211,7 @@ function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
             </div>
           </div>
 
-          {/* Supervisors */}
+          {/* Supervisors + PDF download */}
           <div className="flex items-center gap-2 shrink-0">
             {row.doctor && (
               <Avatar className="h-9 w-9 ring-2 ring-blue-500/30">
@@ -213,6 +229,22 @@ function TeamRow({ row, index }: { row: GradesOverviewRow; index: number }) {
                 </AvatarFallback>
               </Avatar>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 ml-1"
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleDownloadPdf() }}
+              disabled={downloading}
+            >
+              {downloading ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <>
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  <Download className="h-3.5 w-3.5" />
+                </>
+              )}
+            </Button>
           </div>
         </div>
 

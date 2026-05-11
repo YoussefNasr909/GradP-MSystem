@@ -488,6 +488,266 @@ export async function getGradesOverview({ search, stage } = {}) {
   return { rows: filtered, summary };
 }
 
+// ─── Team Activity Timeline ─────────────────────────────────────────────────
+//
+// Aggregates submissions, proposal events, meetings, risks, tasks, and
+// supervisor notes into a single chronological feed for one team.
+
+export async function getTeamActivity(teamId, { limit = 50 } = {}) {
+  const [submissions, proposal, meetings, risks, tasks, notes, deadlines, announcements] = await Promise.all([
+    prisma.submission.findMany({
+      where: { teamId },
+      select: {
+        id: true, deliverableType: true, status: true, grade: true,
+        submittedAt: true, reviewedAt: true, taReviewedAt: true,
+        version: true,
+        submittedBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+        reviewedBy:  { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+        taReviewedBy:{ select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { submittedAt: "desc" },
+      take: 30,
+    }),
+    prisma.proposal.findUnique({
+      where: { teamId },
+      select: {
+        id: true, title: true, status: true, version: true, revisionCount: true,
+        submittedAt: true, reviewedAt: true, createdAt: true,
+        authoredBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+        reviewedBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+    }),
+    prisma.meeting.findMany({
+      where: { teamId },
+      select: {
+        id: true, title: true, status: true, mode: true, startAt: true, createdAt: true,
+        organizer: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.risk.findMany({
+      where: { teamId },
+      select: {
+        id: true, title: true, severity: true, status: true, approvalStatus: true,
+        createdAt: true, updatedAt: true,
+        createdBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+    prisma.task.findMany({
+      where: { teamId, status: { in: ["REVIEW", "APPROVED", "DONE"] } },
+      select: {
+        id: true, title: true, status: true, priority: true,
+        reviewedAt: true, createdAt: true,
+        assignee:   { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+        reviewedBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+    prisma.teamSupervisorNote.findMany({
+      where: { teamId },
+      select: {
+        id: true, content: true, createdAt: true,
+        author: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 15,
+    }),
+    prisma.teamDeliverableDeadline.findMany({
+      where: { teamId },
+      select: {
+        id: true, deliverableType: true, dueDate: true, createdAt: true,
+        setBy: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.announcement.findMany({
+      where: { OR: [{ teamId }, { teamId: null }] },
+      select: {
+        id: true, title: true, content: true, createdAt: true, authorRole: true,
+        author: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+  ]);
+
+  const events = [];
+
+  function name(u) {
+    return u ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : null;
+  }
+
+  // Submissions — uploads
+  for (const s of submissions) {
+    events.push({
+      id: `submission-up-${s.id}`,
+      type: "submission",
+      category: "submission",
+      action: "uploaded",
+      timestamp: s.submittedAt,
+      title: `${s.deliverableType} submitted (v${s.version})`,
+      detail: `Status: ${s.status}`,
+      actor: s.submittedBy ? { name: name(s.submittedBy), avatarUrl: s.submittedBy.avatarUrl, role: s.submittedBy.role } : null,
+    });
+    if (s.taReviewedAt) {
+      events.push({
+        id: `submission-ta-${s.id}`,
+        type: "submission",
+        category: "submission",
+        action: "ta-reviewed",
+        timestamp: s.taReviewedAt,
+        title: `${s.deliverableType} TA-reviewed`,
+        detail: "Recommendation sent to doctor",
+        actor: s.taReviewedBy ? { name: name(s.taReviewedBy), avatarUrl: s.taReviewedBy.avatarUrl, role: s.taReviewedBy.role } : null,
+      });
+    }
+    if (s.reviewedAt) {
+      events.push({
+        id: `submission-fin-${s.id}`,
+        type: "submission",
+        category: "submission",
+        action: "graded",
+        timestamp: s.reviewedAt,
+        title: `${s.deliverableType} graded`,
+        detail: s.grade !== null ? `Final: ${s.grade}/100` : `Status: ${s.status}`,
+        actor: s.reviewedBy ? { name: name(s.reviewedBy), avatarUrl: s.reviewedBy.avatarUrl, role: s.reviewedBy.role } : null,
+      });
+    }
+  }
+
+  // Proposal events
+  if (proposal) {
+    events.push({
+      id: `proposal-create-${proposal.id}`,
+      type: "proposal",
+      category: "proposal",
+      action: "created",
+      timestamp: proposal.createdAt,
+      title: `Proposal drafted: "${proposal.title}"`,
+      detail: `v${proposal.version}`,
+      actor: proposal.authoredBy ? { name: name(proposal.authoredBy), avatarUrl: proposal.authoredBy.avatarUrl, role: proposal.authoredBy.role } : null,
+    });
+    if (proposal.submittedAt) {
+      events.push({
+        id: `proposal-submit-${proposal.id}`,
+        type: "proposal",
+        category: "proposal",
+        action: "submitted",
+        timestamp: proposal.submittedAt,
+        title: "Proposal submitted for review",
+        detail: proposal.revisionCount > 0 ? `${proposal.revisionCount} revision(s)` : null,
+        actor: proposal.authoredBy ? { name: name(proposal.authoredBy), avatarUrl: proposal.authoredBy.avatarUrl, role: proposal.authoredBy.role } : null,
+      });
+    }
+    if (proposal.reviewedAt) {
+      events.push({
+        id: `proposal-review-${proposal.id}`,
+        type: "proposal",
+        category: "proposal",
+        action: `proposal-${proposal.status.toLowerCase()}`,
+        timestamp: proposal.reviewedAt,
+        title: `Proposal ${proposal.status.replace("_", " ").toLowerCase()}`,
+        detail: null,
+        actor: proposal.reviewedBy ? { name: name(proposal.reviewedBy), avatarUrl: proposal.reviewedBy.avatarUrl, role: proposal.reviewedBy.role } : null,
+      });
+    }
+  }
+
+  // Meetings
+  for (const m of meetings) {
+    events.push({
+      id: `meeting-${m.id}`,
+      type: "meeting",
+      category: "meeting",
+      action: "scheduled",
+      timestamp: m.createdAt,
+      title: `Meeting: ${m.title}`,
+      detail: `${m.mode} · ${m.status} · ${new Date(m.startAt).toLocaleString()}`,
+      actor: m.organizer ? { name: name(m.organizer), avatarUrl: m.organizer.avatarUrl, role: m.organizer.role } : null,
+    });
+  }
+
+  // Risks
+  for (const r of risks) {
+    events.push({
+      id: `risk-${r.id}`,
+      type: "risk",
+      category: "risk",
+      action: "raised",
+      timestamp: r.createdAt,
+      title: `Risk: ${r.title}`,
+      detail: `${r.severity ?? "—"} · ${r.status} · ${r.approvalStatus}`,
+      actor: r.createdBy ? { name: name(r.createdBy), avatarUrl: r.createdBy.avatarUrl, role: r.createdBy.role } : null,
+    });
+  }
+
+  // Tasks (reviewed/done only — keeps timeline focused)
+  for (const t of tasks) {
+    events.push({
+      id: `task-${t.id}`,
+      type: "task",
+      category: "task",
+      action: t.status.toLowerCase(),
+      timestamp: t.reviewedAt ?? t.createdAt,
+      title: `Task: ${t.title}`,
+      detail: `${t.priority} · ${t.status}`,
+      actor: t.reviewedBy ? { name: name(t.reviewedBy), avatarUrl: t.reviewedBy.avatarUrl, role: t.reviewedBy.role } : (t.assignee ? { name: name(t.assignee), avatarUrl: t.assignee.avatarUrl, role: t.assignee.role } : null),
+    });
+  }
+
+  // Supervisor notes (only visible to supervisor/admin — but timeline is gated upstream)
+  for (const n of notes) {
+    events.push({
+      id: `note-${n.id}`,
+      type: "note",
+      category: "note",
+      action: "note-added",
+      timestamp: n.createdAt,
+      title: "Supervisor note added",
+      detail: n.content.length > 140 ? n.content.slice(0, 140) + "…" : n.content,
+      actor: n.author ? { name: name(n.author), avatarUrl: n.author.avatarUrl, role: n.author.role } : null,
+    });
+  }
+
+  // Deadlines
+  for (const d of deadlines) {
+    events.push({
+      id: `deadline-${d.id}`,
+      type: "deadline",
+      category: "deadline",
+      action: "deadline-set",
+      timestamp: d.createdAt,
+      title: `Deadline set: ${d.deliverableType}`,
+      detail: `Due ${new Date(d.dueDate).toLocaleDateString()}`,
+      actor: d.setBy ? { name: name(d.setBy), avatarUrl: d.setBy.avatarUrl, role: d.setBy.role } : null,
+    });
+  }
+
+  // Announcements
+  for (const a of announcements) {
+    events.push({
+      id: `announcement-${a.id}`,
+      type: "announcement",
+      category: "announcement",
+      action: "announcement-posted",
+      timestamp: a.createdAt,
+      title: `Announcement: ${a.title}`,
+      detail: a.content.length > 140 ? a.content.slice(0, 140) + "…" : a.content,
+      actor: a.author ? { name: name(a.author), avatarUrl: a.author.avatarUrl, role: a.author.role } : null,
+    });
+  }
+
+  return events
+    .filter((e) => e.timestamp)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, limit);
+}
+
 // ─── Analytics ──────────────────────────────────────────────────────────────
 //
 // Single endpoint serving both /analytics and /reports pages.

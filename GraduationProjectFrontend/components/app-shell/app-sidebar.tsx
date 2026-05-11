@@ -34,6 +34,8 @@ import {
   Activity,
   HelpCircle,
   LifeBuoy,
+  StickyNote,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -130,6 +132,8 @@ const navigationGroups = [
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
+      // Announcements — supervisors post, everyone reads
+      { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone, roles: ["admin", "doctor", "ta", "leader", "member"] },
     ],
   },
   {
@@ -139,6 +143,8 @@ const navigationGroups = [
       { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor", "ta", "leader"] },
       // Risks — created by leader, approved by doctor (TA is not the risk approver)
       { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
+      // Supervisor Toolkit — private notes, deadlines, activity per team. Supervisors + admin only.
+      { name: "Supervisor Toolkit", href: "/dashboard/supervisor-toolkit", icon: StickyNote, roles: ["admin", "doctor", "ta"] },
       { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
     ],

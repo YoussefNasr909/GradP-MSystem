@@ -51,11 +51,13 @@ import {
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { motion } from "framer-motion"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
+import { RubricEditor, getDefaultRubric } from "@/components/dashboard/rubric-editor"
 import {
   submissionsApi,
   type ApiSubmission,
   type ApiDeliverableType,
   type ApiSubmissionStatus,
+  type RubricItem,
 } from "@/lib/api/submissions"
 import type { ApiTeamStage } from "@/lib/api/types"
 import { toast } from "sonner"
@@ -163,6 +165,8 @@ function SubmissionDetailDialog({
   const [gradeFeedback, setGradeFeedback] = useState("")
   const [taFeedback, setTaFeedback] = useState("")
   const [revisionFeedback, setRevisionFeedback] = useState("")
+  const [doctorRubric, setDoctorRubric] = useState<RubricItem[]>([])
+  const [taRubric,     setTaRubric]     = useState<RubricItem[]>([])
   const [loading, setLoading] = useState(false)
 
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
@@ -210,6 +214,7 @@ function SubmissionDetailDialog({
       const updated = await submissionsApi.grade(submission.id, {
         grade: g,
         feedback: gradeFeedback || undefined,
+        rubric: doctorRubric.length > 0 ? doctorRubric : undefined,
       })
       onGraded(updated)
       setGradeDialogOpen(false)
@@ -233,6 +238,7 @@ function SubmissionDetailDialog({
       const updated = await submissionsApi.taReview(submission.id, {
         recommendedGrade: g,
         feedback: taFeedback || undefined,
+        rubric: taRubric.length > 0 ? taRubric : undefined,
       })
       onGraded(updated)
       setTaReviewDialogOpen(false)
@@ -495,8 +501,24 @@ function SubmissionDetailDialog({
                     {submission.feedback && (
                       <p className="text-sm whitespace-pre-wrap leading-relaxed mb-2">{submission.feedback}</p>
                     )}
+
+                    {/* Rubric breakdown (read-only) */}
+                    {submission.rubric && submission.rubric.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-900/50 space-y-1.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Rubric Breakdown</p>
+                        {submission.rubric.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground truncate">{r.name}</span>
+                            <span className="font-mono tabular-nums font-semibold">
+                              {r.score}<span className="text-muted-foreground">/{r.maxScore}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
                     {submission.reviewedAt && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground mt-2">
                         Reviewed by {submission.reviewedBy?.fullName || "Doctor"} · {new Date(submission.reviewedAt).toLocaleString()}
                       </p>
                     )}
@@ -554,8 +576,21 @@ function SubmissionDetailDialog({
       </Dialog>
 
       {/* Grade Dialog (DOCTOR only — sets final grade) */}
-      <Dialog open={gradeDialogOpen} onOpenChange={setGradeDialogOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog
+        open={gradeDialogOpen}
+        onOpenChange={(open) => {
+          setGradeDialogOpen(open)
+          if (open) {
+            // Initialise rubric from existing submission rubric, or TA's rubric, or default
+            const initial =
+              (submission.rubric && submission.rubric.length > 0)
+                ? submission.rubric
+                : getDefaultRubric(submission.deliverableType)
+            setDoctorRubric(initial)
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Award className="h-5 w-5 text-amber-500" />
@@ -576,6 +611,14 @@ function SubmissionDetailDialog({
                 </p>
               </div>
             )}
+
+            <RubricEditor
+              value={doctorRubric}
+              onChange={setDoctorRubric}
+              onTotalChange={(total) => setGrade(String(total))}
+              defaultRubricType={submission.deliverableType}
+            />
+
             <div>
               <Label>Final Grade (0–100)</Label>
               <Input
@@ -584,7 +627,7 @@ function SubmissionDetailDialog({
                 max={100}
                 value={grade}
                 onChange={(e) => setGrade(e.target.value)}
-                placeholder="e.g. 85"
+                placeholder="Driven by rubric, or override here"
                 className="mt-1.5"
               />
             </div>
@@ -615,8 +658,20 @@ function SubmissionDetailDialog({
       </Dialog>
 
       {/* TA Review Dialog (TA only — first-pass recommendation) */}
-      <Dialog open={taReviewDialogOpen} onOpenChange={setTaReviewDialogOpen}>
-        <DialogContent className="max-w-sm">
+      <Dialog
+        open={taReviewDialogOpen}
+        onOpenChange={(open) => {
+          setTaReviewDialogOpen(open)
+          if (open) {
+            const initial =
+              (submission.rubric && submission.rubric.length > 0)
+                ? submission.rubric
+                : getDefaultRubric(submission.deliverableType)
+            setTaRubric(initial)
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Star className="h-5 w-5 text-cyan-500 fill-cyan-500" />
@@ -626,8 +681,16 @@ function SubmissionDetailDialog({
           <div className="space-y-4 mt-2">
             <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-900 text-xs leading-relaxed text-cyan-900 dark:text-cyan-300">
               You&apos;re submitting a <span className="font-semibold">recommendation</span> for the doctor to finalise.
-              They&apos;ll see your grade and feedback before assigning the official mark.
+              They&apos;ll see your grade, feedback, and rubric breakdown before assigning the official mark.
             </div>
+
+            <RubricEditor
+              value={taRubric}
+              onChange={setTaRubric}
+              onTotalChange={(total) => setRecommendedGrade(String(total))}
+              defaultRubricType={submission.deliverableType}
+            />
+
             <div>
               <Label>Recommended Grade (0–100)</Label>
               <Input
@@ -636,7 +699,7 @@ function SubmissionDetailDialog({
                 max={100}
                 value={recommendedGrade}
                 onChange={(e) => setRecommendedGrade(e.target.value)}
-                placeholder="e.g. 82"
+                placeholder="Driven by rubric, or override here"
                 className="mt-1.5"
               />
             </div>

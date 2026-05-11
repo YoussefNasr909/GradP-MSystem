@@ -19,6 +19,9 @@ import teamChatRouter from "../modules/team-chat/team-chat.routes.js";
 import risksRouter from "../modules/risks/risks.routes.js";
 import adminRouter from "../modules/admin/admin.routes.js";
 import proposalsRouter from "../modules/proposals/proposals.routes.js";
+import supervisorNotesRouter from "../modules/supervisor-notes/supervisor-notes.routes.js";
+import deadlinesRouter from "../modules/deadlines/deadlines.routes.js";
+import announcementsRouter from "../modules/announcements/announcements.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -43,4 +46,7 @@ router.use("/team-chats", teamChatRouter);
 router.use("/risks", risksRouter);
 router.use("/admin", adminRouter);
 router.use("/proposals", proposalsRouter);
+router.use("/supervisor-notes", supervisorNotesRouter);
+router.use("/deadlines", deadlinesRouter);
+router.use("/announcements", announcementsRouter);
 export default router;
