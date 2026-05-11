@@ -1144,9 +1144,22 @@ export default function SubmissionsPage() {
         )
       : 0
 
-  const pendingReviews = submissions.filter(
-    (s) => s.status === "PENDING" || s.status === "UNDER_REVIEW",
-  )
+  // Role-aware queue:
+  //   TA     → see fresh submissions (PENDING) that need first-pass review
+  //   Doctor → see submissions UNDER_REVIEW (TA reviewed, awaiting final grade)
+  //   Admin  → see everything that's not finalized
+  const isTaRole     = userRole === "TA"
+  const isDoctorRole = userRole === "DOCTOR"
+  const pendingReviews = submissions.filter((s) => {
+    if (isTaRole)     return s.status === "PENDING"
+    if (isDoctorRole) return s.status === "UNDER_REVIEW"
+    return s.status === "PENDING" || s.status === "UNDER_REVIEW"
+  })
+  const pendingReviewsTitle = isTaRole
+    ? "Awaiting Your First-Pass Review"
+    : isDoctorRole
+    ? "Awaiting Your Final Grade"
+    : "Pending Reviews"
 
   return (
     <TeamRequiredGuard
@@ -1215,12 +1228,12 @@ export default function SubmissionsPage() {
           </Card>
         )}
 
-        {/* Pending reviews (supervisors) */}
+        {/* Pending reviews — role-aware: TA sees PENDING, Doctor sees UNDER_REVIEW */}
         {(isSupervisor || isAdmin) && pendingReviews.length > 0 && (
           <Card className="p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-500" />
-              Pending Reviews
+              <Clock className={`h-5 w-5 ${isTaRole ? "text-cyan-500" : "text-amber-500"}`} />
+              {pendingReviewsTitle}
               <Badge variant="secondary">{pendingReviews.length}</Badge>
             </h2>
             <div className="space-y-3">

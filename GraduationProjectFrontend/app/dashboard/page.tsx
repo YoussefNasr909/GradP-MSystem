@@ -67,6 +67,7 @@ import type { UsersSummary } from "@/lib/api/types"
 import NextLink from "next/link"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -1535,6 +1536,9 @@ function DoctorDashboard() {
         </div>
       </motion.div>
 
+      {/* Role-aware action inbox — Doctor version */}
+      <RoleActionInbox />
+
       {/* Quick Access Grid */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
@@ -1936,6 +1940,9 @@ function TADashboard() {
           </div>
         </div>
       </motion.div>
+
+      {/* Role-aware action inbox — TA version */}
+      <RoleActionInbox />
 
       {/* Quick Access Grid */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>

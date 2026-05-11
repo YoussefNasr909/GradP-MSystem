@@ -487,3 +487,212 @@ export async function getGradesOverview({ search, stage } = {}) {
 
   return { rows: filtered, summary };
 }
+
+// ─── Analytics ──────────────────────────────────────────────────────────────
+//
+// Single endpoint serving both /analytics and /reports pages.
+// Aggregates from existing tables — no new models needed.
+
+const STAGE_ORDER = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"];
+
+export async function getAnalytics() {
+  const [
+    userCounts,
+    teams,
+    tasks,
+    submissions,
+    proposals,
+    meetings,
+    risks,
+  ] = await Promise.all([
+    prisma.user.groupBy({ by: ["role"], _count: { _all: true } }),
+    prisma.team.findMany({
+      select: {
+        id: true,
+        name: true,
+        stage: true,
+        createdAt: true,
+        members: { select: { userId: true } },
+      },
+    }),
+    prisma.task.findMany({
+      select: {
+        id: true, status: true, priority: true, dueDate: true,
+        createdAt: true, updatedAt: true, integrationMode: true,
+      },
+    }),
+    prisma.submission.findMany({
+      select: {
+        id: true, status: true, sdlcPhase: true, deliverableType: true,
+        grade: true, late: true, submittedAt: true,
+      },
+    }),
+    prisma.proposal.findMany({
+      select: { id: true, status: true, createdAt: true, submittedAt: true, reviewedAt: true },
+    }),
+    prisma.meeting.findMany({ select: { id: true, status: true, createdAt: true } }),
+    prisma.risk.findMany({ select: { id: true, status: true, severity: true, createdAt: true } }),
+  ]);
+
+  // ── Overview ───────────────────────────────────────────────────────────────
+  const totalUsers = userCounts.reduce((s, r) => s + r._count._all, 0);
+  const usersByRole = Object.fromEntries(userCounts.map((r) => [r.role, r._count._all]));
+
+  const teamsByStage = STAGE_ORDER.map((stage) => ({
+    stage,
+    count: teams.filter((t) => t.stage === stage).length,
+  }));
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+  const tasksByStatus = {
+    BACKLOG:     tasks.filter((t) => t.status === "BACKLOG").length,
+    TODO:        tasks.filter((t) => t.status === "TODO").length,
+    IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS").length,
+    REVIEW:      tasks.filter((t) => t.status === "REVIEW").length,
+    APPROVED:    tasks.filter((t) => t.status === "APPROVED").length,
+    DONE:        tasks.filter((t) => t.status === "DONE").length,
+  };
+  const tasksByPriority = {
+    LOW:      tasks.filter((t) => t.priority === "LOW").length,
+    MEDIUM:   tasks.filter((t) => t.priority === "MEDIUM").length,
+    HIGH:     tasks.filter((t) => t.priority === "HIGH").length,
+    CRITICAL: tasks.filter((t) => t.priority === "CRITICAL").length,
+  };
+  const overdueTasks = tasks.filter(
+    (t) => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "DONE" && t.status !== "APPROVED",
+  ).length;
+  const completionRate = tasks.length
+    ? Math.round(((tasksByStatus.DONE + tasksByStatus.APPROVED) / tasks.length) * 100)
+    : 0;
+  const githubLinkedTasks = tasks.filter((t) => t.integrationMode === "GITHUB").length;
+
+  // ── Submissions ────────────────────────────────────────────────────────────
+  const submissionsByStatus = {
+    PENDING:           submissions.filter((s) => s.status === "PENDING").length,
+    UNDER_REVIEW:      submissions.filter((s) => s.status === "UNDER_REVIEW").length,
+    REVISION_REQUIRED: submissions.filter((s) => s.status === "REVISION_REQUIRED").length,
+    APPROVED:          submissions.filter((s) => s.status === "APPROVED").length,
+  };
+  const graded = submissions.filter((s) => s.status === "APPROVED" && s.grade !== null);
+  const averageGrade = graded.length
+    ? Math.round(graded.reduce((sum, s) => sum + (s.grade ?? 0), 0) / graded.length)
+    : 0;
+  const onTimeRate = submissions.length
+    ? Math.round((submissions.filter((s) => !s.late).length / submissions.length) * 100)
+    : 100;
+  const lateSubmissions = submissions.filter((s) => s.late).length;
+
+  const submissionsByPhase = STAGE_ORDER.map((stage) => {
+    const inPhase = submissions.filter((s) => s.sdlcPhase === stage);
+    const approvedInPhase = inPhase.filter((s) => s.status === "APPROVED" && s.grade !== null);
+    const phaseAvg = approvedInPhase.length
+      ? Math.round(approvedInPhase.reduce((s, x) => s + (x.grade ?? 0), 0) / approvedInPhase.length)
+      : null;
+    return {
+      stage,
+      total: inPhase.length,
+      approved: approvedInPhase.length,
+      averageGrade: phaseAvg,
+    };
+  });
+
+  // ── Proposals ──────────────────────────────────────────────────────────────
+  const proposalsByStatus = {
+    DRAFT:              proposals.filter((p) => p.status === "DRAFT").length,
+    SUBMITTED:          proposals.filter((p) => p.status === "SUBMITTED").length,
+    UNDER_REVIEW:       proposals.filter((p) => p.status === "UNDER_REVIEW").length,
+    REVISION_REQUESTED: proposals.filter((p) => p.status === "REVISION_REQUESTED").length,
+    APPROVED:           proposals.filter((p) => p.status === "APPROVED").length,
+    REJECTED:           proposals.filter((p) => p.status === "REJECTED").length,
+  };
+
+  // ── Meetings ───────────────────────────────────────────────────────────────
+  const meetingsByStatus = {
+    PENDING_APPROVAL: meetings.filter((m) => m.status === "PENDING_APPROVAL").length,
+    CONFIRMED:        meetings.filter((m) => m.status === "CONFIRMED").length,
+    DECLINED:         meetings.filter((m) => m.status === "DECLINED").length,
+    CANCELLED:        meetings.filter((m) => m.status === "CANCELLED").length,
+    COMPLETED:        meetings.filter((m) => m.status === "COMPLETED").length,
+  };
+
+  // ── Risks ──────────────────────────────────────────────────────────────────
+  const risksByStatus = {
+    OPEN:       risks.filter((r) => r.status === "OPEN").length,
+    MONITORING: risks.filter((r) => r.status === "MONITORING").length,
+    RESOLVED:   risks.filter((r) => r.status === "RESOLVED").length,
+  };
+  const criticalRisksOpen = risks.filter((r) => r.status === "OPEN" && r.severity === "CRITICAL").length;
+
+  // ── Time-series (last 12 weeks) ────────────────────────────────────────────
+  function bucketByWeek(items, dateField) {
+    const weeks = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const start = new Date(now);
+      start.setDate(now.getDate() - i * 7 - 7);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7);
+      const count = items.filter((it) => {
+        const d = it[dateField] ? new Date(it[dateField]) : null;
+        return d && d >= start && d < end;
+      }).length;
+      weeks.push({
+        label: `W${12 - i}`,
+        start: start.toISOString(),
+        count,
+      });
+    }
+    return weeks;
+  }
+
+  const trend = {
+    submissions: bucketByWeek(submissions, "submittedAt"),
+    tasks:       bucketByWeek(tasks, "createdAt"),
+    meetings:    bucketByWeek(meetings, "createdAt"),
+  };
+
+  return {
+    generatedAt: new Date().toISOString(),
+    overview: {
+      totalUsers,
+      usersByRole,
+      totalTeams: teams.length,
+      teamsByStage,
+      averageGrade,
+      completionRate,
+      onTimeRate,
+    },
+    tasks: {
+      total: tasks.length,
+      byStatus: tasksByStatus,
+      byPriority: tasksByPriority,
+      overdue: overdueTasks,
+      completionRate,
+      githubLinked: githubLinkedTasks,
+    },
+    submissions: {
+      total: submissions.length,
+      byStatus: submissionsByStatus,
+      byPhase: submissionsByPhase,
+      averageGrade,
+      onTimeRate,
+      lateSubmissions,
+      graded: graded.length,
+    },
+    proposals: {
+      total: proposals.length,
+      byStatus: proposalsByStatus,
+    },
+    meetings: {
+      total: meetings.length,
+      byStatus: meetingsByStatus,
+    },
+    risks: {
+      total: risks.length,
+      byStatus: risksByStatus,
+      criticalOpen: criticalRisksOpen,
+    },
+    trend,
+  };
+}

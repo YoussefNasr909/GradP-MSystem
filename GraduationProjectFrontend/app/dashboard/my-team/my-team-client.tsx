@@ -33,6 +33,7 @@ import { usersApi } from "@/lib/api/users"
 import { LeaderSupervisorsTab, SupervisorRequestInbox } from "./supervisors-panel"
 import AdminTeamWorkspace from "./admin-team-workspace"
 import { useAuthStore } from "@/lib/stores/auth-store"
+import { TeamGradeCard } from "@/components/dashboard/team-grade-card"
 import { teamsApi } from "@/lib/api/teams"
 import type {
   ApiTeamDetail,
@@ -202,6 +203,9 @@ export default function MyTeamClient() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6 xl:p-8">
       <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
+
+      {/* Project grade snapshot — pulls live submissions + proposal */}
+      <TeamGradeCard teamId={team.id} />
 
       <Tabs defaultValue="overview" className="space-y-5">
         <div className="overflow-x-auto pb-0.5">

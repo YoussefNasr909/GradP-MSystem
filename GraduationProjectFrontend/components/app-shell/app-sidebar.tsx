@@ -10,7 +10,6 @@ import {
   FileText,
   Video,
   MessageSquare,
-  GitBranch,
   Award,
   BarChart3,
   ShieldCheck,

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { auth } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 import { ROLES } from "../../common/constants/roles.js";
-import { getSystemLogs, getUserActivity, getGradesOverview } from "./admin.service.js";
+import { getSystemLogs, getUserActivity, getGradesOverview, getAnalytics } from "./admin.service.js";
 
 const router = Router();
 
@@ -50,6 +50,16 @@ router.get("/grades-overview", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req
       search: search || undefined,
       stage: stage || undefined,
     });
+    res.json({ ok: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/analytics — admin + doctor (powers both /analytics and /reports pages)
+router.get("/analytics", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
+  try {
+    const result = await getAnalytics();
     res.json({ ok: true, data: result });
   } catch (err) {
     next(err);

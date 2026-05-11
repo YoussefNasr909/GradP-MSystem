@@ -157,6 +157,60 @@ export interface GradesOverviewResponse {
   }
 }
 
+// ─── Analytics (admin + doctor) ──────────────────────────────────────────────
+
+export interface AnalyticsResponse {
+  generatedAt: string
+  overview: {
+    totalUsers: number
+    usersByRole: Record<string, number>
+    totalTeams: number
+    teamsByStage: { stage: string; count: number }[]
+    averageGrade: number
+    completionRate: number
+    onTimeRate: number
+  }
+  tasks: {
+    total: number
+    byStatus: Record<string, number>
+    byPriority: Record<string, number>
+    overdue: number
+    completionRate: number
+    githubLinked: number
+  }
+  submissions: {
+    total: number
+    byStatus: Record<string, number>
+    byPhase: { stage: string; total: number; approved: number; averageGrade: number | null }[]
+    averageGrade: number
+    onTimeRate: number
+    lateSubmissions: number
+    graded: number
+  }
+  proposals: {
+    total: number
+    byStatus: Record<string, number>
+  }
+  meetings: {
+    total: number
+    byStatus: Record<string, number>
+  }
+  risks: {
+    total: number
+    byStatus: Record<string, number>
+    criticalOpen: number
+  }
+  trend: {
+    submissions: { label: string; start: string; count: number }[]
+    tasks:       { label: string; start: string; count: number }[]
+    meetings:    { label: string; start: string; count: number }[]
+  }
+}
+
+export const analyticsApi = {
+  get: () => apiRequest<AnalyticsResponse>("/admin/analytics"),
+}
+
 export const gradesOverviewApi = {
   get: (params?: { search?: string; stage?: string }) => {
     const q = new URLSearchParams()
