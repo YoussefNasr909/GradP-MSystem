@@ -22,6 +22,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { announcementsApi, audienceApi, type Announcement, type AnnouncementAudience, type AudiencePreviewTeam } from "@/lib/api/supervisor-tools"
 import { toast } from "sonner"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
+import { teamsApi } from "@/lib/api/teams"
 
 function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
@@ -33,7 +34,39 @@ export default function AnnouncementsPage() {
   const canPost = role === "doctor" || role === "ta" || role === "admin"
 
   const { data: myTeamState } = useMyTeamState()
-  const supervisedTeams = useMemo(() => myTeamState?.supervisedTeams ?? [], [myTeamState])
+
+  // For doctor/TA: their supervisedTeams come from /my-team.
+  // For admin: they don't appear as doctor/ta of any team, so we paginate
+  // through /teams to populate the picker with every team in the program.
+  const [adminTeams, setAdminTeams] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    if (role !== "admin") return
+    let cancelled = false
+    async function loadAllTeams() {
+      try {
+        const collected: { id: string; name: string }[] = []
+        let page = 1
+        for (let i = 0; i < 20; i++) {
+          const res = await teamsApi.list({ page, limit: 50 })
+          if (cancelled) return
+          for (const t of res.items) collected.push({ id: t.id, name: t.name })
+          if (res.items.length < 50 || page >= (res.meta?.totalPages ?? 1)) break
+          page += 1
+        }
+        if (!cancelled) setAdminTeams(collected)
+      } catch (err) {
+        console.error("[announcements] loadAllTeams failed:", err)
+      }
+    }
+    void loadAllTeams()
+    return () => { cancelled = true }
+  }, [role])
+
+  const supervisedTeams = useMemo(() => {
+    if (role === "admin") return adminTeams
+    return myTeamState?.supervisedTeams ?? []
+  }, [role, adminTeams, myTeamState])
 
   const [items, setItems]     = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
@@ -331,7 +364,7 @@ export default function AnnouncementsPage() {
                 <SelectContent>
                   <SelectItem value="ALL">
                     <span className="flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5" /> All supervised teams (filtered)
+                      <Globe className="h-3.5 w-3.5" /> {role === "admin" ? "All teams (filtered)" : "All supervised teams (filtered)"}
                     </span>
                   </SelectItem>
                   {supervisedTeams.map((t) => (
@@ -349,7 +382,7 @@ export default function AnnouncementsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All my supervised teams</SelectItem>
+                    <SelectItem value="all">{role === "admin" ? "Every team in the program" : "All my supervised teams"}</SelectItem>
                     <SelectItem value="byStage">Teams in a specific SDLC stage</SelectItem>
                     <SelectItem value="overdue">Teams with overdue deadlines</SelectItem>
                     <SelectItem value="needsProposalApproval">Teams whose proposal isn&apos;t approved yet</SelectItem>

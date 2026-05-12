@@ -35,6 +35,12 @@ async function getSupervisedTeamIds(actor) {
     const ts = await prisma.team.findMany({ where: { taId: actor.id }, select: { id: true } });
     return ts.map((t) => t.id);
   }
+  if (actor.role === ROLES.ADMIN) {
+    // Admin treats the entire program as their supervised universe — they can
+    // broadcast to all teams, filter by stage, or pick any specific team.
+    const ts = await prisma.team.findMany({ select: { id: true } });
+    return ts.map((t) => t.id);
+  }
   return [];
 }
 
