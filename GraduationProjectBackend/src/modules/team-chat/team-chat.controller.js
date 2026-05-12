@@ -16,7 +16,7 @@ export async function getTeamGroupConversationMessages(req, res) {
 }
 
 export async function sendTeamGroupMessage(req, res) {
-  const result = await sendTeamGroupMessageService(req.user, req.validated.params.id, req.validated.body);
+  const result = await sendTeamGroupMessageService(req.user, req.validated.params.id, req.validated.body, req.file);
   res.status(201).json({ ok: true, data: result });
 }
 

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { FileText, Plus, X, ArrowLeft, Save, Send, Lock } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Circle, FileText, Plus, X, ArrowLeft, Save, Send, Lock } from "lucide-react"
 import { toast } from "sonner"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { proposalsApi } from "@/lib/api/proposals"
@@ -93,6 +93,17 @@ function ChipInput({
   )
 }
 
+function getReadinessItems(body: ProposalBody) {
+  return [
+    { label: "Problem statement", done: body.problemStatement.trim().length >= 50 },
+    { label: "Objectives", done: body.objectives.length > 0 },
+    { label: "Scope", done: body.scope.trim().length >= 20 },
+    { label: "Methodology / SDLC approach", done: body.methodology.trim().length >= 20 },
+    { label: "Technology stack", done: body.technologies.length > 0 },
+    { label: "Deliverables", done: body.deliverables.length > 0 },
+  ]
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function NewProposalPage() {
@@ -129,6 +140,9 @@ export default function NewProposalPage() {
     if (body.deliverables.length < 1)             return "Add at least 1 deliverable"
     return null
   }
+
+  const readinessItems = getReadinessItems(body)
+  const readinessComplete = readinessItems.filter((item) => item.done).length
 
   async function handleSaveDraft() {
     const err = validate()
@@ -291,6 +305,33 @@ export default function NewProposalPage() {
             rows={3}
             maxLength={2000}
           />
+        </div>
+
+        <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold">Submission Readiness</h2>
+            </div>
+            <Badge variant={readinessComplete === readinessItems.length ? "default" : "secondary"}>
+              {readinessComplete}/{readinessItems.length}
+            </Badge>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {readinessItems.map((item) => (
+              <div key={item.label} className="flex items-center gap-2 text-sm">
+                {item.done ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground/50" />
+                )}
+                <span className={!item.done ? "text-muted-foreground" : undefined}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Approval unlocks official SDLC submissions, phase advancement, and formal risk approval.
+          </p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4 border-t border-border/40">

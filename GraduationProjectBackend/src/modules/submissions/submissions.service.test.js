@@ -4,9 +4,13 @@ import { AppError } from "../../common/errors/AppError.js"
 import {
   assertPhaseSubmissionGate,
   assertRubricGradeMatches,
+  getEarliestIncompleteRequiredPhase,
   getLatestPhaseSubmission,
   getRubricScaledScore,
+  isPhaseUnlockedForSubmission,
+  isOptionalEvidenceSubmission,
   normalizeRubric,
+  shouldEnforcePhaseSubmissionGate,
 } from "./submissions.service.js"
 import { calculateWeightedFinal } from "./evaluation-policy.js"
 
@@ -127,4 +131,71 @@ test("calculateWeightedFinal marks incomplete scores until all weighted phases e
   assert.equal(result.weightedFinal, 84)
   assert.equal(result.isFinalComplete, false)
   assert.deepEqual(result.missingWeightedPhases, ["IMPLEMENTATION", "TESTING", "DEPLOYMENT"])
+})
+
+test("shouldEnforcePhaseSubmissionGate only gates required non-optional evidence", () => {
+  assert.equal(
+    shouldEnforcePhaseSubmissionGate({
+      deliverableType: "CODE",
+      sdlcPhase: "IMPLEMENTATION",
+      title: "Source Code",
+    }),
+    true,
+  )
+  assert.equal(
+    shouldEnforcePhaseSubmissionGate({
+      deliverableType: "PROTOTYPE",
+      sdlcPhase: "IMPLEMENTATION",
+      title: "Prototype",
+    }),
+    false,
+  )
+  assert.equal(
+    shouldEnforcePhaseSubmissionGate({
+      deliverableType: "SRS",
+      sdlcPhase: "REQUIREMENTS",
+      title: "Optional: User interview notes",
+    }),
+    false,
+  )
+})
+
+test("isOptionalEvidenceSubmission detects optional supporting evidence titles", () => {
+  assert.equal(isOptionalEvidenceSubmission({ title: " Optional: Survey results " }), true)
+  assert.equal(isOptionalEvidenceSubmission({ title: "SRS Document" }), false)
+})
+
+test("getEarliestIncompleteRequiredPhase starts at requirements when SRS is not approved", () => {
+  assert.equal(getEarliestIncompleteRequiredPhase([]), "REQUIREMENTS")
+})
+
+test("getEarliestIncompleteRequiredPhase does not count optional evidence as required approval", () => {
+  assert.equal(
+    getEarliestIncompleteRequiredPhase([
+      {
+        sdlcPhase: "REQUIREMENTS",
+        deliverableType: "SRS",
+        status: "APPROVED",
+        title: "Optional: User interview notes",
+      },
+    ]),
+    "REQUIREMENTS",
+  )
+})
+
+test("getEarliestIncompleteRequiredPhase advances only after required approvals", () => {
+  assert.equal(
+    getEarliestIncompleteRequiredPhase([
+      { sdlcPhase: "REQUIREMENTS", deliverableType: "SRS", status: "APPROVED" },
+      { sdlcPhase: "DESIGN", deliverableType: "UML", status: "PENDING" },
+      { sdlcPhase: "IMPLEMENTATION", deliverableType: "CODE", status: "APPROVED" },
+    ]),
+    "DESIGN",
+  )
+})
+
+test("isPhaseUnlockedForSubmission keeps previous phases open", () => {
+  assert.equal(isPhaseUnlockedForSubmission("REQUIREMENTS", "DESIGN"), true)
+  assert.equal(isPhaseUnlockedForSubmission("DESIGN", "DESIGN"), true)
+  assert.equal(isPhaseUnlockedForSubmission("IMPLEMENTATION", "DESIGN"), false)
 })
