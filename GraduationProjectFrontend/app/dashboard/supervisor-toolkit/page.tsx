@@ -893,16 +893,45 @@ export default function SupervisorToolkitPage() {
   const supervisedTeams = useMemo(() => myTeamState?.supervisedTeams ?? [], [myTeamState])
 
   const [allTeams, setAllTeams] = useState<{ id: string; name: string }[]>([])
+  const [allTeamsLoaded, setAllTeamsLoaded] = useState(false)
   const [selectedTeamId, setSelectedTeamId] = useState<string>("")
 
-  // For admin we don't have a supervisedTeams equivalent — load all teams
+  // For admin we don't have a supervisedTeams equivalent — load all teams.
+  // /teams caps at limit=50, so we paginate until we've collected everything.
   useEffect(() => {
     if (!canView) return
-    if (role === "admin") {
-      teamsApi.list({ limit: 200 }).then((res) => {
-        setAllTeams(res.items.map((t) => ({ id: t.id, name: t.name })))
-      }).catch(() => {})
+    if (role !== "admin") return
+
+    let cancelled = false
+    async function loadAllTeams() {
+      try {
+        const collected: { id: string; name: string }[] = []
+        let page = 1
+        // Safety cap: walk up to 20 pages × 50 = 1000 teams max
+        for (let i = 0; i < 20; i++) {
+          const res = await teamsApi.list({ page, limit: 50 })
+          if (cancelled) return
+          for (const t of res.items) collected.push({ id: t.id, name: t.name })
+          if (res.items.length < 50 || page >= (res.meta?.totalPages ?? 1)) break
+          page += 1
+        }
+        if (!cancelled) {
+          setAllTeams(collected)
+          setAllTeamsLoaded(true)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          // Even on failure, flip the loaded flag so we surface an empty state
+          // instead of a perma-skeleton.
+          setAllTeamsLoaded(true)
+          toast.error("Failed to load teams")
+          console.error("[supervision] loadAllTeams failed:", err)
+        }
+      }
     }
+
+    void loadAllTeams()
+    return () => { cancelled = true }
   }, [canView, role])
 
   const teamOptions = useMemo(() => {
@@ -929,7 +958,9 @@ export default function SupervisorToolkitPage() {
     )
   }
 
-  const isLoadingTeams = (role === "admin" ? allTeams.length === 0 : myTeamLoading)
+  // Admin: we've finished paginating /teams once `allTeamsLoaded` flips true.
+  // Doctor/TA: we wait for the /my-team hook to settle.
+  const isLoadingTeams = role === "admin" ? !allTeamsLoaded : myTeamLoading
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">

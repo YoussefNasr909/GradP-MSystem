@@ -64,6 +64,14 @@ const navigationGroups = [
         icon: StickyNote,
         roles: ["admin", "doctor", "ta"],
       },
+      // User Management (formerly "Admin Panel") — the admin's primary tool.
+      // Moved here from Management & Reports so it's one click away on login.
+      {
+        name: "User Management",
+        href: "/dashboard/admin",
+        icon: ShieldCheck,
+        roles: ["admin"],
+      },
       {
         name: "My Team",
         href: "/dashboard/my-team",
@@ -151,8 +159,7 @@ const navigationGroups = [
       { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
       // Risks — created by leader, approved by doctor (TA is not the risk approver)
       { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
-      // (Supervision was moved to the Main group — it's the supervisor's primary workspace.)
-      { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
+      // (Supervision + User Management moved to the Main group — primary supervisor/admin workspaces.)
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
     ],
   },
