@@ -224,7 +224,7 @@ export default function SupportPage() {
                 Your ticket ID is <span className="font-mono font-bold">TKT-{Date.now().toString().slice(-6)}</span>
               </p>
               <p className="text-sm text-muted-foreground mb-8">
-                We'll review your request and get back to you within 24 hours.
+                We&apos;ll review your request and get back to you within 24 hours.
               </p>
               <div className="flex gap-4 justify-center">
                 <Button variant="outline" onClick={() => setSubmitted(false)}>
@@ -239,7 +239,7 @@ export default function SupportPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Submit a Support Ticket</CardTitle>
-                <CardDescription>Describe your issue and we'll help you resolve it</CardDescription>
+                <CardDescription>Describe your issue and we&apos;ll help you resolve it</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-6">

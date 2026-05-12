@@ -206,7 +206,7 @@ function providerLabel(provider: ApiCalendarProvider) {
 
 export default function CalendarPage() {
   const searchParams = useSearchParams()
-  const { accessToken } = useAuthStore()
+  const { accessToken, currentUser } = useAuthStore()
   const prefersReducedMotion = useReducedMotion()
   const [view, setView] = useState<CalendarView>("month")
   const [month, setMonth] = useState(new Date())
@@ -214,6 +214,7 @@ export default function CalendarPage() {
   const [search, setSearch] = useState("")
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("ALL")
   const [statusFilter, setStatusFilter] = useState("ALL")
+  const [teamFilter, setTeamFilter] = useState("ALL")
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -270,17 +271,26 @@ export default function CalendarPage() {
     return () => { evNames.forEach((n) => socket.off(n, handler)) }
   }, [accessToken, loadPage])
 
+  const isSupervisor = currentUser?.role === "doctor" || currentUser?.role === "ta"
+
+  const teamOptions = useMemo(() => {
+    const seen = new Map<string, string>()
+    events.forEach((e) => { if (e.team?.id && e.team?.name) seen.set(e.team.id, e.team.name) })
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+  }, [events])
+
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase()
     return events.filter((event) => {
       if (sourceFilter !== "ALL" && event.sourceType !== sourceFilter) return false
       if (statusFilter !== "ALL" && event.status !== statusFilter) return false
+      if (isSupervisor && teamFilter !== "ALL" && event.team?.id !== teamFilter) return false
       if (!query) return true
       return [event.title, event.description, event.team?.name, event.organizer?.fullName, event.assignee?.fullName, event.location, event.provider, event.externalProvider]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query))
     })
-  }, [events, search, sourceFilter, statusFilter])
+  }, [events, search, sourceFilter, statusFilter, teamFilter, isSupervisor])
 
   const statusOptions = useMemo(() => {
     const values = Array.from(new Set(events.map((e) => e.status).filter(Boolean)))
@@ -539,9 +549,26 @@ export default function CalendarPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Team filter — visible only to doctors / TAs when they supervise >1 team */}
+          {isSupervisor && teamOptions.length > 0 && (
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[180px]">
+                <Users className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="All teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All teams</SelectItem>
+                {teamOptions.map(({ id, name }) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           <div className="flex items-center justify-between gap-2 sm:contents">
             <Button variant="ghost" size="sm" className="h-9 w-full px-3 text-sm sm:w-auto"
-              onClick={() => { setSearch(""); setSourceFilter("ALL"); setStatusFilter("ALL") }}>
+              onClick={() => { setSearch(""); setSourceFilter("ALL"); setStatusFilter("ALL"); setTeamFilter("ALL") }}>
               Clear filters
             </Button>
             <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap sm:ml-auto">

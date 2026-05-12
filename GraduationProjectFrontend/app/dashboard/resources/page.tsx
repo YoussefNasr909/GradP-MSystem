@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import {
   AlertTriangle,
@@ -141,10 +142,10 @@ export default function ResourcesPage() {
     isStudentRole && myTeamState?.team && !myTeamState.team.doctor && !myTeamState.team.ta,
   )
 
-  const refreshResources = async () => {
+  const refreshResources = useCallback(async () => {
     const data = await getResources({ search: searchQuery, category: selectedCategory })
     setResources(data)
-  }
+  }, [searchQuery, selectedCategory])
 
   useEffect(() => {
     const fetchResources = async () => {
@@ -169,7 +170,7 @@ export default function ResourcesPage() {
     }, 300)
 
     return () => window.clearTimeout(timer)
-  }, [searchQuery, selectedCategory])
+  }, [refreshResources])
 
   const resetUploadState = () => {
     setSelectedFile(null)
@@ -608,7 +609,7 @@ export default function ResourcesPage() {
                       </p>
                       <div className="flex flex-wrap gap-4 justify-center">
                         <Button variant="outline" className="border-amber-500/50 hover:bg-amber-500/10" asChild>
-                          <a href="/dashboard/proposals">Invite a Supervisor</a>
+                          <Link href="/dashboard/proposals">Invite a Supervisor</Link>
                         </Button>
                         <Button variant="ghost" asChild>
                           <a href="/dashboard/my-team">View Team Details</a>

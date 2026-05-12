@@ -1,576 +1,341 @@
 "use client"
 
-import { SelectItem } from "@/components/ui/select"
-
-import { SelectContent } from "@/components/ui/select"
-
-import { SelectValue } from "@/components/ui/select"
-
-import { SelectTrigger } from "@/components/ui/select"
-
-import { Select } from "@/components/ui/select"
-
+import { useCallback, useEffect, useState } from "react"
+import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { FileText, Download, TrendingUp, Target, Clock, BarChart3, CheckCircle2, Users, Activity } from "lucide-react"
-import { teams } from "@/data/teams"
-import { tasks } from "@/data/tasks"
-import { useAuthStore, getUserById } from "@/lib/stores/auth-store"
-import { motion } from "framer-motion"
-import { TeamRequiredGuard } from "@/components/team-required-guard"
+import { Skeleton } from "@/components/ui/skeleton"
+import {
+  BarChart3, Download, FileText, RefreshCw, Lock, AlertCircle, FileSpreadsheet,
+  FileJson, Users, CheckSquare, Calendar, AlertTriangle, Award,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { analyticsApi, gradesOverviewApi } from "@/lib/api/admin-logs"
+import type { AnalyticsResponse, GradesOverviewResponse } from "@/lib/api/admin-logs"
+import { toast } from "sonner"
+
+// ─── CSV helpers ─────────────────────────────────────────────────────────────
+
+function toCsv(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return ""
+  const headers = Object.keys(rows[0])
+  const esc = (v: unknown) => {
+    if (v === null || v === undefined) return ""
+    const s = String(v)
+    return s.includes(",") || s.includes("\"") || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s
+  }
+  return [
+    headers.join(","),
+    ...rows.map((r) => headers.map((h) => esc(r[h])).join(",")),
+  ].join("\n")
+}
+
+function download(filename: string, content: string, mime: string) {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const { currentUser } = useAuthStore()
+  const role = currentUser?.role?.toLowerCase() ?? ""
+  const canView = role === "admin" || role === "doctor"
 
-  const myTeam = currentUser?.role === "leader" ? teams.find((t) => t.leaderId === currentUser?.id) : null
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null)
+  const [grades, setGrades]       = useState<GradesOverviewResponse | null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const isAdmin = currentUser?.role === "admin"
-  const isSupervisor = currentUser?.role === "doctor" || currentUser?.role === "ta"
-  const isLeader = currentUser?.role === "leader"
+  const fetchData = useCallback(async () => {
+    setError(false)
+    try {
+      const [a, g] = await Promise.all([
+        analyticsApi.get(),
+        gradesOverviewApi.get(),
+      ])
+      setAnalytics(a)
+      setGrades(g)
+    } catch {
+      setError(true)
+    }
+  }, [])
 
-  const teamTasks = isLeader && myTeam ? tasks.filter((t) => t.teamId === myTeam.id) : tasks
+  useEffect(() => {
+    if (!canView) return
+    setLoading(true)
+    fetchData().finally(() => setLoading(false))
+  }, [canView, fetchData])
 
-  const completedTasks = teamTasks.filter((t) => t.status === "done").length
-  const avgProgress = myTeam?.progress || 0
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchData()
+    setRefreshing(false)
+  }
+
+  // ── Export actions ─────────────────────────────────────────────────────────
+
+  function exportGradesCsv() {
+    if (!grades) return
+    const rows = grades.rows.map((r) => ({
+      teamId: r.teamId,
+      teamName: r.teamName,
+      stage: r.stage,
+      memberCount: r.memberCount,
+      doctor: r.doctor?.fullName ?? "",
+      ta: r.ta?.fullName ?? "",
+      leader: r.leader?.fullName ?? "",
+      averageGrade: r.averageGrade ?? "",
+      weightedFinal: r.weightedFinal ?? "",
+      approved: r.stats.approved,
+      pendingReview: r.stats.pendingReview,
+      underReview: r.stats.underReview,
+      needsRevision: r.stats.needsRevision,
+      totalSubmissions: r.stats.total,
+    }))
+    download(`grades-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), "text/csv;charset=utf-8")
+    toast.success("Grades CSV downloaded")
+  }
+
+  function exportAnalyticsJson() {
+    if (!analytics) return
+    download(
+      `analytics-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(analytics, null, 2),
+      "application/json",
+    )
+    toast.success("Analytics JSON downloaded")
+  }
+
+  function exportPhasesCsv() {
+    if (!analytics) return
+    const rows = analytics.submissions.byPhase.map((p) => ({
+      stage: p.stage,
+      total: p.total,
+      approved: p.approved,
+      averageGrade: p.averageGrade ?? "",
+    }))
+    download(`sdlc-phases-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows), "text/csv;charset=utf-8")
+    toast.success("SDLC phases CSV downloaded")
+  }
+
+  if (!canView) {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="min-h-[60vh] flex items-center justify-center">
+        <Card className="p-12 text-center max-w-md border-border/50">
+          <Lock className="h-16 w-16 mx-auto mb-6 text-destructive" />
+          <h2 className="text-2xl font-bold mb-3">Access Denied</h2>
+          <p className="text-muted-foreground">Reports are only available to admins and doctors.</p>
+        </Card>
+      </motion.div>
+    )
+  }
 
   return (
-    <TeamRequiredGuard
-      pageName="Reports & Analytics"
-      pageDescription="Review team progress, delivery status, and project reporting once your team workspace is ready."
-      icon={<BarChart3 className="h-10 w-10 text-primary" />}
-    >
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent">
-            {isLeader ? "Team Reports & Analytics" : "Reports & Analytics"}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {isLeader && myTeam ? `Comprehensive insights for ${myTeam.name}` : "Generate insights and export data"}
-          </p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">
+      {/* Hero */}
+      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-emerald-500/5" />
+        <motion.div
+          className="absolute -right-20 -top-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"
+          animate={{ scale: [1, 1.15, 1], rotate: [0, 120, 0] }}
+          transition={{ duration: 20, repeat: Infinity }}
+        />
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
+              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+              <BarChart3 className="h-7 w-7 text-blue-500" />
+              Reports
+            </motion.h1>
+            <motion.p className="text-muted-foreground"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+              Generate and download program reports for grades, phases, and full analytics
+            </motion.p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
+            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
+            Refresh
+          </Button>
         </div>
-        <Button className="gap-2 glow">
-          <Download className="h-4 w-4" />
-          Export Report
-        </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        {isLeader && myTeam ? (
-          <>
-            <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50 hover:border-primary/50 transition-all group hover:shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg group-hover:scale-110 transition-transform">
-                  <Users className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold">{myTeam.memberIds.length}</p>
-              <p className="text-sm text-muted-foreground">Team Members</p>
-            </Card>
-            <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50 hover:border-primary/50 transition-all group hover:shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg group-hover:scale-110 transition-transform">
-                  <CheckCircle2 className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold">{completedTasks}</p>
-              <p className="text-sm text-muted-foreground">Tasks Completed</p>
-            </Card>
-            <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50 hover:border-primary/50 transition-all group hover:shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-primary to-accent shadow-lg group-hover:scale-110 transition-transform">
-                  <Target className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold">{avgProgress}%</p>
-              <p className="text-sm text-muted-foreground">Project Progress</p>
-            </Card>
-            <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50 hover:border-primary/50 transition-all group hover:shadow-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg group-hover:scale-110 transition-transform">
-                  <BarChart3 className="h-5 w-5 text-white" />
-                </div>
-              </div>
-              <p className="text-3xl font-bold">
-                {myTeam.health === "healthy" ? "Good" : myTeam.health === "at-risk" ? "Fair" : "Poor"}
-              </p>
-              <p className="text-sm text-muted-foreground">Team Health</p>
-            </Card>
-          </>
-        ) : (
-          <>
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Users className="h-5 w-5 text-primary" />
-                <span className="font-medium">Active Teams</span>
-              </div>
-              <p className="text-3xl font-bold">{teams.length}</p>
-              <p className="text-xs text-success mt-1 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                12% from last month
-              </p>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Target className="h-5 w-5 text-success" />
-                <span className="font-medium">Tasks Completed</span>
-              </div>
-              <p className="text-3xl font-bold">247</p>
-              <p className="text-xs text-success mt-1 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                18% from last week
-              </p>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock className="h-5 w-5 text-warning" />
-                <span className="font-medium">Avg Response Time</span>
-              </div>
-              <p className="text-3xl font-bold">2.4h</p>
-              <p className="text-xs text-success mt-1 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />
-                20% faster
-              </p>
-            </Card>
-            <Card className="p-6">
-              <div className="flex items-center gap-3 mb-2">
-                <BarChart3 className="h-5 w-5 text-purple-500" />
-                <span className="font-medium">Avg Grade</span>
-              </div>
-              <p className="text-3xl font-bold">87%</p>
-              <p className="text-xs text-success mt-1 flex items-center gap-1">
-                <TrendingUp className="h-3 w-3" />5 pts increase
-              </p>
-            </Card>
-          </>
-        )}
-      </div>
-
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          {isLeader && <TabsTrigger value="members">Member Performance</TabsTrigger>}
-          {isLeader && <TabsTrigger value="tasks">Task Analytics</TabsTrigger>}
-          {!isLeader && <TabsTrigger value="teams">Team Reports</TabsTrigger>}
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          {(isAdmin || isSupervisor) && <TabsTrigger value="custom">Custom Reports</TabsTrigger>}
-        </TabsList>
-
-        <TabsContent value="overview" className="space-y-6 mt-6">
-          {isLeader && myTeam ? (
-            <>
-              <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
-                  {myTeam.name} - Project Overview
-                </h3>
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Overall Project Completion</span>
-                      <span className="text-sm text-muted-foreground">{myTeam.progress}%</span>
-                    </div>
-                    <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${myTeam.progress}%` }}
-                        transition={{ duration: 1, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-primary to-accent"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Task Completion Rate</span>
-                        <span className="text-sm text-muted-foreground">
-                          {teamTasks.length > 0 ? Math.round((completedTasks / teamTasks.length) * 100) : 0}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-success"
-                          style={{
-                            width: teamTasks.length > 0 ? `${(completedTasks / teamTasks.length) * 100}%` : "0%",
-                          }}
-                        />
-                      </div>
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="p-6"><Skeleton className="h-32" /></Card>
+          ))}
+        </div>
+      ) : error ? (
+        <Card className="p-12 text-center border-border/50">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
+          <p className="text-muted-foreground mb-4">Failed to load report data</p>
+          <Button variant="outline" onClick={() => void fetchData()}>Try again</Button>
+        </Card>
+      ) : analytics && grades ? (
+        <>
+          {/* High-level snapshot */}
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              { label: "Teams",      value: analytics.overview.totalTeams,     icon: Users,        accent: "bg-blue-500" },
+              { label: "Tasks",      value: analytics.tasks.total,             icon: CheckSquare,  accent: "bg-amber-500" },
+              { label: "Submissions",value: analytics.submissions.total,       icon: FileText,     accent: "bg-purple-500" },
+              { label: "Avg Grade",  value: `${analytics.overview.averageGrade}/100`, icon: Award, accent: "bg-green-500" },
+            ].map((s, i) => (
+              <motion.div key={s.label}
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 * i }}>
+                <Card className="p-5 border-border/50">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("p-2.5 rounded-xl text-white", s.accent)}>
+                      <s.icon className="h-5 w-5" />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Team Engagement</span>
-                        <span className="text-sm text-muted-foreground">85%</span>
-                      </div>
-                      <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                        <div className="h-full bg-primary" style={{ width: "85%" }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-                  <h3 className="font-semibold text-lg mb-4">Current Sprint Status</h3>
-                  <div className="space-y-4">
-                    {["Backlog", "In Progress", "Review", "Done"].map((status, index) => {
-                      const count = teamTasks.filter((t) =>
-                        status === "Backlog"
-                          ? t.status === "backlog" || t.status === "todo"
-                          : status === "In Progress"
-                            ? t.status === "in-progress"
-                            : status === "Review"
-                              ? t.status === "review"
-                              : t.status === "done",
-                      ).length
-
-                      return (
-                        <div key={status} className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`h-3 w-3 rounded-full ${
-                                status === "Done"
-                                  ? "bg-success"
-                                  : status === "Review"
-                                    ? "bg-warning"
-                                    : status === "In Progress"
-                                      ? "bg-primary"
-                                      : "bg-muted-foreground"
-                              }`}
-                            />
-                            <span className="font-medium">{status}</span>
-                          </div>
-                          <Badge variant="outline">{count} tasks</Badge>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </Card>
-
-                <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-                  <h3 className="font-semibold text-lg mb-4">Recent Achievements</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-success mt-1.5" />
-                      <div>
-                        <p className="font-medium">Completed 10 tasks this week</p>
-                        <p className="text-xs text-muted-foreground">2 days ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />
-                      <div>
-                        <p className="font-medium">All members attended team meeting</p>
-                        <p className="text-xs text-muted-foreground">3 days ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-warning mt-1.5" />
-                      <div>
-                        <p className="font-medium">Reached 75% project milestone</p>
-                        <p className="text-xs text-muted-foreground">1 week ago</p>
-                      </div>
+                      <p className="text-2xl font-bold tabular-nums">{s.value}</p>
+                      <p className="text-xs text-muted-foreground">{s.label}</p>
                     </div>
                   </div>
                 </Card>
-              </div>
-            </>
-          ) : (
-            <>
-              <Card className="p-6">
-                <h3 className="font-semibold text-lg mb-4">System Overview</h3>
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Overall Project Completion</span>
-                      <span className="text-sm text-muted-foreground">68%</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className="h-full bg-primary" style={{ width: "68%" }} />
-                    </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Export cards */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-amber-500/10">
+                    <Award className="h-5 w-5 text-amber-500" />
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Average Team Progress</span>
-                      <span className="text-sm text-muted-foreground">72%</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className="h-full bg-success" style={{ width: "72%" }} />
-                    </div>
+                    <h3 className="font-semibold">Team Grades</h3>
+                    <p className="text-xs text-muted-foreground">Per-team breakdown</p>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                  Final grades, weighted scores, submission counts, supervisors — one row per team.
+                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant="outline" className="text-[10px]">{grades.rows.length} teams</Badge>
+                  <Badge variant="outline" className="text-[10px]">CSV</Badge>
+                </div>
+                <Button onClick={exportGradesCsv} className="w-full">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Download CSV
+                </Button>
+              </Card>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-purple-500/10">
+                    <BarChart3 className="h-5 w-5 text-purple-500" />
                   </div>
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">Submission Rate</span>
-                      <span className="text-sm text-muted-foreground">95%</span>
-                    </div>
-                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                      <div className="h-full bg-warning" style={{ width: "95%" }} />
-                    </div>
+                    <h3 className="font-semibold">SDLC Phases</h3>
+                    <p className="text-xs text-muted-foreground">Phase-by-phase performance</p>
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                  Approval count and average grade per SDLC phase across all teams.
+                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant="outline" className="text-[10px]">6 phases</Badge>
+                  <Badge variant="outline" className="text-[10px]">CSV</Badge>
+                </div>
+                <Button onClick={exportPhasesCsv} variant="outline" className="w-full">
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Download CSV
+                </Button>
               </Card>
+            </motion.div>
 
-              <div className="grid gap-6 md:grid-cols-2">
-                <Card className="p-6">
-                  <h3 className="font-semibold text-lg mb-4">Top Performing Teams</h3>
-                  <div className="space-y-3">
-                    {teams.slice(0, 5).map((team, index) => (
-                      <div key={team.id} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg font-bold text-muted-foreground">#{index + 1}</span>
-                          <span className="font-medium">{team.name}</span>
-                        </div>
-                        <Badge>{team.progress}%</Badge>
-                      </div>
-                    ))}
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-xl bg-blue-500/10">
+                    <FileJson className="h-5 w-5 text-blue-500" />
                   </div>
-                </Card>
-
-                <Card className="p-6">
-                  <h3 className="font-semibold text-lg mb-4">Recent Activity</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-success mt-1.5" />
-                      <div>
-                        <p className="font-medium">Smart Campus submitted SRS Document</p>
-                        <p className="text-xs text-muted-foreground">2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-primary mt-1.5" />
-                      <div>
-                        <p className="font-medium">AI Study Assistant completed Sprint 2</p>
-                        <p className="text-xs text-muted-foreground">5 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 text-sm">
-                      <div className="h-2 w-2 rounded-full bg-warning mt-1.5" />
-                      <div>
-                        <p className="font-medium">Green Energy Monitor updated proposal</p>
-                        <p className="text-xs text-muted-foreground">1 day ago</p>
-                      </div>
-                    </div>
+                  <div>
+                    <h3 className="font-semibold">Full Analytics</h3>
+                    <p className="text-xs text-muted-foreground">All metrics in JSON</p>
                   </div>
-                </Card>
-              </div>
-            </>
-          )}
-        </TabsContent>
-
-        {isLeader && myTeam && (
-          <TabsContent value="members" className="space-y-4 mt-6">
-            <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-              <h3 className="font-semibold text-lg mb-6">Member Performance Analysis</h3>
-              <div className="space-y-4">
-                {myTeam.memberIds.map((memberId) => {
-                  const member = getUserById(memberId)
-                  const memberTasks = teamTasks.filter((t) => t.assigneeId === memberId)
-                  const completedCount = memberTasks.filter((t) => t.status === "done").length
-                  const completionRate =
-                    memberTasks.length > 0 ? Math.round((completedCount / memberTasks.length) * 100) : 0
-
-                  if (!member) return null
-
-                  return (
-                    <div
-                      key={memberId}
-                      className="border border-border rounded-lg p-4 hover:bg-muted/50 transition-all"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10">
-                            <AvatarImage src={member.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h4 className="font-medium">{member.name}</h4>
-                            <p className="text-sm text-muted-foreground">{member.track || "General"} Track</p>
-                          </div>
-                        </div>
-                        <Badge
-                          variant={completionRate >= 80 ? "default" : completionRate >= 50 ? "secondary" : "outline"}
-                        >
-                          {completionRate}% Complete
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4 mb-3">
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-primary">{memberTasks.length}</p>
-                          <p className="text-xs text-muted-foreground">Total Tasks</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-success">{completedCount}</p>
-                          <p className="text-xs text-muted-foreground">Completed</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-2xl font-bold text-warning">
-                            {memberTasks.filter((t) => t.status === "in-progress").length}
-                          </p>
-                          <p className="text-xs text-muted-foreground">In Progress</p>
-                        </div>
-                      </div>
-                      <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-primary to-accent"
-                          style={{ width: `${completionRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
-          </TabsContent>
-        )}
-
-        {isLeader && myTeam && (
-          <TabsContent value="tasks" className="space-y-4 mt-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-                <h3 className="font-semibold text-lg mb-4">Priority Distribution</h3>
-                <div className="space-y-3">
-                  {["critical", "high", "medium", "low"].map((priority) => {
-                    const count = teamTasks.filter((t) => t.priority === priority).length
-                    const percentage = teamTasks.length > 0 ? (count / teamTasks.length) * 100 : 0
-
-                    return (
-                      <div key={priority} className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="capitalize font-medium">{priority}</span>
-                          <span className="text-muted-foreground">{count} tasks</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${
-                              priority === "critical"
-                                ? "bg-red-500"
-                                : priority === "high"
-                                  ? "bg-orange-500"
-                                  : priority === "medium"
-                                    ? "bg-blue-500"
-                                    : "bg-gray-500"
-                            }`}
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
                 </div>
+                <p className="text-sm text-muted-foreground mb-4 flex-1">
+                  Complete analytics snapshot — every metric, distribution, and trend.
+                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant="outline" className="text-[10px]">Snapshot</Badge>
+                  <Badge variant="outline" className="text-[10px]">JSON</Badge>
+                </div>
+                <Button onClick={exportAnalyticsJson} variant="outline" className="w-full">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download JSON
+                </Button>
               </Card>
+            </motion.div>
+          </div>
 
-              <Card className="p-6 backdrop-blur-xl bg-card/50 border-border/50">
-                <h3 className="font-semibold text-lg mb-4">Workload Distribution</h3>
-                <div className="space-y-3">
-                  {myTeam.memberIds.map((memberId) => {
-                    const member = getUserById(memberId)
-                    const memberTasks = teamTasks.filter((t) => t.assigneeId === memberId)
-                    const percentage = teamTasks.length > 0 ? (memberTasks.length / teamTasks.length) * 100 : 0
-
-                    if (!member) return null
-
-                    return (
-                      <div key={memberId} className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage src={member.avatar || "/placeholder.svg"} />
-                              <AvatarFallback className="text-xs">{member.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="font-medium">{member.name.split(" ")[0]}</span>
-                          </div>
-                          <span className="text-muted-foreground">{memberTasks.length} tasks</span>
-                        </div>
-                        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-primary to-accent"
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </Card>
-            </div>
-          </TabsContent>
-        )}
-
-        <TabsContent value="teams" className="space-y-4 mt-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-semibold text-lg">Team Performance Comparison</h3>
-              <div className="flex items-center">
-                <Select defaultValue="all">
-                  <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Filter teams" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    <SelectItem value="active">Active Only</SelectItem>
-                    <SelectItem value="top">Top Performers</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {teams.map((team) => (
-                <div key={team.id} className="border border-border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h4 className="font-medium">{team.name}</h4>
-                      <p className="text-sm text-muted-foreground">{team.memberIds.length} members</p>
-                    </div>
-                    <Badge>{team.progress}% Complete</Badge>
-                  </div>
-                  <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: `${team.progress}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="performance" className="mt-6">
-          <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">Performance Metrics</h3>
+          {/* Quick distribution snapshot */}
+          <Card className="p-6 border-border/50">
+            <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" /> Current Distribution
+            </h3>
             <div className="grid gap-6 md:grid-cols-3">
-              <div className="border border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground mb-1">Task Completion Rate</p>
-                <p className="text-2xl font-bold">92%</p>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Submissions</p>
+                {Object.entries(analytics.submissions.byStatus).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-sm py-1">
+                    <span className="text-muted-foreground">{k.replace("_", " ").toLowerCase()}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
               </div>
-              <div className="border border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground mb-1">On-Time Submission</p>
-                <p className="text-2xl font-bold">88%</p>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Proposals</p>
+                {Object.entries(analytics.proposals.byStatus).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-sm py-1">
+                    <span className="text-muted-foreground">{k.replace("_", " ").toLowerCase()}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
               </div>
-              <div className="border border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground mb-1">Meeting Attendance</p>
-                <p className="text-2xl font-bold">95%</p>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Risks</p>
+                {Object.entries(analytics.risks.byStatus).map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between text-sm py-1">
+                    <span className="text-muted-foreground">{k.toLowerCase()}</span>
+                    <span className="font-semibold tabular-nums">{v}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm py-1 mt-1 pt-1 border-t border-border/40">
+                  <span className="text-red-500 font-medium flex items-center gap-1"><AlertTriangle className="h-3 w-3" />Critical</span>
+                  <span className="font-bold text-red-500">{analytics.risks.criticalOpen}</span>
+                </div>
               </div>
             </div>
           </Card>
-        </TabsContent>
 
-        {(isAdmin || isSupervisor) && (
-          <TabsContent value="custom" className="mt-6">
-            <Card className="p-8 text-center">
-              <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-semibold mb-2">Custom Report Builder</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Create customized reports with specific metrics and date ranges
-              </p>
-              <Button>Create Custom Report</Button>
-            </Card>
-          </TabsContent>
-        )}
-      </Tabs>
+          <p className="text-[10px] text-muted-foreground text-center">
+            Generated at {new Date(analytics.generatedAt).toLocaleString()}
+          </p>
+        </>
+      ) : null}
     </motion.div>
-    </TeamRequiredGuard>
   )
 }

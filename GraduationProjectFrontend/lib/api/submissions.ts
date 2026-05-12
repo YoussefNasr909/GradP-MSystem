@@ -22,6 +22,48 @@ export type ApiSubmissionUser = {
   avatarUrl: string | null
 }
 
+export type RubricItem = {
+  name: string
+  score: number
+  maxScore: number
+}
+
+export type GradeHistoryEntry = {
+  event: "ta_reviewed" | "revision_requested" | "finalized" | "bulk_finalized" | "unlocked" | "regraded"
+  reason?: string | null
+  overrideReason?: string | null
+  by: string
+  byName: string
+  byRole?: string
+  at: string
+  recommendedGrade?: number | null
+  feedback?: string | null
+  rubric?: RubricItem[] | null
+  rubricScore?: number | null
+  taRecommendedGrade?: number | null
+  noTaAssigned?: boolean
+  // unlock snapshot
+  snapshotGrade?: number | null
+  snapshotFeedback?: string | null
+  snapshotRubric?: RubricItem[] | null
+  snapshotReviewedBy?: string | null
+  snapshotReviewedAt?: string | null
+  // regrade entry
+  previousGrade?: number | null
+  newGrade?: number | null
+}
+
+export type ApiDefenseMeeting = {
+  id: string
+  title: string
+  status: string
+  startAt: string
+  endAt: string
+  mode: string
+  joinUrl: string | null
+  location: string | null
+}
+
 export type ApiSubmission = {
   id: string
   teamId: string
@@ -43,13 +85,28 @@ export type ApiSubmission = {
   submittedAt: string
   deadline: string | null
   late: boolean
+
+  // TA first-pass review
+  taRecommendedGrade: number | null
+  taFeedback: string | null
+  taReviewedAt: string | null
+  taReviewedBy: ApiSubmissionUser | null
+
+  // Doctor final grade
   feedback: string | null
   grade: number | null
   reviewedAt: string | null
+  reviewedBy: ApiSubmissionUser | null
+
+  rubric: RubricItem[] | null
+  gradeHistory: GradeHistoryEntry[] | null
+
+  defenseMeetingId: string | null
+  defenseMeeting: ApiDefenseMeeting | null
+
   createdAt: string
   updatedAt: string
   submittedBy: ApiSubmissionUser | null
-  reviewedBy: ApiSubmissionUser | null
   team: { id: string; name: string; stage: ApiTeamStage }
 }
 
@@ -94,6 +151,33 @@ export type CreateSubmissionPayload = {
 export type GradeSubmissionPayload = {
   grade: number
   feedback?: string
+  rubric?: RubricItem[]
+  reason?: string
+  overrideReason?: string
+}
+
+export type UnlockSubmissionPayload = {
+  reason: string
+}
+
+export type AttachDefensePayload = {
+  meetingId: string | null
+}
+
+export type BulkApprovePayload = {
+  submissionIds: string[]
+  feedback?: string
+}
+
+export type BulkApproveResult = {
+  approved: string[]
+  skipped: { id: string; reason: string }[]
+}
+
+export type TaReviewSubmissionPayload = {
+  recommendedGrade: number
+  feedback?: string
+  rubric?: RubricItem[]
 }
 
 export type RequestRevisionPayload = {
@@ -134,8 +218,25 @@ export const submissionsApi = {
 
   get: (id: string) => apiRequest<ApiSubmission>(`/submissions/${id}`),
 
+  /** Doctor only — finalize the grade for a submission. */
   grade: (id: string, payload: GradeSubmissionPayload) =>
     apiRequest<ApiSubmission>(`/submissions/${id}/grade`, { method: "PATCH", body: payload }),
+
+  /** TA only — submit a first-pass review with a recommended grade. */
+  taReview: (id: string, payload: TaReviewSubmissionPayload) =>
+    apiRequest<ApiSubmission>(`/submissions/${id}/ta-review`, { method: "PATCH", body: payload }),
+
+  /** Doctor — unlock an approved submission so it can be re-graded. */
+  unlock: (id: string, payload: UnlockSubmissionPayload) =>
+    apiRequest<ApiSubmission>(`/submissions/${id}/unlock`, { method: "PATCH", body: payload }),
+
+  /** Supervisor — attach or detach a defense meeting (DEPLOYMENT phase only). */
+  attachDefense: (id: string, payload: AttachDefensePayload) =>
+    apiRequest<ApiSubmission>(`/submissions/${id}/defense`, { method: "PATCH", body: payload }),
+
+  /** Doctor — approve multiple submissions in one call. */
+  bulkApprove: (payload: BulkApprovePayload) =>
+    apiRequest<BulkApproveResult>("/submissions/bulk-approve", { method: "POST", body: payload }),
 
   requestRevision: (id: string, payload: RequestRevisionPayload) =>
     apiRequest<ApiSubmission>(`/submissions/${id}/request-revision`, { method: "PATCH", body: payload }),

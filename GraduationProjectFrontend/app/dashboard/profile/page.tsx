@@ -58,9 +58,14 @@ import {
   BarChart3,
   Activity,
 } from "lucide-react"
-import { teams } from "@/data/teams"
-import { tasks } from "@/data/tasks"
-import { getUserById } from "@/data/users"
+// Mock arrays neutralized — profile widgets that need real per-user data should
+// wire dedicated API calls. For now derived counts show 0 instead of fake numbers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const teams: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tasks: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getUserById(_id: string): any { return null }
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 

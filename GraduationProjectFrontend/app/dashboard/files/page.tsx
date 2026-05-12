@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -158,7 +158,7 @@ export default function FilesPage() {
   })
 
   const memberTeamId = myTeamState?.team?.id
-  const supervisedTeams = myTeamState?.supervisedTeams ?? []
+  const supervisedTeams = useMemo(() => myTeamState?.supervisedTeams ?? [], [myTeamState?.supervisedTeams])
   const effectiveTeamId = isSupervisor ? selectedSupervisedTeamId || undefined : memberTeamId
 
   useEffect(() => {

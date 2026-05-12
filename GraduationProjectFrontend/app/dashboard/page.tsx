@@ -54,11 +54,27 @@ import {
   Megaphone,
   MessageCircle,
 } from "lucide-react"
-import { teams } from "@/data/teams"
-import { users, getUserById } from "@/data/users"
-import { proposals } from "@/data/proposals"
-import { tasks } from "@/data/tasks"
-import { meetings } from "@/data/meetings"
+// ─── Real data placeholders ─────────────────────────────────────────────────
+// The mock arrays from @/data/* used to drive these dashboards. They've been
+// replaced with empty placeholders so derived counts are honest (0 instead of
+// fake). The live counts users actually care about come from RoleActionInbox
+// (proposals to review, submissions to grade, tasks awaiting PR review, etc.)
+// which fetches them via real API endpoints. Per-dashboard widgets that need
+// more detail wire their own hooks (e.g. useMyTeamState).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const teams: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const users: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const proposals: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tasks: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const meetings: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getUserById(_id: string): any { return null }
+void users
+void proposals
 import { usersApi } from "@/lib/api/users"
 import { teamsApi } from "@/lib/api/teams"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
@@ -67,6 +83,7 @@ import type { UsersSummary } from "@/lib/api/types"
 import NextLink from "next/link"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -1366,12 +1383,12 @@ function DoctorDashboard() {
       urgent: pendingProposals.length > 0,
     },
     {
-      title: "Evaluations",
+      title: "Grades Overview",
       icon: ClipboardCheck,
       href: "/dashboard/evaluations",
       count: 4,
       color: "from-purple-500 to-pink-500",
-      description: "Grade & feedback",
+      description: "Final grades",
     },
     {
       title: "Calendar",
@@ -1534,6 +1551,9 @@ function DoctorDashboard() {
           )}
         </div>
       </motion.div>
+
+      {/* Role-aware action inbox — Doctor version */}
+      <RoleActionInbox />
 
       {/* Quick Access Grid */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -1802,12 +1822,12 @@ function TADashboard() {
       description: "Team discussions",
     },
     {
-      title: "Evaluations",
+      title: "Review Work",
       icon: ClipboardCheck,
-      href: "/dashboard/evaluations",
+      href: "/dashboard/reviews",
       count: 3,
       color: "from-orange-500 to-amber-500",
-      description: "Grade submissions",
+      description: "Tasks & PRs",
     },
     {
       title: "Files",
@@ -1826,12 +1846,12 @@ function TADashboard() {
       description: "Direct messages",
     },
     {
-      title: "Analytics",
+      title: "First-Pass Submissions",
       icon: BarChart3,
-      href: "/dashboard/analytics",
+      href: "/dashboard/submissions",
       count: 0,
       color: "from-rose-500 to-pink-500",
-      description: "Performance",
+      description: "Recommend grades",
     },
     {
       title: "Settings",
@@ -1936,6 +1956,9 @@ function TADashboard() {
           </div>
         </div>
       </motion.div>
+
+      {/* Role-aware action inbox — TA version */}
+      <RoleActionInbox />
 
       {/* Quick Access Grid */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>

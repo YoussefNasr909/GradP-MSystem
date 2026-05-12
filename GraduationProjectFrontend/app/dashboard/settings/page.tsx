@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import Image from "next/image"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import {
@@ -15,18 +16,15 @@ import {
   Lock,
   Mail,
   Monitor,
-  Moon,
   Palette,
   Save,
   Shield,
   Smartphone,
-  Sun,
   Trash2,
   User,
   Volume2,
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
@@ -117,7 +115,7 @@ const DEFAULT_NOTIFICATIONS: UserSettings["notifications"] = {
 }
 
 const DEFAULT_APPEARANCE: UserSettings["appearance"] = {
-  theme: "system",
+  theme: "light",
   fontSize: 16,
   compactMode: false,
   reducedMotion: false,
@@ -230,7 +228,9 @@ export default function SettingsPage() {
   const searchParams = useSearchParams()
   const { currentUser, accessToken, rememberSession, setAuth, logout } = useAuthStore()
   const { settings, isLoading, isSaving, error, loadSettings, saveSettings } = useSettingsStore()
-  const { theme: activeTheme, setTheme } = useTheme()
+  // Theme is owned by next-themes (driven by the topbar toggle). The settings
+  // page intentionally doesn't read or write it — see SettingsProvider for
+  // why we stopped doing that.
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed)
   const inAppNotifications = useUIStore((state) => state.inAppNotifications)
   const setInAppNotifications = useUIStore((state) => state.setInAppNotifications)
@@ -247,7 +247,6 @@ export default function SettingsPage() {
   const [passwordSaving, setPasswordSaving] = useState(false)
 
   const settingsRef = useRef(settings)
-  const setThemeRef = useRef(setTheme)
   const setSidebarCollapsedRef = useRef(setSidebarCollapsed)
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -278,10 +277,6 @@ export default function SettingsPage() {
   }, [settings])
 
   useEffect(() => {
-    setThemeRef.current = setTheme
-  }, [setTheme])
-
-  useEffect(() => {
     setSidebarCollapsedRef.current = setSidebarCollapsed
   }, [setSidebarCollapsed])
 
@@ -304,16 +299,9 @@ export default function SettingsPage() {
     setSecurity(settings.security)
   }, [settings])
 
-  // Keep appearance.theme in sync when theme changes from navbar
-  useEffect(() => {
-    if (!activeTheme) return
-    setAppearance((current) => {
-      if (current.theme === activeTheme) return current
-      return { ...current, theme: activeTheme as "light" | "dark" | "system" }
-    })
-  }, [activeTheme])
-
-  // On unmount, restore DOM to the last saved settings so previews don't persist
+  // On unmount, restore DOM to the last saved settings so live previews
+  // (font size, compact mode, etc.) don't persist if the user navigates away
+  // without saving. Theme is NOT touched here — it's owned by next-themes.
   useEffect(() => {
     return () => {
       const saved = settingsRef.current
@@ -324,7 +312,6 @@ export default function SettingsPage() {
       root.classList.toggle("app-reduced-motion", saved.appearance.reducedMotion)
       root.classList.toggle("app-high-contrast", saved.appearance.highContrast)
       setSidebarCollapsedRef.current(saved.appearance.sidebarCollapsed)
-      setThemeRef.current(saved.appearance.theme)
     }
   }, [])
 
@@ -899,13 +886,7 @@ export default function SettingsPage() {
                 <CardDescription>Tune the interface for your screen, eyes, and working style.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <SectionHeader title="Theme" description="Choose the color mode ProjectHub should use." />
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <ThemeButton icon={Sun} label="Light" selected={(activeTheme ?? appearance.theme) === "light"} onClick={() => { setTheme("light"); setAppearance((current) => ({ ...current, theme: "light" })) }} />
-                  <ThemeButton icon={Moon} label="Dark" selected={(activeTheme ?? appearance.theme) === "dark"} onClick={() => { setTheme("dark"); setAppearance((current) => ({ ...current, theme: "dark" })) }} />
-                  <ThemeButton icon={Monitor} label="System" selected={(activeTheme ?? appearance.theme) === "system"} onClick={() => { setTheme("system"); setAppearance((current) => ({ ...current, theme: "system" })) }} />
-                </div>
-
+                {/* Theme picker intentionally lives in the topbar (next to notifications) — removed from here on purpose. */}
                 <div className={panelClassName}>
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -1222,10 +1203,10 @@ export default function SettingsPage() {
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">Step 1 — Scan this QR code with your authenticator app</p>
                   <div className="rounded-lg border bg-background p-3">
-                    <img src={twoFactorSetup.qrCodeDataUrl} alt="Authenticator QR code" className="mx-auto h-48 w-48" />
+                    <Image src={twoFactorSetup.qrCodeDataUrl} alt="Authenticator QR code" width={192} height={192} unoptimized className="mx-auto h-48 w-48" />
                   </div>
                   <div className="rounded-lg border p-3">
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Can't scan? Enter this key manually instead</p>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Can&apos;t scan? Enter this key manually instead</p>
                     <div className="mt-2 flex items-center gap-2">
                       <code className="min-w-0 flex-1 break-all rounded bg-muted px-2 py-1 text-xs">{twoFactorSetup.manualEntryKey}</code>
                       <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(twoFactorSetup.manualEntryKey)}>
@@ -1401,31 +1382,3 @@ function SettingsSaveButton({
   )
 }
 
-function ThemeButton({
-  icon: Icon,
-  label,
-  selected,
-  onClick,
-}: {
-  icon: typeof Sun
-  label: string
-  selected: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-between rounded-lg border border-border/60 bg-background p-4 text-left transition hover:border-primary/40 hover:bg-primary/5",
-        selected && "border-primary bg-primary/10 shadow-sm",
-      )}
-    >
-      <span className="flex items-center gap-3 font-medium">
-        <Icon className="h-4 w-4" />
-        {label}
-      </span>
-      {selected ? <Check className="h-4 w-4 text-primary" /> : null}
-    </button>
-  )
-}

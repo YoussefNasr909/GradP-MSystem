@@ -17,6 +17,14 @@ import discussionsRouter from "../modules/discussions/discussions.routes.js";
 import chatRouter from "../modules/chat/chat.routes.js";
 import teamChatRouter from "../modules/team-chat/team-chat.routes.js";
 import risksRouter from "../modules/risks/risks.routes.js";
+import adminRouter from "../modules/admin/admin.routes.js";
+import proposalsRouter from "../modules/proposals/proposals.routes.js";
+import supervisorNotesRouter from "../modules/supervisor-notes/supervisor-notes.routes.js";
+import deadlinesRouter from "../modules/deadlines/deadlines.routes.js";
+import announcementsRouter from "../modules/announcements/announcements.routes.js";
+import submissionCommentsRouter from "../modules/submission-comments/submission-comments.routes.js";
+import rubricTemplatesRouter from "../modules/rubric-templates/rubric-templates.routes.js";
+import sprintsRouter from "../modules/sprints/sprints.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -39,4 +47,12 @@ router.use("/discussions", discussionsRouter);
 router.use("/chat", chatRouter);
 router.use("/team-chats", teamChatRouter);
 router.use("/risks", risksRouter);
+router.use("/admin", adminRouter);
+router.use("/proposals", proposalsRouter);
+router.use("/supervisor-notes", supervisorNotesRouter);
+router.use("/deadlines", deadlinesRouter);
+router.use("/announcements", announcementsRouter);
+router.use("/submission-comments", submissionCommentsRouter);
+router.use("/rubric-templates", rubricTemplatesRouter);
+router.use("/sprints", sprintsRouter);
 export default router;

@@ -17,6 +17,7 @@ import {
   Trash2,
   ArrowRight,
   Loader2,
+  Megaphone,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState, useMemo, useEffect, useCallback, useRef } from "react"
@@ -30,6 +31,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useSettingsStore } from "@/lib/stores/settings-store"
 import { useUIStore } from "@/lib/stores/ui-store"
 import type { UserSettings } from "@/lib/api/types"
+import { getNotificationDisplay } from "@/lib/notifications/display"
 import { cn } from "@/lib/utils"
 
 const POLL_INTERVAL_MS = 30_000 // poll unread count every 30s
@@ -251,8 +253,11 @@ export function NotificationCenter() {
 
   // ─── Icon & badge helpers ─────────────────────────────────────────────────
   const getIcon = (notification: ApiNotification) => {
+    const display = getNotificationDisplay(notification)
     const type = notification.type
     const iconClass = "h-4 w-4 sm:h-5 sm:w-5"
+    if (display.category === "announcement") return <Megaphone className={`${iconClass} text-sky-500`} />
+    if (display.category === "meeting") return <Calendar className={`${iconClass} text-teal-500`} />
     if (type.startsWith("TASK_ASSIGNED"))       return <CheckCircle className={`${iconClass} text-emerald-500`} />
     if (type.startsWith("TASK_APPROVED"))        return <CheckCircle className={`${iconClass} text-green-500`} />
     if (type.startsWith("TASK_CHANGES"))         return <AlertCircle className={`${iconClass} text-orange-500`} />
@@ -261,36 +266,13 @@ export function NotificationCenter() {
     if (type.startsWith("TEAM_JOIN"))            return <Award       className={`${iconClass} text-purple-500`} />
     if (type.startsWith("SUPERVISOR"))           return <Calendar    className={`${iconClass} text-amber-500`} />
     if (type.startsWith("SUBMISSION"))           return <FileText    className={`${iconClass} text-indigo-500`} />
-    if (type === "SYSTEM") {
-      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
-        return <Calendar className={`${iconClass} text-teal-500`} />
-      }
-      return <AlertCircle className={`${iconClass} text-red-500`} />
-    }
+    if (type === "SYSTEM") return <AlertCircle className={`${iconClass} text-slate-500`} />
     return <Info className={`${iconClass} text-slate-500`} />
   }
 
   const getTypeBadge = (notification: ApiNotification) => {
-    const type = notification.type
-    let label = "Info"
-    let variant = "bg-slate-500/10 text-slate-700 dark:text-slate-400"
-
-    if (type.startsWith("TASK"))       { label = "Task";       variant = "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" }
-    if (type.startsWith("TEAM_INVITE")){ label = "Invitation"; variant = "bg-blue-500/10 text-blue-700 dark:text-blue-400" }
-    if (type.startsWith("TEAM_JOIN"))  { label = "Team";       variant = "bg-purple-500/10 text-purple-700 dark:text-purple-400" }
-    if (type.startsWith("SUPERVISOR")) { label = "Supervisor"; variant = "bg-amber-500/10 text-amber-700 dark:text-amber-400" }
-    if (type.startsWith("SUBMISSION")) { label = "Submission"; variant = "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400" }
-    if (type === "SYSTEM") {
-      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
-        label = "Meetings"
-        variant = "bg-teal-500/10 text-teal-700 dark:text-teal-400"
-      } else {
-        label = "System"
-        variant = "bg-red-500/10 text-red-700 dark:text-red-400"
-      }
-    }
-
-    return <span className={`text-xs px-2 py-0.5 rounded-full ${variant} font-medium`}>{label}</span>
+    const display = getNotificationDisplay(notification)
+    return <span className={`text-xs px-2 py-0.5 rounded-full ${display.toneClassName} font-medium`}>{display.label}</span>
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -385,44 +367,57 @@ export function NotificationCenter() {
                   </div>
                 ) : displayedNotifications.length > 0 ? (
                   <div className="divide-y">
-                    {displayedNotifications.map((notification, index) => (
-                      <motion.div
-                        key={notification.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.03 }}
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`p-3 sm:p-4 cursor-pointer transition-all hover:bg-muted/80 active:bg-muted group relative ${
-                          !notification.read ? "bg-primary/10" : "bg-background/80"
-                        }`}
-                      >
-                        <div className="flex gap-3">
-                          <div className="p-2 rounded-lg bg-muted shrink-0">{getIcon(notification)}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className={`text-xs sm:text-sm ${!notification.read ? "font-semibold text-foreground" : "text-foreground/90"} line-clamp-2`}>
-                                {notification.message}
-                              </p>
-                              {!notification.read && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />}
+                    {displayedNotifications.map((notification, index) => {
+                      const display = getNotificationDisplay(notification)
+
+                      return (
+                        <motion.div
+                          key={notification.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.03 }}
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`p-3 sm:p-4 cursor-pointer transition-all hover:bg-muted/80 active:bg-muted group relative ${
+                            !notification.read ? "bg-primary/10" : "bg-background/80"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/80">
+                              {getIcon(notification)}
                             </div>
-                            <div className="flex items-center gap-2 mt-1.5">
-                              {getTypeBadge(notification)}
-                              <span className="text-[10px] sm:text-xs text-muted-foreground">
-                                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                              </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className={`text-xs sm:text-sm ${!notification.read ? "font-semibold text-foreground" : "text-foreground/90"} line-clamp-1`}>
+                                    {display.title}
+                                  </p>
+                                  {display.message && display.message !== display.title && (
+                                    <p className="mt-0.5 line-clamp-2 text-[11px] sm:text-xs text-muted-foreground">
+                                      {display.message}
+                                    </p>
+                                  )}
+                                </div>
+                                {!notification.read && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />}
+                              </div>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                {getTypeBadge(notification)}
+                                <span className="text-[10px] sm:text-xs text-muted-foreground">
+                                  {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                                </span>
+                              </div>
                             </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => deleteNotification(notification.id, e)}
+                            >
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                            </Button>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => deleteNotification(notification.id, e)}
-                          >
-                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 ) : (
                   <div className="p-8 sm:p-12 text-center">

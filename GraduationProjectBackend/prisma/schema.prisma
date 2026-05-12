@@ -135,6 +135,12 @@ enum TaskReviewDecision {
   CHANGES_REQUESTED
 }
 
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
 enum DeliverableType {
   SRS
   UML
@@ -156,6 +162,15 @@ enum SubmissionStatus {
   UNDER_REVIEW
   REVISION_REQUIRED
   APPROVED
+}
+
+enum ProposalStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  REVISION_REQUESTED
+  APPROVED
+  REJECTED
 }
 
 enum DocumentCategory {
@@ -368,9 +383,18 @@ model User {
   assignedTasks           Task[]             @relation("TaskAssignee")
   createdTasks            Task[]             @relation("TaskCreator")
   reviewedTasks           Task[]             @relation("TaskReviewer")
+  createdSprints          Sprint[]           @relation("SprintCreator")
   submittedWeeklyReports  WeeklyReport[]     @relation("WeeklyReportSubmitter")
   submittedSubmissions    Submission[]       @relation("SubmissionSubmitter")
   reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
+  taReviewedSubmissions   Submission[]       @relation("SubmissionTAReviewer")
+  authoredProposals       Proposal[]         @relation("ProposalAuthor")
+  reviewedProposals       Proposal[]         @relation("ProposalReviewer")
+  authoredSupervisorNotes TeamSupervisorNote[] @relation("SupervisorNoteAuthor")
+  setDeliverableDeadlines TeamDeliverableDeadline[] @relation("DeadlineSetter")
+  authoredAnnouncements   Announcement[]      @relation("AnnouncementAuthor")
+  authoredSubmissionComments SubmissionComment[] @relation("SubmissionCommentAuthor")
+  createdRubricTemplates  TeamRubricTemplate[] @relation("RubricTemplateCreator")
   uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
   createdResources        TeamResource[]     @relation("ResourceCreator")
   createdRisks            Risk[]             @relation("RiskCreator")
@@ -464,11 +488,17 @@ model Team {
   supervisorRequests TeamSupervisorRequest[]
   githubRepository GitHubTeamRepository?
   tasks        Task[]
+  sprints      Sprint[]
   weeklyReports WeeklyReport[]
   submissions  Submission[]
   documents    TeamDocument[]
   meetings     Meeting[]
   risks         Risk[]
+  proposal      Proposal?
+  supervisorNotes      TeamSupervisorNote[]
+  deliverableDeadlines TeamDeliverableDeadline[]
+  announcements        Announcement[]
+  rubricTemplates      TeamRubricTemplate[]
   groupConversation TeamGroupConversation?
 
   @@index([visibility, stage])
@@ -669,6 +699,7 @@ model GitHubSyncCursor {
 model Task {
   id                      String               @id @default(cuid())
   teamId                  String
+  sprintId                String?
   taskType                TaskType             @default(OTHER)
   integrationMode         TaskIntegrationMode  @default(MANUAL)
   origin                  TaskOrigin           @default(GPMS)
@@ -691,6 +722,9 @@ model Task {
   description             String?
   status                  TaskStatus           @default(BACKLOG)
   priority                TaskPriority         @default(MEDIUM)
+  storyPoints             Int                  @default(3)
+  actualPoints            Int?
+  unplanned               Boolean              @default(false)
   assigneeUserId          String?
   createdByUserId         String?
   reviewedByUserId        String?
@@ -710,17 +744,43 @@ model Task {
   updatedAt               DateTime             @updatedAt
 
   team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sprint     Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   assignee   User? @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   createdBy  User? @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   reviewedBy User? @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([teamId, githubIssueNumber])
   @@index([teamId, status])
+  @@index([teamId, sprintId])
+  @@index([sprintId, status])
   @@index([assigneeUserId])
   @@index([createdByUserId])
   @@index([reviewedByUserId])
   @@index([teamId, integrationMode])
   @@index([teamId, githubPullRequestNumber])
+}
+
+model Sprint {
+  id              String       @id @default(cuid())
+  teamId          String
+  name            String
+  goal            String?
+  startDate       DateTime
+  endDate         DateTime
+  status          SprintStatus @default(PLANNED)
+  completedAt     DateTime?
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  team      Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("SprintCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  tasks     Task[]
+
+  @@unique([teamId, name])
+  @@index([teamId, status])
+  @@index([teamId, startDate, endDate])
+  @@index([createdByUserId])
 }
 
 model WeeklyReport {
@@ -765,25 +825,87 @@ model Submission {
   artifactUrl       String?
   version           Int                  @default(1)
   submittedByUserId String?
+
+  // Two-step review flow:
+  // Step 1 — TA first-pass review (recommendation)
+  taRecommendedGrade  Int?
+  taFeedback          String?
+  taReviewedByUserId  String?
+  taReviewedAt        DateTime?
+
+  // Step 2 — Doctor final grade (authoritative)
   reviewedByUserId  String?
   reviewedAt        DateTime?
+  feedback          String?
+  grade             Int?
+
+  // Rubric used for grading: [{ name, score, maxScore }]
+  rubric            Json?
+
+  // Grade revision audit trail (every time the doctor changes the grade
+  // after the first finalize, the previous state is pushed here).
+  // Stored as an array of { grade, feedback, rubric, reviewedAt, reviewedBy, changedAt, reason }.
+  gradeHistory      Json?
+
+  // Defense meeting link (only required for DEPLOYMENT-phase deliverables).
+  defenseMeetingId  String?              @unique
+
   submittedAt       DateTime             @default(now())
   deadline          DateTime?
   late              Boolean              @default(false)
-  feedback          String?
-  grade             Int?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  submittedBy User? @relation("SubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
-  reviewedBy  User? @relation("SubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  submittedBy    User?    @relation("SubmissionSubmitter",   fields: [submittedByUserId],  references: [id], onDelete: SetNull)
+  reviewedBy     User?    @relation("SubmissionReviewer",    fields: [reviewedByUserId],   references: [id], onDelete: SetNull)
+  taReviewedBy   User?    @relation("SubmissionTAReviewer",  fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
+  defenseMeeting Meeting? @relation("MeetingForSubmission",  fields: [defenseMeetingId],   references: [id], onDelete: SetNull)
+  comments       SubmissionComment[]
 
   @@index([teamId, deliverableType])
   @@index([teamId, sdlcPhase])
   @@index([teamId, status])
   @@index([submittedByUserId])
   @@index([reviewedByUserId])
+  @@index([taReviewedByUserId])
+}
+
+// Conversation thread on a single submission.
+// Visible to: team members + the team's doctor + TA + admins.
+model SubmissionComment {
+  id           String   @id @default(cuid())
+  submissionId String
+  authorUserId String
+  authorRole   Role
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  author     User       @relation("SubmissionCommentAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
+  @@index([authorUserId])
+}
+
+// Per-team override of a deliverable's rubric template.
+// If a row exists for (teamId, deliverableType), the rubric editor
+// preloads this instead of the global default.
+model TeamRubricTemplate {
+  id              String          @id @default(cuid())
+  teamId          String
+  deliverableType DeliverableType
+  rubric          Json
+  createdByUserId String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  team      Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User @relation("RubricTemplateCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, deliverableType])
+  @@index([teamId])
 }
 
 model TeamDocument {
@@ -1041,6 +1163,7 @@ model Meeting {
   organizer            User               @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
   participants         MeetingParticipant[]
   approvals            MeetingApproval[]
+  defenseForSubmission Submission?         @relation("MeetingForSubmission")
 
   @@index([teamId, startAt])
   @@index([organizerId, startAt])
@@ -1111,4 +1234,108 @@ model CalendarIntegration {
 
   @@unique([userId, provider])
   @@index([provider, syncEnabled])
+}
+
+model Proposal {
+  id                String         @id @default(cuid())
+  teamId            String         @unique
+  authoredByUserId  String
+
+  // Core fields
+  title             String
+  abstract          String
+  problemStatement  String
+  objectives        String[]       @default([])
+  scope             String
+  methodology       String
+  technologies      String[]       @default([])
+  deliverables      String[]       @default([])
+  timeline          String?
+
+  // Optional attached file (e.g. signed PDF)
+  fileName          String?
+  fileSize          Int?
+  fileType          String?
+  fileUrl           String?
+
+  // Review workflow
+  status            ProposalStatus @default(DRAFT)
+  feedback          String?
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  submittedAt       DateTime?
+
+  // Versioning (for revisions)
+  version           Int            @default(1)
+  revisionCount     Int            @default(0)
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  authoredBy  User  @relation("ProposalAuthor",   fields: [authoredByUserId], references: [id], onDelete: Cascade)
+  reviewedBy  User? @relation("ProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([authoredByUserId])
+  @@index([reviewedByUserId])
+}
+
+// Private notes a supervisor (Doctor/TA) keeps on a team.
+// Invisible to students — only the team's doctor / TA / admin can see.
+model TeamSupervisorNote {
+  id           String   @id @default(cuid())
+  teamId       String
+  authorUserId String
+  authorRole   Role     // DOCTOR or TA (so we can show whose note it is)
+  content      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  team   Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author User @relation("SupervisorNoteAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, createdAt])
+  @@index([authorUserId])
+}
+
+// Per-team-per-deliverable target deadline set by the supervisor.
+// Used to drive "what's due this week" and to mark late submissions.
+model TeamDeliverableDeadline {
+  id              String          @id @default(cuid())
+  teamId          String
+  deliverableType DeliverableType
+  dueDate         DateTime
+  setByUserId     String
+  note            String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  team  Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  setBy User @relation("DeadlineSetter", fields: [setByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, deliverableType])
+  @@index([dueDate])
+  @@index([teamId])
+}
+
+// Announcements a supervisor broadcasts to all (or one) supervised team.
+// On create, notifications are pushed to every member of the target team(s).
+model Announcement {
+  id          String   @id @default(cuid())
+  authorUserId String
+  authorRole  Role
+  // null teamId = broadcast to ALL teams the author supervises
+  teamId      String?
+  title       String
+  content     String
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author User  @relation("AnnouncementAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([authorUserId, createdAt])
+  @@index([teamId, createdAt])
 }

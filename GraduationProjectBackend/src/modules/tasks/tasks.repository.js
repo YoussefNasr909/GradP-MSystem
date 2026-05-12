@@ -29,6 +29,7 @@ const taskTeamSelect = {
 export const taskSelect = {
   id: true,
   teamId: true,
+  sprintId: true,
   taskType: true,
   integrationMode: true,
   origin: true,
@@ -51,6 +52,9 @@ export const taskSelect = {
   description: true,
   status: true,
   priority: true,
+  storyPoints: true,
+  actualPoints: true,
+  unplanned: true,
   assigneeUserId: true,
   createdByUserId: true,
   reviewedByUserId: true,
@@ -71,12 +75,29 @@ export const taskSelect = {
   assignee: { select: teamUserSelect },
   createdBy: { select: teamUserSelect },
   reviewedBy: { select: teamUserSelect },
+  sprint: {
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      status: true,
+    },
+  },
   team: { select: taskTeamSelect },
 };
 
 export function listTasksByTeam(teamId, tx = prisma) {
   return tx.task.findMany({
     where: { teamId },
+    orderBy: [{ createdAt: "desc" }],
+    select: taskSelect,
+  });
+}
+
+export function listTasksByTeamIds(teamIds, tx = prisma) {
+  return tx.task.findMany({
+    where: { teamId: { in: teamIds } },
     orderBy: [{ createdAt: "desc" }],
     select: taskSelect,
   });
@@ -151,6 +172,25 @@ export function expireOverdueTasksByTeam(teamId, now = new Date(), tx = prisma) 
   return tx.task.updateMany({
     where: {
       teamId,
+      integrationMode: "MANUAL",
+      origin: "GPMS",
+      status: "IN_PROGRESS",
+      dueDate: {
+        lt: now,
+      },
+    },
+    data: {
+      status: "TODO",
+      acceptedAt: null,
+      submittedForReviewAt: null,
+    },
+  });
+}
+
+export function expireOverdueTasksByTeams(teamIds, now = new Date(), tx = prisma) {
+  return tx.task.updateMany({
+    where: {
+      teamId: { in: teamIds },
       integrationMode: "MANUAL",
       origin: "GPMS",
       status: "IN_PROGRESS",

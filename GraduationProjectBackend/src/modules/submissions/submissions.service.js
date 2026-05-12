@@ -92,6 +92,67 @@ function toSubmissionResponse(submission) {
     reviewedBy: submission.reviewedBy
       ? { ...submission.reviewedBy, fullName: buildFullName(submission.reviewedBy) }
       : null,
+    taReviewedBy: submission.taReviewedBy
+      ? { ...submission.taReviewedBy, fullName: buildFullName(submission.taReviewedBy) }
+      : null,
+  };
+}
+
+export function normalizeRubric(rubric) {
+  if (!Array.isArray(rubric)) return null;
+  return rubric.map((item) => {
+    const normalized = {
+      name: String(item.name),
+      score: Number(item.score),
+      maxScore: Number(item.maxScore),
+    };
+    if (normalized.score > normalized.maxScore) {
+      throw new AppError(
+        `"${normalized.name}" score cannot exceed its max score.`,
+        422,
+        "RUBRIC_SCORE_EXCEEDS_MAX",
+      );
+    }
+    return normalized;
+  });
+}
+
+export function getRubricScaledScore(rubric) {
+  const normalized = normalizeRubric(rubric);
+  if (!normalized || normalized.length === 0) return null;
+  const total = normalized.reduce((sum, item) => sum + item.score, 0);
+  const possible = normalized.reduce((sum, item) => sum + item.maxScore, 0);
+  return possible > 0 ? Math.round((total / possible) * 100) : null;
+}
+
+export function assertRubricGradeMatches({ grade, rubric, overrideReason }) {
+  const rubricScore = getRubricScaledScore(rubric);
+  if (rubricScore === null || rubricScore === grade) return rubricScore;
+
+  if (!overrideReason || overrideReason.trim().length < 5) {
+    throw new AppError(
+      `Final grade (${grade}/100) differs from the rubric total (${rubricScore}/100). Provide an override reason.`,
+      422,
+      "RUBRIC_OVERRIDE_REASON_REQUIRED",
+    );
+  }
+
+  return rubricScore;
+}
+
+function appendGradeHistory(submission, event) {
+  const existing = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
+  return [...existing, event];
+}
+
+function buildHistoryEvent(actor, event, details = {}) {
+  return {
+    event,
+    by: actor.id,
+    byName: buildFullName(actor),
+    byRole: actor.role,
+    at: new Date().toISOString(),
+    ...details,
   };
 }
 
@@ -241,6 +302,21 @@ export async function createSubmissionService(actor, payload, file) {
   };
 
   const submission = await createSubmission(data);
+
+  // Notify the team's TA (or doctor as fallback) that a new submission is ready
+  // for first-pass review. This is the loop-closing notification that was
+  // previously missing — supervisors no longer have to manually check.
+  const reviewerUserId = team.taId ?? team.doctorId ?? null;
+  if (reviewerUserId) {
+    await notify({
+      userId: reviewerUserId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "New Submission to Review",
+      message: `${buildFullName(actor)} submitted "${deliverableType}" for ${team.name}. ${team.taId ? "Please run a first-pass review." : "Please review and grade."}`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
   return toSubmissionResponse(submission);
 }
 
@@ -268,9 +344,91 @@ async function assertSupervisorForTeam(actor, teamId) {
   }
 }
 
-export async function gradeSubmissionService(actor, submissionId, { grade, feedback }) {
-  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
-    throw new AppError("Only supervisors can grade submissions.", 403, "SUBMISSION_GRADE_FORBIDDEN");
+/**
+ * TA first-pass review.
+ * TA submits a *recommendation* \u2014 grade is NOT final.
+ * Status moves to UNDER_REVIEW so the doctor knows to finalize.
+ */
+export async function taReviewSubmissionService(actor, submissionId, { recommendedGrade, feedback, rubric }) {
+  if (actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team TA can submit a first-pass review.", 403, "SUBMISSION_TA_REVIEW_FORBIDDEN");
+  }
+
+  const submission = await findSubmissionById(submissionId);
+  if (!submission) {
+    throw new AppError("Submission not found.", 404, "SUBMISSION_NOT_FOUND");
+  }
+
+  await assertSupervisorForTeam(actor, submission.teamId);
+
+  if (!["PENDING", "REVISION_REQUIRED"].includes(submission.status)) {
+    throw new AppError(
+      "TA first-pass review is only available for pending submissions or revised submissions.",
+      409,
+      "SUBMISSION_TA_REVIEW_BAD_STATE",
+    );
+  }
+
+  const normalizedRubric = normalizeRubric(rubric);
+
+  const updated = await updateSubmission(submissionId, {
+    taRecommendedGrade: recommendedGrade,
+    taFeedback: feedback || null,
+    taReviewedByUserId: actor.id,
+    taReviewedAt: new Date(),
+    status: "UNDER_REVIEW",
+    ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
+    gradeHistory: appendGradeHistory(
+      submission,
+      buildHistoryEvent(actor, "ta_reviewed", {
+        recommendedGrade,
+        feedback: feedback || null,
+        rubric: normalizedRubric,
+      }),
+    ),
+  });
+
+  // Notify the doctor that a TA recommendation is ready
+  const team = await prisma.team.findUnique({
+    where: { id: submission.teamId },
+    select: { doctorId: true },
+  });
+  if (team?.doctorId) {
+    await notify({
+      userId: team.doctorId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "TA Review Ready for Final Grade",
+      message: `${buildFullName(actor)} reviewed "${submission.deliverableType}" and recommended ${recommendedGrade}/100. Awaiting your final grade.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  // Also let the submitter know review is in progress
+  const submitterUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
+  if (submitterUserId) {
+    await notify({
+      userId: submitterUserId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "Submission Under Review",
+      message: `Your "${submission.deliverableType}" submission has been reviewed by the TA and is awaiting the doctor's final grade.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  return toSubmissionResponse(updated);
+}
+
+/**
+ * Doctor final grade.
+ * Doctor sets the authoritative grade and approves the submission.
+ *
+ * If the submission was previously APPROVED and is being re-graded (after
+ * an unlock), the prior state is pushed onto Submission.gradeHistory as an
+ * audit trail entry.
+ */
+export async function gradeSubmissionService(actor, submissionId, { grade, feedback, rubric, reason, overrideReason }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can finalize the grade.", 403, "SUBMISSION_GRADE_FORBIDDEN");
   }
 
   const submission = await findSubmissionById(submissionId);
@@ -281,8 +439,60 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
   await assertSupervisorForTeam(actor, submission.teamId);
 
   if (submission.status === "APPROVED") {
-    throw new AppError("This submission is already approved.", 409, "SUBMISSION_ALREADY_APPROVED");
+    throw new AppError("This submission is already approved. Unlock it first to re-grade.", 409, "SUBMISSION_ALREADY_APPROVED");
   }
+
+  const team = await prisma.team.findUnique({
+    where: { id: submission.teamId },
+    select: { taId: true },
+  });
+  const hasAssignedTa = Boolean(team?.taId);
+  const hasTaRecommendation = submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined;
+  if (hasAssignedTa && (submission.status !== "UNDER_REVIEW" || !hasTaRecommendation)) {
+    throw new AppError(
+      "This team has a TA assigned. The TA must submit a first-pass recommendation before the doctor finalizes the grade.",
+      409,
+      "SUBMISSION_TA_REVIEW_REQUIRED",
+    );
+  }
+
+  if (submission.sdlcPhase === "DEPLOYMENT") {
+    if (!submission.defenseMeetingId) {
+      throw new AppError(
+        "Link a completed defense meeting before finalizing deployment deliverables.",
+        409,
+        "SUBMISSION_DEFENSE_REQUIRED",
+      );
+    }
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: submission.defenseMeetingId },
+      select: { status: true },
+    });
+    if (!meeting || meeting.status !== "COMPLETED") {
+      throw new AppError(
+        "The linked defense meeting must be marked completed before final grading.",
+        409,
+        "SUBMISSION_DEFENSE_INCOMPLETE",
+      );
+    }
+  }
+
+  const normalizedRubric = normalizeRubric(rubric);
+  const finalOverrideReason = overrideReason || reason || null;
+  const rubricScore = assertRubricGradeMatches({ grade, rubric: normalizedRubric, overrideReason: finalOverrideReason });
+
+  const existingHistory = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
+  const wasReGrade = existingHistory.some((entry) => entry?.event === "unlocked") || submission.grade !== null;
+  const historyEvent = buildHistoryEvent(actor, wasReGrade ? "regraded" : "finalized", {
+    previousGrade: submission.grade,
+    newGrade: grade,
+    feedback: feedback || null,
+    rubric: normalizedRubric,
+    rubricScore,
+    overrideReason: finalOverrideReason,
+    taRecommendedGrade: submission.taRecommendedGrade ?? null,
+    noTaAssigned: !hasAssignedTa,
+  });
 
   const updated = await updateSubmission(submissionId, {
     grade,
@@ -290,12 +500,14 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     status: "APPROVED",
     reviewedByUserId: actor.id,
     reviewedAt: new Date(),
+    ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
+    gradeHistory: [...existingHistory, historyEvent],
   });
 
   // Notify the submitter their submission was graded
   const submitterUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
   if (submitterUserId) {
-    const gradeText = grade !== null && grade !== undefined ? ` \u2014 Grade: ${grade}` : "";
+    const gradeText = ` \u2014 Grade: ${grade}/100`;
     await notify({
       userId: submitterUserId,
       type: "SUBMISSION_GRADED",
@@ -307,7 +519,93 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     console.warn(`[notify] gradeSubmission: could not resolve submitter userId for submission ${submissionId}`);
   }
 
+  // Close the loop with the TA who first-pass reviewed (if any).
+  // Their work isn't invisible \u2014 they hear back when the doctor finalizes.
+  const taReviewerId = submission.taReviewedByUserId ?? submission.taReviewedBy?.id ?? null;
+  if (taReviewerId && taReviewerId !== actor.id) {
+    const matchedRec = submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined
+      ? ` (you recommended ${submission.taRecommendedGrade})`
+      : "";
+    await notify({
+      userId: taReviewerId,
+      type: "SUBMISSION_GRADED",
+      title: "Your Review Was Finalized",
+      message: `${buildFullName(actor)} finalized "${submission.deliverableType}" at ${grade}/100${matchedRec}.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  // Auto-suggest stage advance: if this approval was the last required
+  // deliverable for the team's current phase, nudge the leader.
+  await maybeNudgeStageAdvance(submission.teamId, submission.sdlcPhase);
+
   return toSubmissionResponse(updated);
+}
+
+/**
+ * Internal helper. Called after a doctor finalizes a submission grade —
+ * checks whether all required deliverables in the team's current phase are
+ * now APPROVED, and if so notifies the leader they can advance the stage.
+ *
+ * Silent if anything is missing / the team has already advanced. Errors are
+ * swallowed because this is a notification courtesy, never the critical path.
+ */
+async function maybeNudgeStageAdvance(teamId, approvedPhase) {
+  try {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true, stage: true, leaderId: true },
+    });
+    if (!team) return;
+    // Only nudge if the approved submission was for the team's CURRENT phase.
+    // (Doctors can also approve back-fills from earlier phases — we ignore those.)
+    if (team.stage !== approvedPhase) return;
+
+    const config = SDLC_PHASE_DELIVERABLES[team.stage];
+    if (!config || config.required.length === 0) return;
+
+    // Are all required deliverables for this phase now APPROVED?
+    const approved = await prisma.submission.findMany({
+      where: {
+        teamId,
+        sdlcPhase: team.stage,
+        status: "APPROVED",
+        deliverableType: { in: config.required },
+      },
+      select: { deliverableType: true },
+    });
+    const approvedSet = new Set(approved.map((s) => s.deliverableType));
+    const allDone = config.required.every((d) => approvedSet.has(d));
+    if (!allDone) return;
+
+    const currentIdx = STAGE_ORDER.indexOf(team.stage);
+    const nextStage = STAGE_ORDER[currentIdx + 1];
+    if (!nextStage) return; // Already in final stage
+
+    // Avoid notification spam: don't nudge twice in a row.
+    // We check whether the leader already has an unread "ready to advance" notification.
+    const existing = await prisma.notification.findFirst({
+      where: {
+        userId: team.leaderId,
+        type: "SYSTEM",
+        read: false,
+        title: { startsWith: "Ready to advance" },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await notify({
+      userId: team.leaderId,
+      type: "SYSTEM",
+      title: `Ready to advance to ${nextStage}`,
+      message: `All required deliverables for ${team.stage} have been approved. You can advance your project to the ${nextStage} phase from the Submissions page.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  } catch (err) {
+    // Best-effort: never let a notification failure block a grade save.
+    console.warn(`[notify] maybeNudgeStageAdvance failed for team ${teamId}:`, err?.message);
+  }
 }
 
 export async function requestRevisionService(actor, submissionId, { feedback }) {
@@ -326,11 +624,26 @@ export async function requestRevisionService(actor, submissionId, { feedback }) 
     throw new AppError("Cannot request revision on an approved submission.", 409, "SUBMISSION_ALREADY_APPROVED");
   }
 
+  const revisionData =
+    actor.role === ROLES.TA
+      ? {
+          taFeedback: feedback,
+          taReviewedByUserId: actor.id,
+          taReviewedAt: new Date(),
+        }
+      : {
+          feedback,
+          reviewedByUserId: actor.id,
+          reviewedAt: new Date(),
+        };
+
   const updated = await updateSubmission(submissionId, {
-    feedback,
+    ...revisionData,
     status: "REVISION_REQUIRED",
-    reviewedByUserId: actor.id,
-    reviewedAt: new Date(),
+    gradeHistory: appendGradeHistory(
+      submission,
+      buildHistoryEvent(actor, "revision_requested", { feedback }),
+    ),
   });
 
   // Notify the submitter that changes are needed
@@ -549,4 +862,204 @@ export async function advanceStageService(actor, query) {
     newStage: nextStage,
     message: `Project advanced to ${nextStage} stage.`,
   };
+}
+
+/**
+ * Unlock an APPROVED submission so the doctor can revise the grade.
+ * Pushes the current state onto gradeHistory before reverting status.
+ */
+export async function unlockSubmissionService(actor, submissionId, { reason }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can unlock a submission.", 403, "SUBMISSION_UNLOCK_FORBIDDEN");
+  }
+
+  const submission = await findSubmissionById(submissionId);
+  if (!submission) {
+    throw new AppError("Submission not found.", 404, "SUBMISSION_NOT_FOUND");
+  }
+
+  await assertSupervisorForTeam(actor, submission.teamId);
+
+  if (submission.status !== "APPROVED") {
+    throw new AppError("Only approved submissions can be unlocked.", 409, "SUBMISSION_NOT_APPROVED");
+  }
+
+  if (!reason || reason.trim().length < 5) {
+    throw new AppError("Provide a reason (min 5 characters) for unlocking the grade.", 422, "UNLOCK_REASON_REQUIRED");
+  }
+
+  // Snapshot the current grade state for the audit trail
+  const existingHistory = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
+  const snapshot = buildHistoryEvent(actor, "unlocked", {
+    snapshotGrade: submission.grade,
+    snapshotFeedback: submission.feedback,
+    snapshotRubric: submission.rubric ?? null,
+    snapshotReviewedBy: submission.reviewedBy?.fullName ?? null,
+    snapshotReviewedAt: submission.reviewedAt,
+    reason: reason.trim(),
+  });
+
+  const updated = await updateSubmission(submissionId, {
+    status: "UNDER_REVIEW",
+    gradeHistory: [...existingHistory, snapshot],
+  });
+
+  // Notify the submitter + TA that the grade is being revised
+  const submitterUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
+  if (submitterUserId) {
+    await notify({
+      userId: submitterUserId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "Grade Under Revision",
+      message: `${buildFullName(actor)} unlocked the "${submission.deliverableType}" grade for revision. Reason: ${reason.trim()}`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+  const taReviewerId = submission.taReviewedByUserId ?? null;
+  if (taReviewerId && taReviewerId !== actor.id) {
+    await notify({
+      userId: taReviewerId,
+      type: "SUBMISSION_FEEDBACK",
+      title: "Submission Grade Reopened",
+      message: `${buildFullName(actor)} reopened "${submission.deliverableType}" for re-grading.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  }
+
+  return toSubmissionResponse(updated);
+}
+
+/**
+ * Bulk approve multiple submissions in one call.
+ * Doctor + Admin only. Skips items where the actor isn't a supervisor.
+ * Returns { approved: [...ids], skipped: [{id, reason}] }.
+ */
+export async function bulkApproveSubmissionsService(actor, { submissionIds, feedback }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can bulk approve submissions.", 403, "BULK_GRADE_FORBIDDEN");
+  }
+  if (!Array.isArray(submissionIds) || submissionIds.length === 0) {
+    throw new AppError("Provide at least one submission id.", 422, "BULK_GRADE_EMPTY");
+  }
+  if (submissionIds.length > 50) {
+    throw new AppError("Cannot bulk approve more than 50 submissions at once.", 422, "BULK_GRADE_TOO_MANY");
+  }
+
+  const approved = [];
+  const skipped = [];
+  for (const id of submissionIds) {
+    try {
+      const sub = await findSubmissionById(id);
+      if (!sub) { skipped.push({ id, reason: "Not found" }); continue; }
+      if (sub.status === "APPROVED") { skipped.push({ id, reason: "Already approved" }); continue; }
+      if (sub.status !== "UNDER_REVIEW") { skipped.push({ id, reason: "Awaiting TA first-pass review" }); continue; }
+      if (sub.taRecommendedGrade === null || sub.taRecommendedGrade === undefined) {
+        skipped.push({ id, reason: "Missing TA recommendation" });
+        continue;
+      }
+
+      // Doctor must supervise the team (admin bypasses)
+      if (actor.role !== ROLES.ADMIN) {
+        const team = await prisma.team.findFirst({
+          where: { id: sub.teamId, doctorId: actor.id },
+          select: { id: true },
+        });
+        if (!team) { skipped.push({ id, reason: "Not your team" }); continue; }
+      }
+
+      if (sub.sdlcPhase === "DEPLOYMENT") {
+        if (!sub.defenseMeetingId) { skipped.push({ id, reason: "Defense meeting required" }); continue; }
+        const meeting = await prisma.meeting.findUnique({
+          where: { id: sub.defenseMeetingId },
+          select: { status: true },
+        });
+        if (!meeting || meeting.status !== "COMPLETED") {
+          skipped.push({ id, reason: "Defense meeting incomplete" });
+          continue;
+        }
+      }
+
+      const finalGrade = sub.taRecommendedGrade;
+
+      await updateSubmission(id, {
+        grade: finalGrade,
+        feedback: feedback || sub.taFeedback || "Bulk approved.",
+        status: "APPROVED",
+        reviewedByUserId: actor.id,
+        reviewedAt: new Date(),
+        gradeHistory: appendGradeHistory(
+          sub,
+          buildHistoryEvent(actor, "bulk_finalized", {
+            newGrade: finalGrade,
+            feedback: feedback || sub.taFeedback || "Bulk approved.",
+            taRecommendedGrade: sub.taRecommendedGrade,
+          }),
+        ),
+      });
+
+      // Notify submitter + TA
+      const submitterUserId = sub.submittedByUserId ?? sub.submittedBy?.id ?? null;
+      if (submitterUserId) {
+        await notify({
+          userId: submitterUserId,
+          type: "SUBMISSION_GRADED",
+          title: "Submission Graded",
+          message: `Your "${sub.deliverableType}" submission was approved at ${finalGrade}/100.`,
+          actionUrl: "/dashboard/submissions",
+        });
+      }
+      const taReviewerId = sub.taReviewedByUserId ?? null;
+      if (taReviewerId && taReviewerId !== actor.id) {
+        await notify({
+          userId: taReviewerId,
+          type: "SUBMISSION_GRADED",
+          title: "Your Review Was Finalized",
+          message: `${buildFullName(actor)} approved "${sub.deliverableType}" (bulk action).`,
+          actionUrl: "/dashboard/submissions",
+        });
+      }
+
+      approved.push(id);
+    } catch (err) {
+      skipped.push({ id, reason: err?.message || "Error" });
+    }
+  }
+
+  return { approved, skipped };
+}
+
+/**
+ * Link or unlink a defense meeting on a DEPLOYMENT-phase submission.
+ * Used for FINAL_REPORT / PRESENTATION deliverables.
+ */
+export async function attachDefenseMeetingService(actor, submissionId, { meetingId }) {
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can link defense meetings for final evaluation.", 403, "DEFENSE_FORBIDDEN");
+  }
+
+  const submission = await findSubmissionById(submissionId);
+  if (!submission) throw new AppError("Submission not found.", 404, "SUBMISSION_NOT_FOUND");
+
+  if (submission.sdlcPhase !== "DEPLOYMENT") {
+    throw new AppError("Defense meetings only apply to DEPLOYMENT-phase deliverables.", 422, "DEFENSE_NOT_APPLICABLE");
+  }
+
+  await assertSupervisorForTeam(actor, submission.teamId);
+
+  if (meetingId) {
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { id: true, teamId: true },
+    });
+    if (!meeting) throw new AppError("Meeting not found.", 404, "MEETING_NOT_FOUND");
+    if (meeting.teamId !== submission.teamId) {
+      throw new AppError("The meeting belongs to a different team.", 422, "DEFENSE_TEAM_MISMATCH");
+    }
+  }
+
+  const updated = await updateSubmission(submissionId, {
+    defenseMeetingId: meetingId || null,
+  });
+
+  return toSubmissionResponse(updated);
 }

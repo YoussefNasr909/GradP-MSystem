@@ -12,18 +12,26 @@ import {
   createSubmission,
   getSubmission,
   gradeSubmission,
+  taReviewSubmission,
   requestRevision,
   deleteSubmission,
   getSDLCSummary,
   advanceStage,
+  unlockSubmission,
+  attachDefenseMeeting,
+  bulkApproveSubmissions,
 } from "./submissions.controller.js";
 import {
   listSubmissionsSchema,
   submissionByIdSchema,
   gradeSubmissionSchema,
+  taReviewSubmissionSchema,
   requestRevisionSchema,
   sdlcSummarySchema,
   advanceStageSchema,
+  unlockSubmissionSchema,
+  attachDefenseSchema,
+  bulkApproveSchema,
 } from "./submissions.schema.js";
 
 const router = Router();
@@ -94,11 +102,21 @@ router.use(auth);
 router.get("/sdlc-summary", validate(sdlcSummarySchema), getSDLCSummary);
 router.post("/advance-stage", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(advanceStageSchema), advanceStage);
 
+// Bulk approve — doctor + admin only. Registered before /:id routes.
+router.post("/bulk-approve", allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(bulkApproveSchema), bulkApproveSubmissions);
+
 // CRUD
 router.get("/", validate(listSubmissionsSchema), listSubmissions);
 router.post("/", allowRoles(ROLES.LEADER), uploadSingle, createSubmission);
 router.get("/:id", validate(submissionByIdSchema), getSubmission);
-router.patch("/:id/grade", allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(gradeSubmissionSchema), gradeSubmission);
+
+// Two-step review flow:
+//  • TA first-pass review → records a recommended grade + feedback (status → UNDER_REVIEW)
+//  • Doctor final grade   → sets the authoritative grade (status → APPROVED)
+router.patch("/:id/ta-review", allowRoles(ROLES.TA, ROLES.ADMIN), validate(taReviewSubmissionSchema), taReviewSubmission);
+router.patch("/:id/grade",      allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(gradeSubmissionSchema),    gradeSubmission);
+router.patch("/:id/unlock",     allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(unlockSubmissionSchema),   unlockSubmission);
+router.patch("/:id/defense",    allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(attachDefenseSchema), attachDefenseMeeting);
 router.patch("/:id/request-revision", allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(requestRevisionSchema), requestRevision);
 router.delete("/:id", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(submissionByIdSchema), deleteSubmission);
 

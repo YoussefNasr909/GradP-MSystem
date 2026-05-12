@@ -1,6 +1,6 @@
 import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
-import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId } from "../teams/teams.repository.js";
+import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId, listTeams } from "../teams/teams.repository.js";
 import {
   bootstrapTaskGitHubArtifactsService,
   mergeTaskPullRequestService,
@@ -10,9 +10,11 @@ import {
 } from "../github/github.service.js";
 import {
   createTask,
+  expireOverdueTasksByTeams,
   expireOverdueTasksByTeam,
   findTaskById,
   listTasksByTeam,
+  listTasksByTeamIds,
   updateTaskById,
 } from "./tasks.repository.js";
 import { notify } from "../../common/utils/notify.js";
@@ -86,6 +88,17 @@ function parseDateBoundary(value, boundary = "start") {
   return date;
 }
 
+function normalizeStoryPoints(value, fallback = 3) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const points = Number(value);
+
+  if (!Number.isInteger(points) || points < 0 || points > 99) {
+    throw new AppError("Story points must be a whole number between 0 and 99.", 422, "TASK_STORY_POINTS_INVALID");
+  }
+
+  return points;
+}
+
 function toTaskUserSummary(user) {
   if (!user) return null;
 
@@ -137,6 +150,10 @@ function isTaskOverdue(task, now = new Date()) {
 
 function canManageTaskTeam(actor, team) {
   return actor.role === ROLES.ADMIN || team?.leader?.id === actor.id;
+}
+
+function canReviewTaskTeam(actor, team) {
+  return actor.role === ROLES.ADMIN || team?.ta?.id === actor.id;
 }
 
 function canViewTaskTeam(actor, team) {
@@ -194,6 +211,12 @@ function assertTaskAssignee(task, actor) {
 function assertTaskManager(task, actor) {
   if (!canManageTaskTeam(actor, task.team)) {
     throw new AppError("Only the team leader or an admin can manage this task workflow.", 403, "TASK_MANAGER_ONLY");
+  }
+}
+
+function assertTaskReviewer(task, actor) {
+  if (!canReviewTaskTeam(actor, task.team)) {
+    throw new AppError("Only an assigned reviewer can review this task.", 403, "TASK_REVIEWER_ONLY");
   }
 }
 
@@ -272,6 +295,29 @@ async function resolveActorTeamContext(actor, requestedTeamId) {
   }
 
   throw new AppError("This role is not supported for task access.", 403, "TASK_ROLE_UNSUPPORTED");
+}
+
+async function resolveActorTaskListTeamIds(actor, requestedTeamId) {
+  const normalizedRequestedTeamId = normalizeText(requestedTeamId) || null;
+
+  if (normalizedRequestedTeamId) {
+    const { team } = await resolveActorTeamContext(actor, normalizedRequestedTeamId);
+    return [team.id];
+  }
+
+  if (actor.role === ROLES.DOCTOR || actor.role === ROLES.TA || actor.role === ROLES.ADMIN) {
+    const teams = await listTeams(
+      actor.role === ROLES.DOCTOR
+        ? { doctorId: actor.id }
+        : actor.role === ROLES.TA
+          ? { taId: actor.id }
+          : {},
+    );
+    return teams.map((team) => team.id);
+  }
+
+  const { team } = await resolveActorTeamContext(actor, normalizedRequestedTeamId);
+  return [team.id];
 }
 
 function compareTasks(left, right) {
@@ -379,6 +425,7 @@ function toTaskResponse(task, actor) {
   const isAwaitingAcceptance = isGpmsManagedTask(task) && visibleStatus === "TODO" && !task.acceptedAt;
   const isAssignee = task.assigneeUserId === actor.id;
   const canManage = canManageTaskTeam(actor, task.team);
+  const canReview = canReviewTaskTeam(actor, task.team);
   const hasPastEndDate = Boolean(task.dueDate) && new Date(task.dueDate).getTime() < Date.now();
   const github = buildGitHubState(task);
   const reviewGate = github?.reviewGate ?? null;
@@ -398,6 +445,10 @@ function toTaskResponse(task, actor) {
     status: visibleStatus,
     rawStatus: task.status,
     priority: task.priority,
+    sprintId: task.sprintId ?? null,
+    storyPoints: Number(task.storyPoints ?? 0),
+    actualPoints: task.actualPoints ?? null,
+    unplanned: Boolean(task.unplanned),
     startDate: task.startDate ?? null,
     endDate: task.dueDate ?? null,
     acceptedAt: task.acceptedAt ?? null,
@@ -426,10 +477,10 @@ function toTaskResponse(task, actor) {
         isAssignee &&
         task.status === "IN_PROGRESS" &&
         (!isRepoBackedTask(task) || Boolean(reviewGate?.ready)),
-      canApprove: isGpmsManagedTask(task) && canManage && task.status === "REVIEW",
+      canApprove: isGpmsManagedTask(task) && canReview && task.status === "REVIEW",
       canReject:
         isGpmsManagedTask(task) &&
-        canManage &&
+        canReview &&
         (task.status === "REVIEW" || canRejectGitHubApprovedTask),
       canEdit: isGpmsManagedTask(task) && canManage,
       canBootstrapGithub: canWriteRepoBackedTask(actor, task) && !task.githubIssueNumber,
@@ -476,6 +527,55 @@ function buildUpdatedDateRange(task, payload) {
   };
 }
 
+function startOfDay(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfDay(value) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function formatScheduleDate(value) {
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function assertTaskDatesFitAssignedSprint(task, nextStartDate, nextEndDate) {
+  if (!task.sprintId || !task.sprint) return;
+
+  if (!nextStartDate || !nextEndDate) {
+    throw new AppError(
+      `"${task.title}" needs both a start date and an end date while it is assigned to "${task.sprint.name}".`,
+      422,
+      "TASK_SPRINT_DATES_REQUIRED"
+    );
+  }
+
+  const taskStart = startOfDay(nextStartDate);
+  const taskEnd = endOfDay(nextEndDate);
+  const sprintStart = startOfDay(task.sprint.startDate);
+  const sprintEnd = endOfDay(task.sprint.endDate);
+
+  if (taskStart.getTime() < sprintStart.getTime()) {
+    throw new AppError(
+      `"${task.title}" starts on ${formatScheduleDate(taskStart)}, before "${task.sprint.name}" starts on ${formatScheduleDate(sprintStart)}.`,
+      422,
+      "TASK_START_BEFORE_SPRINT"
+    );
+  }
+
+  if (taskEnd.getTime() > sprintEnd.getTime()) {
+    throw new AppError(
+      `"${task.title}" ends on ${formatScheduleDate(taskEnd)}, after "${task.sprint.name}" ends on ${formatScheduleDate(sprintEnd)}.`,
+      422,
+      "TASK_END_AFTER_SPRINT"
+    );
+  }
+}
+
 function buildReviewSnapshot(task, actor, overrides = {}) {
   return {
     actorId: actor.id,
@@ -505,11 +605,17 @@ function buildMissingGitHubReviewEvidenceMessage(task) {
 }
 
 export async function listTasksService(actor, filters) {
-  const { team } = await resolveActorTeamContext(actor, filters.teamId);
-  await expireOverdueTasksByTeam(team.id);
+  const teamIds = await resolveActorTaskListTeamIds(actor, filters.teamId);
+  if (teamIds.length === 0) return [];
+
+  if (teamIds.length === 1) {
+    await expireOverdueTasksByTeam(teamIds[0]);
+  } else {
+    await expireOverdueTasksByTeams(teamIds);
+  }
 
   const normalizedSearch = normalizeText(filters.search).toLowerCase();
-  const tasks = await listTasksByTeam(team.id);
+  const tasks = teamIds.length === 1 ? await listTasksByTeam(teamIds[0]) : await listTasksByTeamIds(teamIds);
 
   return tasks
     .filter((task) => {
@@ -559,6 +665,7 @@ export async function createTaskService(actor, payload) {
     title: normalizeText(payload.title),
     description: normalizeText(payload.description) || null,
     priority: payload.priority,
+    storyPoints: normalizeStoryPoints(payload.storyPoints),
     status: "TODO",
     assigneeUserId: assignee.id,
     createdByUserId: actor.id,
@@ -592,12 +699,19 @@ export async function updateTaskService(actor, taskId, payload) {
   assertTaskManager(task, actor);
 
   const { nextStartDate, nextEndDate } = buildUpdatedDateRange(task, payload);
+  if (payload.startDate !== undefined || payload.endDate !== undefined) {
+    assertTaskDatesFitAssignedSprint(task, nextStartDate, nextEndDate);
+  }
+
   const updateData = {};
   let shouldResetWorkflow = false;
 
   if (payload.title !== undefined) updateData.title = normalizeText(payload.title);
   if (payload.description !== undefined) updateData.description = normalizeText(payload.description) || null;
   if (payload.priority !== undefined) updateData.priority = payload.priority;
+  if (payload.storyPoints !== undefined) updateData.storyPoints = normalizeStoryPoints(payload.storyPoints, task.storyPoints);
+  if (payload.actualPoints !== undefined) updateData.actualPoints = payload.actualPoints === null ? null : normalizeStoryPoints(payload.actualPoints, task.actualPoints ?? task.storyPoints);
+  if (payload.unplanned !== undefined) updateData.unplanned = Boolean(payload.unplanned);
   if (payload.taskType !== undefined) updateData.taskType = payload.taskType;
 
   if (payload.integrationMode !== undefined) {
@@ -715,7 +829,7 @@ export async function approveTaskService(actor, taskId, payload = {}) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskManager(task, actor);
+  assertTaskReviewer(task, actor);
 
   if (task.status !== "REVIEW") {
     throw new AppError("Only tasks in review can be approved.", 409, "TASK_NOT_IN_REVIEW");
@@ -781,7 +895,7 @@ export async function rejectTaskService(actor, taskId, payload) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskManager(task, actor);
+  assertTaskReviewer(task, actor);
 
   const canRejectCurrentStatus = task.status === "REVIEW" || (isRepoBackedTask(task) && task.status === "APPROVED");
   if (!canRejectCurrentStatus) {

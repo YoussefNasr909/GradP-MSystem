@@ -7,7 +7,7 @@ import { AppTopbar } from "@/components/app-shell/app-topbar"
 import { Breadcrumbs } from "@/components/app-shell/breadcrumbs"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useRouter, usePathname } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { useUIStore } from "@/lib/stores/ui-store"
 import { ChatProvider } from "@/components/features/chat/chat-provider"
 import { ChatLauncher } from "@/components/features/chat/chat-launcher"
@@ -16,6 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 const { currentUser, accessToken, hasHydrated } = useAuthStore()
   const router = useRouter()
   const pathname = usePathname()
+  const mainRef = useRef<HTMLElement | null>(null)
   const { sidebarCollapsed, isMobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
 
  useEffect(() => {
@@ -52,6 +53,10 @@ useEffect(() => {
   useEffect(() => {
     setMobileSidebarOpen(false)
   }, [pathname, setMobileSidebarOpen])
+
+  useLayoutEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" })
+  }, [pathname])
 
   useEffect(() => {
     if (isMobileSidebarOpen) {
@@ -138,22 +143,11 @@ if (incomplete) {
       >
         <AppTopbar />
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth-touch safe-area-bottom">
+        <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth-touch safe-area-bottom">
           <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
             <Breadcrumbs />
 
-            <AnimatePresence initial={false}>
-              <motion.div
-                key={pathname}
-                initial={false}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="min-w-0"
-              >
-                {children}
-              </motion.div>
-            </AnimatePresence>
+            <div className="min-w-0">{children}</div>
           </div>
         </main>
       </div>

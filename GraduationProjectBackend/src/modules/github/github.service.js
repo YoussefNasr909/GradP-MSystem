@@ -2354,13 +2354,19 @@ export async function githubInstallCallbackService(query) {
   }
 
   let ownerLogin = null;
+  let ownerType = null;
+
   try {
     const app = await getGitHubApp();
-    const octokit = await app.getInstallationOctokit(Number(query.installation_id));
-    const { data: installationRepos } = await octokit.rest.apps.listReposAccessibleToInstallation();
-    ownerLogin = installationRepos.repositories?.[0]?.owner?.login ?? null;
+    const { data: installation } = await app.octokit.request("GET /app/installations/{installation_id}", {
+      installation_id: Number(query.installation_id),
+    });
+
+    ownerLogin = installation.account?.login ?? null;
+    ownerType = installation.account?.type === "Organization" ? "ORGANIZATION" : "USER";
   } catch {
     ownerLogin = null;
+    ownerType = null;
   }
 
   return {
@@ -2369,6 +2375,7 @@ export async function githubInstallCallbackService(query) {
       installationId: query.installation_id,
       teamId,
       owner: ownerLogin,
+      ownerType,
       setupAction: query.setup_action ?? null,
     }),
   };
@@ -2490,11 +2497,19 @@ export async function createRepositoryService(actor, payload) {
     );
   }
 
-  await validateInstallationForOwner({
+  const installation = await validateInstallationForOwner({
     writeOctokit,
     installationId: payload.installationId,
     ownerLogin: owner,
   });
+
+  if (installation.repository_selection === "selected") {
+    throw httpError(
+      400,
+      "GITHUB_INSTALLATION_REPOSITORY_SELECTION_BLOCKS_CREATE",
+      "This GitHub App installation only has access to selected repositories. To create a new repository from GPMS, reinstall or update the app with All repositories for this owner, or create the repo manually, add it to the installation, then use Connect existing.",
+    );
+  }
 
   const installationOctokit = await getInstallationOctokit(payload.installationId);
 
@@ -2572,16 +2587,46 @@ export async function connectRepositoryService(actor, payload) {
   const team = await resolveTargetTeam(actor, payload.teamId);
   assertCanManageRepository(actor, team);
 
+  const owner = normalizeText(payload.owner);
+  const repoName = normalizeText(payload.repoName);
+  const writeOctokit = await requireUserWriteOctokit(actor);
+
+  await validateInstallationForOwner({
+    writeOctokit,
+    installationId: payload.installationId,
+    ownerLogin: owner,
+  });
+
   const installationOctokit = await getInstallationOctokit(payload.installationId);
   let repo;
   try {
     const response = await installationOctokit.rest.repos.get({
-      owner: payload.owner,
-      repo: payload.repoName,
+      owner,
+      repo: repoName,
     });
     repo = response.data;
   } catch (error) {
     throw mapGitHubRepositoryConnectionError(error, payload);
+  }
+
+  const connectedGitHub = await getUserConnectionByUserId(actor.id);
+  const accessState = await resolveConnectedRepositoryAccess(
+    connectedGitHub,
+    {
+      ownerLogin: repo.owner.login,
+      repoName: repo.name,
+      visibility: (repo.visibility ?? (repo.private ? "private" : "public")).toUpperCase(),
+    },
+    installationOctokit,
+    repo,
+  );
+
+  if (!accessState.hasWriteAccess) {
+    throw httpError(
+      403,
+      "GITHUB_USER_REPOSITORY_WRITE_REQUIRED",
+      `Your connected GitHub account does not have write access to ${repo.full_name}. A public repository is still read-only for other accounts unless they are collaborators or otherwise have write permission. Connect a GitHub account with write access, or ask ${repo.owner.login} to grant collaborator access.`,
+    );
   }
 
   const record = await persistRepositoryConnection(team.id, {

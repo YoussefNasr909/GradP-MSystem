@@ -10,7 +10,6 @@ import {
   FileText,
   Video,
   MessageSquare,
-  GitBranch,
   Award,
   BarChart3,
   ShieldCheck,
@@ -19,7 +18,6 @@ import {
   GraduationCap,
   ChevronDown,
   Workflow,
-  Settings,
   CheckCircle2,
   Crown,
   Calendar,
@@ -36,6 +34,8 @@ import {
   Activity,
   HelpCircle,
   LifeBuoy,
+  StickyNote,
+  Megaphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -55,6 +55,22 @@ const navigationGroups = [
         href: "/dashboard",
         icon: LayoutDashboard,
         roles: ["admin", "doctor", "ta", "leader", "member"],
+      },
+      // Supervision — the supervisor's daily workspace (activity, notes, deadlines, rubrics).
+      // Sits at the top of the sidebar for doctor/TA/admin since it's their main entry point.
+      {
+        name: "Supervision",
+        href: "/dashboard/supervisor-toolkit",
+        icon: StickyNote,
+        roles: ["admin", "doctor", "ta"],
+      },
+      // User Management (formerly "Admin Panel") — the admin's primary tool.
+      // Moved here from Management & Reports so it's one click away on login.
+      {
+        name: "User Management",
+        href: "/dashboard/admin",
+        icon: ShieldCheck,
+        roles: ["admin"],
       },
       {
         name: "My Team",
@@ -82,7 +98,7 @@ const navigationGroups = [
       { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin", "doctor", "ta"] },
       { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
       { name: "SDLC Phases", href: "/dashboard/sdlc", icon: Workflow, roles: ["leader", "member"] },
-      { name: "Weekly Progress", href: "/dashboard/weekly-progress", icon: ClipboardList, roles: ["leader", "member"] },
+      { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
       { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
     ],
   },
@@ -95,15 +111,18 @@ const navigationGroups = [
         icon: Calendar,
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
-      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "ta", "leader"] },
+      // Proposals — created by leader, reviewed by doctor only (TA is not in the proposal loop)
+      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "leader", "member"] },
       {
         name: "Submissions",
         href: "/dashboard/submissions",
         icon: Upload,
         roles: ["leader", "member", "doctor", "ta"],
       },
+      // Review Work — TA-only (their main job: first-pass review of tasks/PRs)
       { name: "Review Work", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta"] },
-      { name: "Evaluations", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor", "ta"] },
+      // Grades Overview (formerly Evaluations) — admin + doctor only (final grade owner)
+      { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
       {
         name: "Meetings",
         href: "/dashboard/meetings",
@@ -129,22 +148,19 @@ const navigationGroups = [
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
+      // Announcements — supervisors post, everyone reads
+      { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone, roles: ["admin", "doctor", "ta", "leader", "member"] },
     ],
   },
   {
     name: "Management & Reports",
     items: [
-      { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor", "ta", "leader"] },
-      { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor", "ta", "leader"] },
-      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor"] },
-      { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
+      { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor"] },
+      { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
+      // Risks — created by leader, approved by doctor (TA is not the risk approver)
+      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
+      // (Supervision + User Management moved to the Main group — primary supervisor/admin workspaces.)
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
-      {
-        name: "Settings",
-        href: "/dashboard/settings",
-        icon: Settings,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
     ],
   },
   {

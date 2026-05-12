@@ -5,8 +5,12 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Calendar, Clock, ChevronLeft, ChevronRight, GanttChart } from "lucide-react"
-import { tasks } from "@/data/tasks"
-import { teams } from "@/data/teams"
+// Mock arrays neutralized. Timeline is currently a placeholder view — when this
+// page is wired to real data, replace these with tasksApi.list + teamsApi.my.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tasks: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const teams: any[] = []
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useState } from "react"
 import { TeamRequiredGuard } from "@/components/team-required-guard"

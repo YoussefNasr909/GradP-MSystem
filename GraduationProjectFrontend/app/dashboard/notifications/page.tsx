@@ -17,12 +17,14 @@ import {
   CheckCircle,
   Loader2,
   RefreshCw,
+  Megaphone,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { formatDistanceToNow } from "date-fns"
 import Link from "next/link"
 import { notificationsApi, type ApiNotification } from "@/lib/api/notifications"
+import { getNotificationDisplay } from "@/lib/notifications/display"
 import { toast } from "sonner"
 
 export default function NotificationsPage() {
@@ -130,7 +132,10 @@ export default function NotificationsPage() {
 
   // ─── Icon helper ──────────────────────────────────────────────────────────
   const getIcon = (notification: ApiNotification) => {
+    const display = getNotificationDisplay(notification)
     const type = notification.type
+    if (display.category === "announcement") return <Megaphone className="h-5 w-5" />
+    if (display.category === "meeting") return <Calendar className="h-5 w-5" />
     if (type.startsWith("TASK_ASSIGNED"))  return <CheckCheck   className="h-5 w-5" />
     if (type.startsWith("TASK_APPROVED"))  return <CheckCircle  className="h-5 w-5" />
     if (type.startsWith("TASK_CHANGES"))   return <AlertCircle  className="h-5 w-5" />
@@ -139,28 +144,17 @@ export default function NotificationsPage() {
     if (type.startsWith("TEAM_JOIN"))      return <Star         className="h-5 w-5" />
     if (type.startsWith("SUPERVISOR"))     return <Calendar     className="h-5 w-5" />
     if (type.startsWith("SUBMISSION"))     return <FileText     className="h-5 w-5" />
-    if (type === "SYSTEM") {
-      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
-        return <Calendar className="h-5 w-5" />
-      }
-    }
+    if (type === "SYSTEM") return <AlertCircle className="h-5 w-5" />
     return <Bell className="h-5 w-5" />
   }
 
   const getTypeColor = (notification: ApiNotification) => {
-    const type = notification.type
-    if (type.startsWith("TASK"))        return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-    if (type.startsWith("TEAM_INVITE")) return "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-    if (type.startsWith("TEAM_JOIN"))   return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-    if (type.startsWith("SUPERVISOR"))  return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-    if (type.startsWith("SUBMISSION"))  return "bg-green-500/10 text-green-600 dark:text-green-400"
-    if (type === "SYSTEM") {
-      if (notification.title?.toLowerCase().includes("meeting") || notification.actionUrl?.includes("calendar")) {
-        return "bg-teal-500/10 text-teal-600 dark:text-teal-400"
-      }
-      return "bg-red-500/10 text-red-600 dark:text-red-400"
-    }
-    return "bg-gray-500/10 text-gray-600 dark:text-gray-400"
+    return getNotificationDisplay(notification).toneClassName
+  }
+
+  const getTypeBadge = (notification: ApiNotification) => {
+    const display = getNotificationDisplay(notification)
+    return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${display.toneClassName}`}>{display.label}</span>
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -287,7 +281,10 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <>
-              {filteredNotifications.map((notification, index) => (
+              {filteredNotifications.map((notification, index) => {
+                const display = getNotificationDisplay(notification)
+
+                return (
                 <motion.div
                   key={notification.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -305,12 +302,15 @@ export default function NotificationsPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-foreground">{notification.title}</h3>
+                        <div className="flex-1 min-w-0">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold text-foreground">{display.title}</h3>
+                            {getTypeBadge(notification)}
                             {!notification.read && <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />}
                           </div>
-                          <p className="text-sm text-muted-foreground line-clamp-2">{notification.message}</p>
+                          {display.message && display.message !== display.title && (
+                            <p className="text-sm text-muted-foreground line-clamp-2">{display.message}</p>
+                          )}
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {!notification.read && (
@@ -335,14 +335,15 @@ export default function NotificationsPage() {
                         </div>
                         {notification.actionUrl && (
                           <Link href={notification.actionUrl} className="text-indigo-600 dark:text-indigo-400 hover:underline">
-                            View details →
+                            View details -&gt;
                           </Link>
                         )}
                       </div>
                     </div>
                   </div>
                 </motion.div>
-              ))}
+                )
+              })}
 
               {/* Load more */}
               {hasNextPage && !searchQuery && filter === "all" && (
