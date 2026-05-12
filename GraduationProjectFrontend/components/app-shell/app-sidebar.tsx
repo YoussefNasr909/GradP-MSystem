@@ -139,8 +139,8 @@ const navigationGroups = [
   {
     name: "Management & Reports",
     items: [
-      { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor", "ta", "leader"] },
-      { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor", "ta", "leader"] },
+      { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor"] },
+      { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
       // Risks — created by leader, approved by doctor (TA is not the risk approver)
       { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
       // Supervisor Toolkit — private notes, deadlines, activity per team. Supervisors + admin only.

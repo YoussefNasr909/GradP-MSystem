@@ -29,11 +29,19 @@ export type RubricItem = {
 }
 
 export type GradeHistoryEntry = {
-  event: "unlocked" | "regraded"
+  event: "ta_reviewed" | "revision_requested" | "finalized" | "bulk_finalized" | "unlocked" | "regraded"
   reason?: string | null
+  overrideReason?: string | null
   by: string
   byName: string
+  byRole?: string
   at: string
+  recommendedGrade?: number | null
+  feedback?: string | null
+  rubric?: RubricItem[] | null
+  rubricScore?: number | null
+  taRecommendedGrade?: number | null
+  noTaAssigned?: boolean
   // unlock snapshot
   snapshotGrade?: number | null
   snapshotFeedback?: string | null
@@ -145,6 +153,7 @@ export type GradeSubmissionPayload = {
   feedback?: string
   rubric?: RubricItem[]
   reason?: string
+  overrideReason?: string
 }
 
 export type UnlockSubmissionPayload = {
@@ -157,7 +166,6 @@ export type AttachDefensePayload = {
 
 export type BulkApprovePayload = {
   submissionIds: string[]
-  grade?: number
   feedback?: string
 }
 

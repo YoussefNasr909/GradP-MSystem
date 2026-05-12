@@ -1,4 +1,5 @@
 import { prisma } from "../../loaders/dbLoader.js";
+import { PHASE_WEIGHTS, calculateWeightedFinal } from "../submissions/evaluation-policy.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -355,24 +356,14 @@ export async function getUserActivity({ page = 1, limit = 50, search, role } = {
 // Returns one row per team with all their graded/pending submissions,
 // aggregated stats, and a weighted final score per SDLC phase.
 
-const PHASE_WEIGHTS = {
-  REQUIREMENTS:   0.15,
-  DESIGN:         0.20,
-  IMPLEMENTATION: 0.30,
-  TESTING:        0.15,
-  DEPLOYMENT:     0.20,
-  MAINTENANCE:    0.00,
-};
-
 function buildFullName(u) {
   return `${u?.firstName ?? ""} ${u?.lastName ?? ""}`.trim();
 }
 
 export async function getGradesOverview({ search, stage, actor, scope } = {}) {
-  // Doctor-scope filter: when `scope === "mine"` AND the actor is a doctor,
-  // restrict to teams they actually supervise. Admin always sees everything.
+  // Doctors always see only their supervised teams. Admin sees everything.
   let teamWhere = {};
-  if (actor && actor.role === "DOCTOR" && scope === "mine") {
+  if (actor && actor.role === "DOCTOR") {
     teamWhere = { doctorId: actor.id };
   }
 
@@ -430,14 +421,7 @@ export async function getGradesOverview({ search, stage, actor, scope } = {}) {
     });
 
     // Weighted final = sum(weight × phase_avg) / sum(weights with grades)
-    let weightedTotal = 0;
-    let usedWeights = 0;
-    Object.entries(phaseAverages).forEach(([phase, avg]) => {
-      const w = PHASE_WEIGHTS[phase] ?? 0;
-      weightedTotal += w * avg;
-      usedWeights += w;
-    });
-    const weightedFinal = usedWeights > 0 ? Math.round(weightedTotal / usedWeights) : null;
+    const { weightedFinal, missingWeightedPhases, isFinalComplete } = calculateWeightedFinal(phaseAverages);
 
     return {
       teamId: team.id,
@@ -456,6 +440,8 @@ export async function getGradesOverview({ search, stage, actor, scope } = {}) {
       },
       averageGrade,
       weightedFinal,
+      missingWeightedPhases,
+      isFinalComplete,
       phaseAverages,
       submissions: team.submissions,
     };
@@ -493,7 +479,7 @@ export async function getGradesOverview({ search, stage, actor, scope } = {}) {
     totalNeedsRevision:  rows.reduce((s, r) => s + r.stats.needsRevision,  0),
   };
 
-  return { rows: filtered, summary };
+  return { rows: filtered, summary, phaseWeights: PHASE_WEIGHTS };
 }
 
 // ─── Team Activity Timeline ─────────────────────────────────────────────────

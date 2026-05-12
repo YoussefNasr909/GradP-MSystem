@@ -116,7 +116,7 @@ router.get("/:id", validate(submissionByIdSchema), getSubmission);
 router.patch("/:id/ta-review", allowRoles(ROLES.TA, ROLES.ADMIN), validate(taReviewSubmissionSchema), taReviewSubmission);
 router.patch("/:id/grade",      allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(gradeSubmissionSchema),    gradeSubmission);
 router.patch("/:id/unlock",     allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(unlockSubmissionSchema),   unlockSubmission);
-router.patch("/:id/defense",    allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(attachDefenseSchema), attachDefenseMeeting);
+router.patch("/:id/defense",    allowRoles(ROLES.DOCTOR, ROLES.ADMIN), validate(attachDefenseSchema), attachDefenseMeeting);
 router.patch("/:id/request-revision", allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN), validate(requestRevisionSchema), requestRevision);
 router.delete("/:id", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(submissionByIdSchema), deleteSubmission);
 

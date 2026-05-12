@@ -44,22 +44,47 @@ const idSchema = z.object({
 
 async function assertSupervisor(actor, teamId) {
   if (actor.role === ROLES.ADMIN) return;
-  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA) {
-    throw new AppError("Only supervisors can manage rubric templates.", 403, "RUBRIC_FORBIDDEN");
+  if (actor.role !== ROLES.DOCTOR) {
+    throw new AppError("Only doctors can manage official rubric templates.", 403, "RUBRIC_FORBIDDEN");
   }
   const team = await prisma.team.findUnique({
     where: { id: teamId },
     select: { doctorId: true, taId: true },
   });
   if (!team) throw new AppError("Team not found.", 404, "TEAM_NOT_FOUND");
-  if (team.doctorId !== actor.id && team.taId !== actor.id) {
-    throw new AppError("You're not a supervisor for this team.", 403, "RUBRIC_FORBIDDEN");
+  if (team.doctorId !== actor.id) {
+    throw new AppError("Only the team doctor can manage rubric templates.", 403, "RUBRIC_FORBIDDEN");
+  }
+}
+
+async function assertTeamAccess(actor, teamId) {
+  if (actor.role === ROLES.ADMIN) return;
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      leaderId: true,
+      doctorId: true,
+      taId: true,
+      members: { select: { userId: true } },
+    },
+  });
+  if (!team) throw new AppError("Team not found.", 404, "TEAM_NOT_FOUND");
+
+  const allowed =
+    team.leaderId === actor.id ||
+    team.doctorId === actor.id ||
+    team.taId === actor.id ||
+    team.members.some((member) => member.userId === actor.id);
+
+  if (!allowed) {
+    throw new AppError("You cannot view rubric templates for this team.", 403, "RUBRIC_FORBIDDEN");
   }
 }
 
 // LIST templates for a team (visible to anyone with team access)
 router.get("/", validate(listSchema), async (req, res, next) => {
   try {
+    await assertTeamAccess(req.user, req.validated.query.teamId);
     const rows = await prisma.teamRubricTemplate.findMany({
       where: { teamId: req.validated.query.teamId },
       orderBy: { deliverableType: "asc" },
@@ -71,7 +96,7 @@ router.get("/", validate(listSchema), async (req, res, next) => {
 // UPSERT a template (supervisor)
 router.post(
   "/",
-  allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN),
+  allowRoles(ROLES.DOCTOR, ROLES.ADMIN),
   validate(upsertSchema),
   async (req, res, next) => {
     try {
@@ -105,7 +130,7 @@ router.post(
 // DELETE a template (supervisor)
 router.delete(
   "/:id",
-  allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN),
+  allowRoles(ROLES.DOCTOR, ROLES.ADMIN),
   validate(idSchema),
   async (req, res, next) => {
     try {

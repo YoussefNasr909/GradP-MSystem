@@ -288,6 +288,8 @@ function SubmissionDetailDialog({
   const [revisionFeedback, setRevisionFeedback] = useState("")
   const [doctorRubric, setDoctorRubric] = useState<RubricItem[]>([])
   const [taRubric,     setTaRubric]     = useState<RubricItem[]>([])
+  const [doctorRubricScore, setDoctorRubricScore] = useState<number | null>(null)
+  const [overrideReason, setOverrideReason] = useState("")
   const [loading, setLoading] = useState(false)
 
   // Unlock dialog state
@@ -341,6 +343,10 @@ function SubmissionDetailDialog({
         grade: g,
         feedback: gradeFeedback || undefined,
         rubric: doctorRubric.length > 0 ? doctorRubric : undefined,
+        overrideReason:
+          doctorRubricScore !== null && doctorRubricScore !== g
+            ? overrideReason.trim() || undefined
+            : undefined,
       })
       onGraded(updated)
       setGradeDialogOpen(false)
@@ -616,7 +622,7 @@ function SubmissionDetailDialog({
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2 text-amber-700 dark:text-amber-500">
                         <Award className="h-4 w-4" />
-                        <h4 className="text-sm font-semibold">Doctor Final Grade</h4>
+                        <h4 className="text-sm font-semibold">{submission.grade !== null ? "Doctor Final Grade" : "Doctor Feedback"}</h4>
                       </div>
                       {submission.grade !== null && (
                         <Badge variant="outline" className="border-amber-500/40 text-amber-700 dark:text-amber-500 font-semibold">
@@ -670,7 +676,7 @@ function SubmissionDetailDialog({
                         {submission.gradeHistory.map((h, i) => (
                           <div key={i} className="text-xs p-2 rounded-lg bg-muted/40">
                             <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="outline" className="text-[10px] capitalize">{h.event}</Badge>
+                              <Badge variant="outline" className="text-[10px] capitalize">{h.event.replaceAll("_", " ")}</Badge>
                               <span className="text-muted-foreground">{new Date(h.at).toLocaleString()}</span>
                               <span className="text-muted-foreground">· by {h.byName}</span>
                             </div>
@@ -683,7 +689,25 @@ function SubmissionDetailDialog({
                             {h.event === "regraded" && (
                               <>
                                 <p>Changed from <b>{h.previousGrade}/100</b> → <b>{h.newGrade}/100</b></p>
-                                {h.reason && <p className="text-muted-foreground italic mt-1">Reason: {h.reason}</p>}
+                                {(h.overrideReason || h.reason) && <p className="text-muted-foreground italic mt-1">Reason: {h.overrideReason || h.reason}</p>}
+                              </>
+                            )}
+                            {h.event === "ta_reviewed" && (
+                              <p>TA recommended <b>{h.recommendedGrade}/100</b></p>
+                            )}
+                            {h.event === "revision_requested" && (
+                              <p>Revision requested: <span className="text-muted-foreground">{h.feedback}</span></p>
+                            )}
+                            {(h.event === "finalized" || h.event === "bulk_finalized") && (
+                              <>
+                                <p>
+                                  Finalized at <b>{h.newGrade}/100</b>
+                                  {h.taRecommendedGrade !== null && h.taRecommendedGrade !== undefined
+                                    ? ` from TA recommendation ${h.taRecommendedGrade}/100`
+                                    : ""}
+                                </p>
+                                {h.noTaAssigned && <p className="text-muted-foreground italic mt-1">No TA was assigned to this team.</p>}
+                                {h.overrideReason && <p className="text-muted-foreground italic mt-1">Override: {h.overrideReason}</p>}
                               </>
                             )}
                           </div>
@@ -721,7 +745,7 @@ function SubmissionDetailDialog({
                     ) : (
                       <div className="text-xs text-muted-foreground">
                         No defense meeting linked yet.
-                        {(isDoctor || userRole === "TA") && (
+                        {isDoctor && (
                           <Link
                             href={`/dashboard/meetings?createForSubmission=${submission.id}&teamId=${submission.teamId}`}
                             className="block mt-2 text-primary hover:underline"
@@ -763,7 +787,7 @@ function SubmissionDetailDialog({
                 {/* ── Actions (branch by role) ── */}
                 {canGrade && submission.status !== "APPROVED" && isLatest && (
                   <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-8">
-                    {isTa && (
+                    {isTa && (submission.status === "PENDING" || submission.status === "REVISION_REQUIRED") && (
                       <Button
                         size="lg"
                         className="flex-1 shadow-sm font-semibold bg-cyan-600 hover:bg-cyan-700"
@@ -822,6 +846,7 @@ function SubmissionDetailDialog({
                 ? submission.rubric
                 : getDefaultRubric(submission.deliverableType)
             setDoctorRubric(initial)
+            setOverrideReason("")
           }
         }}
       >
@@ -850,7 +875,10 @@ function SubmissionDetailDialog({
             <RubricEditor
               value={doctorRubric}
               onChange={setDoctorRubric}
-              onTotalChange={(total) => setGrade(String(total))}
+              onTotalChange={(total) => {
+                setDoctorRubricScore(total)
+                setGrade(String(total))
+              }}
               defaultRubricType={submission.deliverableType}
             />
 
@@ -866,6 +894,18 @@ function SubmissionDetailDialog({
                 className="mt-1.5"
               />
             </div>
+            {doctorRubricScore !== null && grade !== "" && Number(grade) !== doctorRubricScore && (
+              <div>
+                <Label>Override Reason</Label>
+                <Textarea
+                  value={overrideReason}
+                  onChange={(e) => setOverrideReason(e.target.value)}
+                  placeholder="Explain why the final grade differs from the rubric total."
+                  className="mt-1.5 resize-none"
+                  rows={3}
+                />
+              </div>
+            )}
             <div>
               <Label>Final Feedback (optional)</Label>
               <Textarea

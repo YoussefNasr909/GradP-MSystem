@@ -1,7 +1,14 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { AppError } from "../../common/errors/AppError.js"
-import { assertPhaseSubmissionGate, getLatestPhaseSubmission } from "./submissions.service.js"
+import {
+  assertPhaseSubmissionGate,
+  assertRubricGradeMatches,
+  getLatestPhaseSubmission,
+  getRubricScaledScore,
+  normalizeRubric,
+} from "./submissions.service.js"
+import { calculateWeightedFinal } from "./evaluation-policy.js"
 
 test("getLatestPhaseSubmission returns the newest phase item", () => {
   const latest = getLatestPhaseSubmission([
@@ -66,4 +73,58 @@ test("assertPhaseSubmissionGate allows the next deliverable after approval", () 
       "IMPLEMENTATION",
     )
   })
+})
+
+test("normalizeRubric rejects criterion scores over max score", () => {
+  assert.throws(
+    () => normalizeRubric([{ name: "Quality", score: 11, maxScore: 10 }]),
+    (error) =>
+      error instanceof AppError &&
+      error.code === "RUBRIC_SCORE_EXCEEDS_MAX" &&
+      error.statusCode === 422,
+  )
+})
+
+test("getRubricScaledScore scales rubric totals to 100", () => {
+  assert.equal(
+    getRubricScaledScore([
+      { name: "A", score: 8, maxScore: 10 },
+      { name: "B", score: 12, maxScore: 20 },
+    ]),
+    67,
+  )
+})
+
+test("assertRubricGradeMatches requires a reason when grade differs from rubric total", () => {
+  assert.throws(
+    () =>
+      assertRubricGradeMatches({
+        grade: 90,
+        rubric: [{ name: "Quality", score: 8, maxScore: 10 }],
+        overrideReason: "",
+      }),
+    (error) =>
+      error instanceof AppError &&
+      error.code === "RUBRIC_OVERRIDE_REASON_REQUIRED" &&
+      error.statusCode === 422,
+  )
+})
+
+test("assertRubricGradeMatches allows explicit grade override with reason", () => {
+  assert.equal(
+    assertRubricGradeMatches({
+      grade: 90,
+      rubric: [{ name: "Quality", score: 8, maxScore: 10 }],
+      overrideReason: "Excellent live defense",
+    }),
+    80,
+  )
+})
+
+test("calculateWeightedFinal marks incomplete scores until all weighted phases exist", () => {
+  const result = calculateWeightedFinal({ REQUIREMENTS: 90, DESIGN: 80 })
+
+  assert.equal(result.weightedFinal, 84)
+  assert.equal(result.isFinalComplete, false)
+  assert.deepEqual(result.missingWeightedPhases, ["IMPLEMENTATION", "TESTING", "DEPLOYMENT"])
 })

@@ -98,13 +98,62 @@ function toSubmissionResponse(submission) {
   };
 }
 
-function normalizeRubric(rubric) {
+export function normalizeRubric(rubric) {
   if (!Array.isArray(rubric)) return null;
-  return rubric.map((item) => ({
-    name: String(item.name),
-    score: Number(item.score),
-    maxScore: Number(item.maxScore),
-  }));
+  return rubric.map((item) => {
+    const normalized = {
+      name: String(item.name),
+      score: Number(item.score),
+      maxScore: Number(item.maxScore),
+    };
+    if (normalized.score > normalized.maxScore) {
+      throw new AppError(
+        `"${normalized.name}" score cannot exceed its max score.`,
+        422,
+        "RUBRIC_SCORE_EXCEEDS_MAX",
+      );
+    }
+    return normalized;
+  });
+}
+
+export function getRubricScaledScore(rubric) {
+  const normalized = normalizeRubric(rubric);
+  if (!normalized || normalized.length === 0) return null;
+  const total = normalized.reduce((sum, item) => sum + item.score, 0);
+  const possible = normalized.reduce((sum, item) => sum + item.maxScore, 0);
+  return possible > 0 ? Math.round((total / possible) * 100) : null;
+}
+
+export function assertRubricGradeMatches({ grade, rubric, overrideReason }) {
+  const rubricScore = getRubricScaledScore(rubric);
+  if (rubricScore === null || rubricScore === grade) return rubricScore;
+
+  if (!overrideReason || overrideReason.trim().length < 5) {
+    throw new AppError(
+      `Final grade (${grade}/100) differs from the rubric total (${rubricScore}/100). Provide an override reason.`,
+      422,
+      "RUBRIC_OVERRIDE_REASON_REQUIRED",
+    );
+  }
+
+  return rubricScore;
+}
+
+function appendGradeHistory(submission, event) {
+  const existing = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
+  return [...existing, event];
+}
+
+function buildHistoryEvent(actor, event, details = {}) {
+  return {
+    event,
+    by: actor.id,
+    byName: buildFullName(actor),
+    byRole: actor.role,
+    at: new Date().toISOString(),
+    ...details,
+  };
 }
 
 export function getLatestPhaseSubmission(submissions = []) {
@@ -312,8 +361,12 @@ export async function taReviewSubmissionService(actor, submissionId, { recommend
 
   await assertSupervisorForTeam(actor, submission.teamId);
 
-  if (submission.status === "APPROVED") {
-    throw new AppError("This submission is already finalized by the doctor.", 409, "SUBMISSION_ALREADY_APPROVED");
+  if (!["PENDING", "REVISION_REQUIRED"].includes(submission.status)) {
+    throw new AppError(
+      "TA first-pass review is only available for pending submissions or revised submissions.",
+      409,
+      "SUBMISSION_TA_REVIEW_BAD_STATE",
+    );
   }
 
   const normalizedRubric = normalizeRubric(rubric);
@@ -325,6 +378,14 @@ export async function taReviewSubmissionService(actor, submissionId, { recommend
     taReviewedAt: new Date(),
     status: "UNDER_REVIEW",
     ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
+    gradeHistory: appendGradeHistory(
+      submission,
+      buildHistoryEvent(actor, "ta_reviewed", {
+        recommendedGrade,
+        feedback: feedback || null,
+        rubric: normalizedRubric,
+      }),
+    ),
   });
 
   // Notify the doctor that a TA recommendation is ready
@@ -365,7 +426,7 @@ export async function taReviewSubmissionService(actor, submissionId, { recommend
  * an unlock), the prior state is pushed onto Submission.gradeHistory as an
  * audit trail entry.
  */
-export async function gradeSubmissionService(actor, submissionId, { grade, feedback, rubric, reason }) {
+export async function gradeSubmissionService(actor, submissionId, { grade, feedback, rubric, reason, overrideReason }) {
   if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
     throw new AppError("Only the team doctor can finalize the grade.", 403, "SUBMISSION_GRADE_FORBIDDEN");
   }
@@ -381,16 +442,35 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     throw new AppError("This submission is already approved. Unlock it first to re-grade.", 409, "SUBMISSION_ALREADY_APPROVED");
   }
 
-  // Defense-meeting gate for DEPLOYMENT-phase deliverables.
-  // If a defense was scheduled but not yet COMPLETED, block grading.
-  if (submission.sdlcPhase === "DEPLOYMENT" && submission.defenseMeetingId) {
+  const team = await prisma.team.findUnique({
+    where: { id: submission.teamId },
+    select: { taId: true },
+  });
+  const hasAssignedTa = Boolean(team?.taId);
+  const hasTaRecommendation = submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined;
+  if (hasAssignedTa && (submission.status !== "UNDER_REVIEW" || !hasTaRecommendation)) {
+    throw new AppError(
+      "This team has a TA assigned. The TA must submit a first-pass recommendation before the doctor finalizes the grade.",
+      409,
+      "SUBMISSION_TA_REVIEW_REQUIRED",
+    );
+  }
+
+  if (submission.sdlcPhase === "DEPLOYMENT") {
+    if (!submission.defenseMeetingId) {
+      throw new AppError(
+        "Link a completed defense meeting before finalizing deployment deliverables.",
+        409,
+        "SUBMISSION_DEFENSE_REQUIRED",
+      );
+    }
     const meeting = await prisma.meeting.findUnique({
       where: { id: submission.defenseMeetingId },
-      select: { status: true, startAt: true },
+      select: { status: true },
     });
-    if (meeting && meeting.status !== "COMPLETED" && meeting.status !== "CANCELLED") {
+    if (!meeting || meeting.status !== "COMPLETED") {
       throw new AppError(
-        "The defense meeting hasn't been marked complete yet. Update it first.",
+        "The linked defense meeting must be marked completed before final grading.",
         409,
         "SUBMISSION_DEFENSE_INCOMPLETE",
       );
@@ -398,11 +478,21 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
   }
 
   const normalizedRubric = normalizeRubric(rubric);
+  const finalOverrideReason = overrideReason || reason || null;
+  const rubricScore = assertRubricGradeMatches({ grade, rubric: normalizedRubric, overrideReason: finalOverrideReason });
 
-  // If this is a re-grade after an unlock (gradeHistory exists with at least
-  // one entry from previous approval), append a new audit record now.
   const existingHistory = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
-  const wasReGrade = existingHistory.length > 0;
+  const wasReGrade = existingHistory.some((entry) => entry?.event === "unlocked") || submission.grade !== null;
+  const historyEvent = buildHistoryEvent(actor, wasReGrade ? "regraded" : "finalized", {
+    previousGrade: submission.grade,
+    newGrade: grade,
+    feedback: feedback || null,
+    rubric: normalizedRubric,
+    rubricScore,
+    overrideReason: finalOverrideReason,
+    taRecommendedGrade: submission.taRecommendedGrade ?? null,
+    noTaAssigned: !hasAssignedTa,
+  });
 
   const updated = await updateSubmission(submissionId, {
     grade,
@@ -411,22 +501,7 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     reviewedByUserId: actor.id,
     reviewedAt: new Date(),
     ...(normalizedRubric ? { rubric: normalizedRubric } : {}),
-    ...(wasReGrade
-      ? {
-          gradeHistory: [
-            ...existingHistory,
-            {
-              event: "regraded",
-              previousGrade: submission.grade,
-              newGrade: grade,
-              reason: reason || null,
-              by: actor.id,
-              byName: buildFullName(actor),
-              at: new Date().toISOString(),
-            },
-          ],
-        }
-      : {}),
+    gradeHistory: [...existingHistory, historyEvent],
   });
 
   // Notify the submitter their submission was graded
@@ -479,11 +554,26 @@ export async function requestRevisionService(actor, submissionId, { feedback }) 
     throw new AppError("Cannot request revision on an approved submission.", 409, "SUBMISSION_ALREADY_APPROVED");
   }
 
+  const revisionData =
+    actor.role === ROLES.TA
+      ? {
+          taFeedback: feedback,
+          taReviewedByUserId: actor.id,
+          taReviewedAt: new Date(),
+        }
+      : {
+          feedback,
+          reviewedByUserId: actor.id,
+          reviewedAt: new Date(),
+        };
+
   const updated = await updateSubmission(submissionId, {
-    feedback,
+    ...revisionData,
     status: "REVISION_REQUIRED",
-    reviewedByUserId: actor.id,
-    reviewedAt: new Date(),
+    gradeHistory: appendGradeHistory(
+      submission,
+      buildHistoryEvent(actor, "revision_requested", { feedback }),
+    ),
   });
 
   // Notify the submitter that changes are needed
@@ -730,18 +820,14 @@ export async function unlockSubmissionService(actor, submissionId, { reason }) {
 
   // Snapshot the current grade state for the audit trail
   const existingHistory = Array.isArray(submission.gradeHistory) ? submission.gradeHistory : [];
-  const snapshot = {
-    event: "unlocked",
+  const snapshot = buildHistoryEvent(actor, "unlocked", {
     snapshotGrade: submission.grade,
     snapshotFeedback: submission.feedback,
     snapshotRubric: submission.rubric ?? null,
     snapshotReviewedBy: submission.reviewedBy?.fullName ?? null,
     snapshotReviewedAt: submission.reviewedAt,
     reason: reason.trim(),
-    by: actor.id,
-    byName: buildFullName(actor),
-    at: new Date().toISOString(),
-  };
+  });
 
   const updated = await updateSubmission(submissionId, {
     status: "UNDER_REVIEW",
@@ -778,7 +864,7 @@ export async function unlockSubmissionService(actor, submissionId, { reason }) {
  * Doctor + Admin only. Skips items where the actor isn't a supervisor.
  * Returns { approved: [...ids], skipped: [{id, reason}] }.
  */
-export async function bulkApproveSubmissionsService(actor, { submissionIds, grade = 85, feedback }) {
+export async function bulkApproveSubmissionsService(actor, { submissionIds, feedback }) {
   if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
     throw new AppError("Only the team doctor can bulk approve submissions.", 403, "BULK_GRADE_FORBIDDEN");
   }
@@ -796,6 +882,11 @@ export async function bulkApproveSubmissionsService(actor, { submissionIds, grad
       const sub = await findSubmissionById(id);
       if (!sub) { skipped.push({ id, reason: "Not found" }); continue; }
       if (sub.status === "APPROVED") { skipped.push({ id, reason: "Already approved" }); continue; }
+      if (sub.status !== "UNDER_REVIEW") { skipped.push({ id, reason: "Awaiting TA first-pass review" }); continue; }
+      if (sub.taRecommendedGrade === null || sub.taRecommendedGrade === undefined) {
+        skipped.push({ id, reason: "Missing TA recommendation" });
+        continue;
+      }
 
       // Doctor must supervise the team (admin bypasses)
       if (actor.role !== ROLES.ADMIN) {
@@ -806,8 +897,19 @@ export async function bulkApproveSubmissionsService(actor, { submissionIds, grad
         if (!team) { skipped.push({ id, reason: "Not your team" }); continue; }
       }
 
-      // Bias toward TA's recommendation if it exists; otherwise use default
-      const finalGrade = sub.taRecommendedGrade ?? grade;
+      if (sub.sdlcPhase === "DEPLOYMENT") {
+        if (!sub.defenseMeetingId) { skipped.push({ id, reason: "Defense meeting required" }); continue; }
+        const meeting = await prisma.meeting.findUnique({
+          where: { id: sub.defenseMeetingId },
+          select: { status: true },
+        });
+        if (!meeting || meeting.status !== "COMPLETED") {
+          skipped.push({ id, reason: "Defense meeting incomplete" });
+          continue;
+        }
+      }
+
+      const finalGrade = sub.taRecommendedGrade;
 
       await updateSubmission(id, {
         grade: finalGrade,
@@ -815,6 +917,14 @@ export async function bulkApproveSubmissionsService(actor, { submissionIds, grad
         status: "APPROVED",
         reviewedByUserId: actor.id,
         reviewedAt: new Date(),
+        gradeHistory: appendGradeHistory(
+          sub,
+          buildHistoryEvent(actor, "bulk_finalized", {
+            newGrade: finalGrade,
+            feedback: feedback || sub.taFeedback || "Bulk approved.",
+            taRecommendedGrade: sub.taRecommendedGrade,
+          }),
+        ),
       });
 
       // Notify submitter + TA
@@ -853,8 +963,8 @@ export async function bulkApproveSubmissionsService(actor, { submissionIds, grad
  * Used for FINAL_REPORT / PRESENTATION deliverables.
  */
 export async function attachDefenseMeetingService(actor, submissionId, { meetingId }) {
-  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.TA && actor.role !== ROLES.ADMIN) {
-    throw new AppError("Only supervisors can schedule defense meetings.", 403, "DEFENSE_FORBIDDEN");
+  if (actor.role !== ROLES.DOCTOR && actor.role !== ROLES.ADMIN) {
+    throw new AppError("Only the team doctor can link defense meetings for final evaluation.", 403, "DEFENSE_FORBIDDEN");
   }
 
   const submission = await findSubmissionById(submissionId);

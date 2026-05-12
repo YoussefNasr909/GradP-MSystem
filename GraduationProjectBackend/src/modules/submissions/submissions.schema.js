@@ -64,6 +64,7 @@ export const gradeSubmissionSchema = z.object({
     feedback: z.string().trim().min(3).max(2000).optional(),
     rubric: rubricSchema,
     reason: z.string().trim().max(500).optional(),
+    overrideReason: z.string().trim().max(500).optional(),
   }),
 });
 
@@ -91,7 +92,6 @@ export const bulkApproveSchema = z.object({
   query:  z.object({}).optional().default({}),
   body: z.object({
     submissionIds: z.array(z.string().trim().min(1)).min(1).max(50),
-    grade: z.coerce.number().int().min(0).max(100).optional(),
     feedback: z.string().trim().max(2000).optional(),
   }),
 });

@@ -142,11 +142,7 @@ function canManageTaskTeam(actor, team) {
 }
 
 function canReviewTaskTeam(actor, team) {
-  return (
-    canManageTaskTeam(actor, team) ||
-    team?.doctor?.id === actor.id ||
-    team?.ta?.id === actor.id
-  );
+  return actor.role === ROLES.ADMIN || team?.ta?.id === actor.id;
 }
 
 function canViewTaskTeam(actor, team) {

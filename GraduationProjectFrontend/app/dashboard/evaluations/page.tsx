@@ -184,9 +184,11 @@ function TeamRow({
             </div>
           </div>
 
-          {/* Final grade big number */}
+          {/* Weighted score */}
           <div className="text-center lg:text-left">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">Final Grade</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
+              {row.isFinalComplete ? "Final Grade" : "Current Weighted Score"}
+            </p>
             <div className="flex items-baseline gap-1.5">
               <span className={cn("text-4xl font-bold tabular-nums", gradeColor(row.weightedFinal ?? row.averageGrade))}>
                 {row.weightedFinal ?? row.averageGrade ?? "—"}
@@ -221,6 +223,11 @@ function TeamRow({
               {row.stats.needsRevision > 0 && (
                 <Badge variant="outline" className="border-red-500/30 text-red-500 px-1.5 py-0">
                   {row.stats.needsRevision} revision
+                </Badge>
+              )}
+              {!row.isFinalComplete && row.missingWeightedPhases.length > 0 && (
+                <Badge variant="outline" className="border-slate-500/30 text-slate-500 px-1.5 py-0">
+                  {row.missingWeightedPhases.length} phase{row.missingWeightedPhases.length === 1 ? "" : "s"} missing
                 </Badge>
               )}
             </div>
@@ -347,9 +354,6 @@ export default function GradesOverviewPage() {
   const canView = currentUser?.role === "admin" || currentUser?.role === "doctor"
   const isDoctor = currentUser?.role === "doctor"
 
-  // Doctors default to "my teams" scope; admins default to "all"
-  const [scope, setScope] = useState<"mine" | "all">(isDoctor ? "mine" : "all")
-
   // Bulk-approve state
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set())
   const [bulkApproving, setBulkApproving] = useState(false)
@@ -360,7 +364,7 @@ export default function GradesOverviewPage() {
       const res = await gradesOverviewApi.get({
         search: search || undefined,
         stage: stageFilter,
-        scope: isDoctor ? scope : undefined,
+        scope: isDoctor ? "mine" : undefined,
       })
       setData(res)
       // Clear any selections that no longer exist after filter change
@@ -368,7 +372,7 @@ export default function GradesOverviewPage() {
     } catch {
       setError(true)
     }
-  }, [search, stageFilter, isDoctor, scope])
+  }, [search, stageFilter, isDoctor])
 
   useEffect(() => {
     if (!canView) return
@@ -425,7 +429,7 @@ export default function GradesOverviewPage() {
             </motion.h1>
             <motion.p className="text-muted-foreground"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              Final grades across every team, weighted by SDLC phase
+              Official doctor grades with transparent SDLC weighting
             </motion.p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
@@ -514,26 +518,9 @@ export default function GradesOverviewPage() {
             </SelectContent>
           </Select>
           {isDoctor && (
-            <div className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5">
-              <button
-                onClick={() => setScope("mine")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                  scope === "mine" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                My teams
-              </button>
-              <button
-                onClick={() => setScope("all")}
-                className={cn(
-                  "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                  scope === "all" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                All teams
-              </button>
-            </div>
+            <Badge variant="outline" className="h-9 px-3 rounded-lg">
+              My supervised teams
+            </Badge>
           )}
           {(search || stageFilter !== "all") && (
             <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStageFilter("all") }}>
@@ -575,7 +562,7 @@ export default function GradesOverviewPage() {
                         : `${pendingDoctorIds.length} submission${pendingDoctorIds.length === 1 ? "" : "s"} awaiting your final grade`}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Bulk approval uses each TA&apos;s recommended grade (or 85 if none).
+                      Bulk approval only uses submissions that already have a TA recommendation.
                     </p>
                   </div>
                 </div>

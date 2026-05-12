@@ -1,11 +1,7 @@
 import PDFDocument from "pdfkit";
 import { prisma } from "../../loaders/dbLoader.js";
 import { AppError } from "../../common/errors/AppError.js";
-
-const PHASE_WEIGHTS = {
-  REQUIREMENTS: 0.15, DESIGN: 0.20, IMPLEMENTATION: 0.30,
-  TESTING: 0.15, DEPLOYMENT: 0.20, MAINTENANCE: 0,
-};
+import { PHASE_WEIGHTS, calculateWeightedFinal } from "../submissions/evaluation-policy.js";
 
 function fullName(u) {
   return u ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : "—";
@@ -56,14 +52,7 @@ export async function streamTeamReportCardPdf(teamId, res) {
   const phaseAvg = {};
   Object.entries(phaseAverages).forEach(([p, { total, count }]) => { phaseAvg[p] = Math.round(total / count); });
 
-  let weightedTotal = 0;
-  let usedWeights = 0;
-  Object.entries(phaseAvg).forEach(([p, avg]) => {
-    const w = PHASE_WEIGHTS[p] ?? 0;
-    weightedTotal += w * avg;
-    usedWeights += w;
-  });
-  const weightedFinal = usedWeights > 0 ? Math.round(weightedTotal / usedWeights) : null;
+  const { weightedFinal, isFinalComplete } = calculateWeightedFinal(phaseAvg);
   const avgGrade = graded.length
     ? Math.round(graded.reduce((s, x) => s + x.grade, 0) / graded.length)
     : null;
@@ -113,7 +102,7 @@ export async function streamTeamReportCardPdf(teamId, res) {
   doc.fontSize(10).font("Helvetica").fillColor("#444");
   doc.text(`Submissions graded: ${graded.length} / ${team.submissions.length}`, statsX, gradeY + 22);
   doc.text(`Average grade: ${avgGrade !== null ? avgGrade + "/100" : "—"}`, statsX, gradeY + 38);
-  doc.text(`Weighted final: ${weightedFinal !== null ? weightedFinal + "/100" : "—"}`, statsX, gradeY + 54);
+  doc.text(`${isFinalComplete ? "Final grade" : "Current weighted score"}: ${weightedFinal !== null ? weightedFinal + "/100" : "—"}`, statsX, gradeY + 54);
   doc.text(`Team size: ${team.members.length + 1} members`, statsX, gradeY + 70);
   doc.text(`Proposal: ${team.proposal ? team.proposal.status : "Not started"}`, statsX, gradeY + 86);
 

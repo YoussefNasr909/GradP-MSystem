@@ -140,6 +140,8 @@ export interface GradesOverviewRow {
   }
   averageGrade: number | null
   weightedFinal: number | null
+  missingWeightedPhases: string[]
+  isFinalComplete: boolean
   phaseAverages: Record<string, number>
   submissions: GradesOverviewSubmission[]
 }
@@ -155,6 +157,7 @@ export interface GradesOverviewResponse {
     totalUnderReview: number
     totalNeedsRevision: number
   }
+  phaseWeights: Record<string, number>
 }
 
 // ─── Analytics (admin + doctor) ──────────────────────────────────────────────

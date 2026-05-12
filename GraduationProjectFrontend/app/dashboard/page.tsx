@@ -1367,12 +1367,12 @@ function DoctorDashboard() {
       urgent: pendingProposals.length > 0,
     },
     {
-      title: "Evaluations",
+      title: "Grades Overview",
       icon: ClipboardCheck,
       href: "/dashboard/evaluations",
       count: 4,
       color: "from-purple-500 to-pink-500",
-      description: "Grade & feedback",
+      description: "Final grades",
     },
     {
       title: "Calendar",
@@ -1806,12 +1806,12 @@ function TADashboard() {
       description: "Team discussions",
     },
     {
-      title: "Evaluations",
+      title: "Review Work",
       icon: ClipboardCheck,
-      href: "/dashboard/evaluations",
+      href: "/dashboard/reviews",
       count: 3,
       color: "from-orange-500 to-amber-500",
-      description: "Grade submissions",
+      description: "Tasks & PRs",
     },
     {
       title: "Files",
@@ -1830,12 +1830,12 @@ function TADashboard() {
       description: "Direct messages",
     },
     {
-      title: "Analytics",
+      title: "First-Pass Submissions",
       icon: BarChart3,
-      href: "/dashboard/analytics",
+      href: "/dashboard/submissions",
       count: 0,
       color: "from-rose-500 to-pink-500",
-      description: "Performance",
+      description: "Recommend grades",
     },
     {
       title: "Settings",
