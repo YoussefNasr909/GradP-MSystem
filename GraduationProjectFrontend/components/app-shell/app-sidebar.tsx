@@ -56,6 +56,14 @@ const navigationGroups = [
         icon: LayoutDashboard,
         roles: ["admin", "doctor", "ta", "leader", "member"],
       },
+      // Supervision — the supervisor's daily workspace (activity, notes, deadlines, rubrics).
+      // Sits at the top of the sidebar for doctor/TA/admin since it's their main entry point.
+      {
+        name: "Supervision",
+        href: "/dashboard/supervisor-toolkit",
+        icon: StickyNote,
+        roles: ["admin", "doctor", "ta"],
+      },
       {
         name: "My Team",
         href: "/dashboard/my-team",
@@ -143,8 +151,7 @@ const navigationGroups = [
       { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
       // Risks — created by leader, approved by doctor (TA is not the risk approver)
       { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
-      // Supervisor Toolkit — private notes, deadlines, activity per team. Supervisors + admin only.
-      { name: "Supervisor Toolkit", href: "/dashboard/supervisor-toolkit", icon: StickyNote, roles: ["admin", "doctor", "ta"] },
+      // (Supervision was moved to the Main group — it's the supervisor's primary workspace.)
       { name: "Admin Panel", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
     ],

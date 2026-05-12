@@ -446,6 +446,179 @@ function ActivityPanel({ teamId }: { teamId: string }) {
   )
 }
 
+// ─── Team Pulse (header stats strip) ────────────────────────────────────────
+//
+// Quick "vital signs" for the selected team — current SDLC stage, action
+// queue counts, and the last activity timestamp. Sits above the tabs so the
+// supervisor sees what matters before drilling in.
+type PulseCounts = {
+  stage: string | null
+  notes: number
+  deadlines: number
+  overdueDeadlines: number
+  activityLastWeek: number
+  lastActivityAt: string | null
+}
+
+function TeamPulse({ teamId }: { teamId: string }) {
+  const [counts, setCounts] = useState<PulseCounts | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+
+    async function load() {
+      try {
+        const [notes, deadlines, activity] = await Promise.all([
+          supervisorNotesApi.list(teamId).catch(() => []),
+          deadlinesApi.list({ teamId }).catch(() => []),
+          activityApi.forTeam(teamId).catch(() => []),
+        ])
+
+        const now = Date.now()
+        const overdueDeadlines = deadlines.filter((d) => new Date(d.dueDate).getTime() < now).length
+        const weekAgo = now - 7 * 24 * 60 * 60 * 1000
+        const activityLastWeek = activity.filter((e) => new Date(e.timestamp).getTime() > weekAgo).length
+        const lastActivityAt = activity[0]?.timestamp ?? null
+
+        // Get stage from the activity payload — easiest existing source
+        let stage: string | null = null
+        try {
+          const team = await teamsApi.getById(teamId)
+          stage = team.stage
+        } catch { /* fall through */ }
+
+        if (cancelled) return
+        setCounts({
+          stage,
+          notes: notes.length,
+          deadlines: deadlines.length,
+          overdueDeadlines,
+          activityLastWeek,
+          lastActivityAt,
+        })
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [teamId])
+
+  if (loading || !counts) {
+    return (
+      <Card className="p-4 border-border/50">
+        <Skeleton className="h-12 w-full" />
+      </Card>
+    )
+  }
+
+  const STAGE_COLORS: Record<string, string> = {
+    REQUIREMENTS: "border-blue-500/30 text-blue-500 bg-blue-500/5",
+    DESIGN: "border-purple-500/30 text-purple-500 bg-purple-500/5",
+    IMPLEMENTATION: "border-amber-500/30 text-amber-500 bg-amber-500/5",
+    TESTING: "border-cyan-500/30 text-cyan-500 bg-cyan-500/5",
+    DEPLOYMENT: "border-green-500/30 text-green-500 bg-green-500/5",
+    MAINTENANCE: "border-gray-500/30 text-gray-500 bg-gray-500/5",
+  }
+
+  function relative(iso: string | null): string {
+    if (!iso) return "no activity yet"
+    const diffMs = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(diffMs / 60000)
+    if (m < 1) return "just now"
+    if (m < 60) return `${m}m ago`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}h ago`
+    const d = Math.floor(h / 24)
+    if (d < 7) return `${d}d ago`
+    return new Date(iso).toLocaleDateString()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35 }}
+    >
+      <Card className="p-4 border-border/50">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Stage */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-muted/50 shrink-0">
+              <ListChecks className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">SDLC Stage</p>
+              {counts.stage ? (
+                <Badge variant="outline" className={cn("text-[11px] mt-0.5", STAGE_COLORS[counts.stage] ?? "")}>
+                  {counts.stage}
+                </Badge>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+          </div>
+
+          {/* Activity */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
+              <Activity className="h-4 w-4 text-blue-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Last 7 days</p>
+              <p className="text-sm font-semibold">
+                {counts.activityLastWeek} event{counts.activityLastWeek === 1 ? "" : "s"}
+                <span className="text-xs text-muted-foreground font-normal ml-1.5">
+                  · {relative(counts.lastActivityAt)}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Deadlines */}
+          <div className="flex items-center gap-3">
+            <div className={cn(
+              "p-2 rounded-lg shrink-0",
+              counts.overdueDeadlines > 0 ? "bg-red-500/10" : "bg-cyan-500/10",
+            )}>
+              <CalendarClock className={cn(
+                "h-4 w-4",
+                counts.overdueDeadlines > 0 ? "text-red-500" : "text-cyan-500",
+              )} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deadlines</p>
+              <p className="text-sm font-semibold">
+                {counts.deadlines} set
+                {counts.overdueDeadlines > 0 && (
+                  <span className="text-red-500 text-xs font-normal ml-1.5">
+                    · {counts.overdueDeadlines} overdue
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
+              <StickyNote className="h-4 w-4 text-amber-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Private notes</p>
+              <p className="text-sm font-semibold">
+                {counts.notes} entr{counts.notes === 1 ? "y" : "ies"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  )
+}
+
 // ─── Rubrics Panel ──────────────────────────────────────────────────────────
 //
 // Per-team custom rubric overrides. When a team has a custom rubric for a
@@ -769,32 +942,48 @@ export default function SupervisorToolkitPage() {
           transition={{ duration: 20, repeat: Infinity }}
         />
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
+          <div className="min-w-0">
+            <motion.h1
+              className="text-3xl font-bold mb-1.5 flex items-center gap-3"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
               <StickyNote className="h-7 w-7 text-indigo-500" />
-              Supervisor Toolkit
+              Supervision
             </motion.h1>
-            <motion.p className="text-muted-foreground"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              Per-team supervisor view — private notes, deadlines, and full activity history
+            <motion.p
+              className="text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.1 }}
+            >
+              Everything you need to supervise a team — activity history, private notes,
+              deadlines, and custom grading rubrics.
             </motion.p>
           </div>
 
           {!isLoadingTeams && teamOptions.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
+            <motion.div
+              className="flex items-center gap-2 shrink-0"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+            >
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground px-2">
+                <Users className="h-3.5 w-3.5" />
+                <span>{teamOptions.length} supervised team{teamOptions.length === 1 ? "" : "s"}</span>
+              </div>
               <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                <SelectTrigger className="w-[240px]">
+                <SelectTrigger className="w-[260px]">
                   <SelectValue placeholder="Select a team" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-72">
                   {teamOptions.map((t) => (
                     <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
@@ -802,13 +991,32 @@ export default function SupervisorToolkitPage() {
       {isLoadingTeams ? (
         <Card className="p-12"><Skeleton className="h-24 w-full" /></Card>
       ) : teamOptions.length === 0 ? (
-        <Card className="p-12 text-center border-border/50">
-          <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            You don&apos;t supervise any teams yet.
-          </p>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Card className="p-12 text-center border-dashed border-2 border-border/60">
+            <motion.div
+              className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted/60"
+              animate={{ y: [0, -6, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              <Users className="h-10 w-10 text-muted-foreground" />
+            </motion.div>
+            <h2 className="text-xl font-bold mb-2">No supervised teams yet</h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              When teams request you as their doctor or TA and you accept, they&apos;ll
+              appear here. Check{" "}
+              <span className="text-foreground font-medium">Notifications</span>
+              {" "}for incoming requests.
+            </p>
+          </Card>
+        </motion.div>
       ) : selectedTeamId ? (
+        <div className="space-y-4">
+          {/* Vital-signs strip — quick at-a-glance counts for the selected team */}
+          <TeamPulse key={selectedTeamId} teamId={selectedTeamId} />
+
         <Tabs defaultValue="activity" className="space-y-4">
           <TabsList className="p-1 gap-0.5 bg-muted/50 backdrop-blur-sm border border-border/60">
             <TabsTrigger
@@ -857,6 +1065,7 @@ export default function SupervisorToolkitPage() {
             <RubricsPanel teamId={selectedTeamId} userRole={(currentUser?.role ?? "").toUpperCase()} />
           </TabsContent>
         </Tabs>
+        </div>
       ) : null}
     </motion.div>
   )
