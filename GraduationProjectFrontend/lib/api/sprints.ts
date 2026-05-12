@@ -43,6 +43,10 @@ export const sprintsApi = {
       method: "PATCH",
       body: payload,
     }),
+  delete: (id: string) =>
+    apiRequest<{ id: string; teamId: string; name: string; releasedTasks: number }>(`/sprints/${id}`, {
+      method: "DELETE",
+    }),
   start: (id: string) =>
     apiRequest<ApiSprint>(`/sprints/${id}/start`, {
       method: "POST",

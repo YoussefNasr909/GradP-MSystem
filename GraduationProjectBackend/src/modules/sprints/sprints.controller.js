@@ -2,6 +2,7 @@ import {
   assignTaskToSprintService,
   completeSprintService,
   createSprintService,
+  deleteSprintService,
   listSprintsBoardService,
   moveTaskToBacklogService,
   startSprintService,
@@ -31,6 +32,11 @@ export async function startSprint(req, res) {
 
 export async function completeSprint(req, res) {
   const result = await completeSprintService(req.user, req.validated.params.id);
+  res.json({ ok: true, data: result });
+}
+
+export async function deleteSprint(req, res) {
+  const result = await deleteSprintService(req.user, req.validated.params.id);
   res.json({ ok: true, data: result });
 }
 

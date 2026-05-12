@@ -5,6 +5,7 @@ import {
   assignTaskToSprint,
   completeSprint,
   createSprint,
+  deleteSprint,
   listSprintsBoard,
   moveTaskToBacklog,
   startSprint,
@@ -30,6 +31,7 @@ router.post("/", validate(createSprintSchema), createSprint);
 router.patch("/tasks/:taskId", validate(updateSprintTaskSchema), updateSprintTask);
 router.post("/backlog/tasks/:taskId", validate(backlogTaskSchema), moveTaskToBacklog);
 router.patch("/:id", validate(updateSprintSchema), updateSprint);
+router.delete("/:id", validate(sprintActionSchema), deleteSprint);
 router.post("/:id/start", validate(sprintActionSchema), startSprint);
 router.post("/:id/complete", validate(sprintActionSchema), completeSprint);
 router.post("/:id/tasks/:taskId", validate(assignSprintTaskSchema), assignTaskToSprint);

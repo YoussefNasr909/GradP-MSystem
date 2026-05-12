@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const SPRINT_STATUS_VALUES = ["PLANNED", "ACTIVE", "COMPLETED"];
+const CREATE_SPRINT_STATUS_VALUES = ["PLANNED", "ACTIVE"];
 
 const dateStringSchema = z
   .string()
@@ -27,7 +28,7 @@ export const createSprintSchema = z.object({
       goal: sprintGoalSchema,
       startDate: dateStringSchema,
       endDate: dateStringSchema,
-      status: z.enum(SPRINT_STATUS_VALUES).optional(),
+      status: z.enum(CREATE_SPRINT_STATUS_VALUES).optional(),
     })
     .refine((body) => body.endDate >= body.startDate, {
       message: "End date must be on or after the start date",

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { prisma } from "../../loaders/dbLoader.js";
@@ -68,6 +69,18 @@ const sprintSelect = {
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function isUniqueConstraintError(error) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function mapSprintPersistenceError(error) {
+  if (isUniqueConstraintError(error)) {
+    throw new AppError("A sprint with this name already exists for this team.", 409, "SPRINT_NAME_EXISTS");
+  }
+
+  throw error;
 }
 
 function buildFullName(user) {
@@ -379,7 +392,7 @@ function buildSprintStats(tasks) {
     completedStoryPoints,
     unplannedTasks,
     unplannedStoryPoints,
-    progress: totalStoryPoints > 0 ? Math.round((completedStoryPoints / totalStoryPoints) * 100) : 0,
+    progress: totalStoryPoints > 0 ? Math.min(100, Math.round((completedStoryPoints / totalStoryPoints) * 100)) : 0,
   };
 }
 
@@ -519,6 +532,10 @@ export async function createSprintService(actor, payload) {
   const { team } = await resolveActorTeamContext(actor, payload.teamId);
   assertCanManage(actor, team);
 
+  if (payload.status === "COMPLETED") {
+    throw new AppError("Create a sprint as planned or active, then complete it when the work is done.", 422, "SPRINT_CREATE_COMPLETED_INVALID");
+  }
+
   const startDate = parseDateBoundary(payload.startDate, "start");
   const endDate = parseDateBoundary(payload.endDate, "end");
   assertDateRange(startDate, endDate);
@@ -533,20 +550,24 @@ export async function createSprintService(actor, payload) {
     }
   }
 
-  const sprint = await prisma.sprint.create({
-    data: {
-      teamId: team.id,
-      name: normalizeText(payload.name),
-      goal: normalizeText(payload.goal) || null,
-      startDate,
-      endDate,
-      status: payload.status ?? "PLANNED",
-      createdByUserId: actor.id,
-    },
-    select: sprintSelect,
-  });
+  try {
+    const sprint = await prisma.sprint.create({
+      data: {
+        teamId: team.id,
+        name: normalizeText(payload.name),
+        goal: normalizeText(payload.goal) || null,
+        startDate,
+        endDate,
+        status: payload.status ?? "PLANNED",
+        createdByUserId: actor.id,
+      },
+      select: sprintSelect,
+    });
 
-  return toSprintResponse(sprint);
+    return toSprintResponse(sprint);
+  } catch (error) {
+    mapSprintPersistenceError(error);
+  }
 }
 
 export async function updateSprintService(actor, sprintId, payload) {
@@ -561,6 +582,14 @@ export async function updateSprintService(actor, sprintId, payload) {
     assertSprintTasksFitWindow(sprint, startDate, endDate);
   }
 
+  if (sprint.status === "COMPLETED" && payload.status !== undefined && payload.status !== "COMPLETED") {
+    throw new AppError("Completed sprints cannot be reopened.", 409, "SPRINT_ALREADY_COMPLETED");
+  }
+
+  if (payload.status === "COMPLETED" && sprint.status !== "ACTIVE" && sprint.status !== "COMPLETED") {
+    throw new AppError("Start the sprint before completing it.", 409, "SPRINT_NOT_ACTIVE");
+  }
+
   if (payload.status === "ACTIVE" && sprint.status !== "ACTIVE") {
     const activeSprint = await prisma.sprint.findFirst({
       where: { teamId: sprint.teamId, status: "ACTIVE", id: { not: sprint.id } },
@@ -571,21 +600,25 @@ export async function updateSprintService(actor, sprintId, payload) {
     }
   }
 
-  const updated = await prisma.sprint.update({
-    where: { id: sprint.id },
-    data: {
-      ...(payload.name !== undefined ? { name: normalizeText(payload.name) } : {}),
-      ...(payload.goal !== undefined ? { goal: normalizeText(payload.goal) || null } : {}),
-      ...(payload.startDate !== undefined ? { startDate } : {}),
-      ...(payload.endDate !== undefined ? { endDate } : {}),
-      ...(payload.status !== undefined
-        ? { status: payload.status, completedAt: payload.status === "COMPLETED" ? new Date() : null }
-        : {}),
-    },
-    select: sprintSelect,
-  });
+  try {
+    const updated = await prisma.sprint.update({
+      where: { id: sprint.id },
+      data: {
+        ...(payload.name !== undefined ? { name: normalizeText(payload.name) } : {}),
+        ...(payload.goal !== undefined ? { goal: normalizeText(payload.goal) || null } : {}),
+        ...(payload.startDate !== undefined ? { startDate } : {}),
+        ...(payload.endDate !== undefined ? { endDate } : {}),
+        ...(payload.status !== undefined
+          ? { status: payload.status, completedAt: payload.status === "COMPLETED" ? new Date() : null }
+          : {}),
+      },
+      select: sprintSelect,
+    });
 
-  return toSprintResponse(updated);
+    return toSprintResponse(updated);
+  } catch (error) {
+    mapSprintPersistenceError(error);
+  }
 }
 
 export async function startSprintService(actor, sprintId) {
@@ -617,6 +650,14 @@ export async function completeSprintService(actor, sprintId) {
   const sprint = await resolveSprintForActor(actor, sprintId);
   assertCanManage(actor, sprint.team);
 
+  if (sprint.status === "COMPLETED") {
+    throw new AppError("This sprint is already completed.", 409, "SPRINT_ALREADY_COMPLETED");
+  }
+
+  if (sprint.status !== "ACTIVE") {
+    throw new AppError("Start the sprint before completing it.", 409, "SPRINT_NOT_ACTIVE");
+  }
+
   const updated = await prisma.sprint.update({
     where: { id: sprint.id },
     data: { status: "COMPLETED", completedAt: new Date() },
@@ -624,6 +665,28 @@ export async function completeSprintService(actor, sprintId) {
   });
 
   return toSprintResponse(updated);
+}
+
+export async function deleteSprintService(actor, sprintId) {
+  const sprint = await resolveSprintForActor(actor, sprintId);
+  assertCanManage(actor, sprint.team);
+
+  await prisma.$transaction([
+    prisma.task.updateMany({
+      where: { sprintId: sprint.id },
+      data: { sprintId: null, unplanned: false },
+    }),
+    prisma.sprint.delete({
+      where: { id: sprint.id },
+    }),
+  ]);
+
+  return {
+    id: sprint.id,
+    teamId: sprint.teamId,
+    name: sprint.name,
+    releasedTasks: sprint.tasks?.length ?? 0,
+  };
 }
 
 export async function assignTaskToSprintService(actor, sprintId, taskId, payload = {}) {
