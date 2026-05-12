@@ -145,5 +145,16 @@ export const teamsApi = {
     apiRequest<ApiTeamDetail>(`/teams/${teamId}/supervisors/${supervisorRole}`, {
       method: "DELETE",
     }),
+  /** Leader-only: hand off team leadership to one of the current members. */
+  transferLeadership: (teamId: string, newLeaderId: string) =>
+    apiRequest<{
+      teamId: string
+      transferredAt: string
+      oldLeader: { id: string; firstName: string; lastName: string; fullName: string; avatarUrl: string | null }
+      newLeader: { id: string; firstName: string; lastName: string; fullName: string; avatarUrl: string | null }
+    }>(`/teams/${teamId}/transfer-leadership`, {
+      method: "POST",
+      body: { newLeaderId },
+    }),
 }
 

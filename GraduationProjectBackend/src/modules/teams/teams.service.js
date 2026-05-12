@@ -1202,6 +1202,77 @@ export async function removeTeamMemberService(actor, teamId, userId) {
 
 
 
+/**
+ * Transfer team leadership from the current leader to one of the team's members.
+ *
+ * Swaps the two users:
+ *  - new leader: removed from TeamMember, role bumped STUDENT → LEADER, set as team.leaderId
+ *  - old leader: role dropped LEADER → STUDENT, inserted as a TeamMember
+ *
+ * All in a transaction so we never end up with a team that has no leader, or
+ * a leader who's also a member.
+ */
+export async function transferLeadershipService(actor, teamId, { newLeaderId }) {
+  const team = await findTeamById(teamId);
+  if (!team) throw new AppError("Team not found.", 404, "TEAM_NOT_FOUND");
+
+  // Only the current leader (or admin) can transfer leadership
+  if (actor.role !== ROLES.ADMIN && team.leader.id !== actor.id) {
+    throw new AppError("Only the current team leader can transfer leadership.", 403, "LEADER_TRANSFER_FORBIDDEN");
+  }
+
+  const normalizedNewLeaderId = normalizeText(newLeaderId);
+  if (!normalizedNewLeaderId) {
+    throw new AppError("Provide the new leader's user id.", 422, "LEADER_TRANSFER_TARGET_REQUIRED");
+  }
+  if (normalizedNewLeaderId === team.leader.id) {
+    throw new AppError("Pick a different team member to transfer leadership to.", 422, "LEADER_TRANSFER_SELF");
+  }
+
+  // Confirm the new leader is a current member of this team
+  const membership = await findTeamMemberByUserId(normalizedNewLeaderId);
+  if (!membership || membership.team.id !== teamId) {
+    throw new AppError("The new leader must be a current member of this team.", 422, "LEADER_TRANSFER_NOT_MEMBER");
+  }
+
+  const oldLeaderId = team.leader.id;
+
+  // Run as a transaction so we never leave the team in a half-state
+  await prisma.$transaction([
+    // 1. Remove the new leader from TeamMember (leaders aren't members)
+    prisma.teamMember.delete({ where: { userId: normalizedNewLeaderId } }),
+    // 2. Promote them to LEADER and point the team at them
+    prisma.user.update({ where: { id: normalizedNewLeaderId }, data: { role: ROLES.LEADER } }),
+    prisma.team.update({ where: { id: teamId }, data: { leaderId: normalizedNewLeaderId } }),
+    // 3. Demote the old leader to STUDENT and add them as a TeamMember
+    prisma.user.update({ where: { id: oldLeaderId }, data: { role: ROLES.STUDENT } }),
+    prisma.teamMember.create({ data: { teamId, userId: oldLeaderId } }),
+  ]);
+
+  // Notify both sides
+  await notify({
+    userId: normalizedNewLeaderId,
+    type: "SYSTEM",
+    title: "You're the team leader now",
+    message: `${buildFullName(team.leader)} transferred leadership of "${team.name}" to you. You can now manage members, invitations, supervisors, and team settings.`,
+    actionUrl: "/dashboard/my-team",
+  });
+  await notify({
+    userId: oldLeaderId,
+    type: "SYSTEM",
+    title: "Leadership Transferred",
+    message: `You handed leadership of "${team.name}" to ${buildFullName(membership.user)}. You're now a regular member.`,
+    actionUrl: "/dashboard/my-team",
+  });
+
+  return {
+    teamId,
+    transferredAt: new Date().toISOString(),
+    oldLeader: toUserSummary(team.leader),
+    newLeader: toUserSummary(membership.user),
+  };
+}
+
 export async function removeSupervisorAssignmentService(actor, teamId, supervisorRole) {
   const team = await findTeamById(teamId);
   assertCanManageTeam(team, actor);
