@@ -100,6 +100,7 @@ export default function MyTeamClient() {
   const isLeader = currentUser?.role === "leader"
   const isStudent = currentUser?.role === "member"
   const isSupervisor = currentUser?.role === "doctor" || currentUser?.role === "ta"
+  const reduceMotion = Boolean(useReducedMotion())
 
   const joinByCode = async () => {
     setJoinCodeError("")
@@ -203,10 +204,14 @@ export default function MyTeamClient() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6 xl:p-8">
-      <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
+      <motion.div {...getRevealMotion(reduceMotion)}>
+        <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
+      </motion.div>
 
       {/* Project grade snapshot — pulls live submissions + proposal */}
-      <TeamGradeCard teamId={team.id} />
+      <motion.div {...getRevealMotion(reduceMotion, 0.04)}>
+        <TeamGradeCard teamId={team.id} />
+      </motion.div>
 
       <Tabs defaultValue="overview" className="space-y-5">
         <div className="overflow-x-auto pb-0.5">
@@ -798,7 +803,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
   }
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm">
+    <Card className="overflow-hidden rounded-[28px] border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
       <div className="bg-gradient-to-br from-primary/[0.09] via-background to-transparent">
         <div className="flex flex-col gap-5 p-5 sm:p-6 md:p-7 lg:flex-row lg:items-start lg:justify-between">
           {/* Left: team info */}
