@@ -86,6 +86,17 @@ function parseDateBoundary(value, boundary = "start") {
   return date;
 }
 
+function normalizeStoryPoints(value, fallback = 3) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const points = Number(value);
+
+  if (!Number.isInteger(points) || points < 0 || points > 99) {
+    throw new AppError("Story points must be a whole number between 0 and 99.", 422, "TASK_STORY_POINTS_INVALID");
+  }
+
+  return points;
+}
+
 function toTaskUserSummary(user) {
   if (!user) return null;
 
@@ -398,6 +409,10 @@ function toTaskResponse(task, actor) {
     status: visibleStatus,
     rawStatus: task.status,
     priority: task.priority,
+    sprintId: task.sprintId ?? null,
+    storyPoints: Number(task.storyPoints ?? 0),
+    actualPoints: task.actualPoints ?? null,
+    unplanned: Boolean(task.unplanned),
     startDate: task.startDate ?? null,
     endDate: task.dueDate ?? null,
     acceptedAt: task.acceptedAt ?? null,
@@ -474,6 +489,55 @@ function buildUpdatedDateRange(task, payload) {
     nextStartDate,
     nextEndDate,
   };
+}
+
+function startOfDay(value) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfDay(value) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function formatScheduleDate(value) {
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function assertTaskDatesFitAssignedSprint(task, nextStartDate, nextEndDate) {
+  if (!task.sprintId || !task.sprint) return;
+
+  if (!nextStartDate || !nextEndDate) {
+    throw new AppError(
+      `"${task.title}" needs both a start date and an end date while it is assigned to "${task.sprint.name}".`,
+      422,
+      "TASK_SPRINT_DATES_REQUIRED"
+    );
+  }
+
+  const taskStart = startOfDay(nextStartDate);
+  const taskEnd = endOfDay(nextEndDate);
+  const sprintStart = startOfDay(task.sprint.startDate);
+  const sprintEnd = endOfDay(task.sprint.endDate);
+
+  if (taskStart.getTime() < sprintStart.getTime()) {
+    throw new AppError(
+      `"${task.title}" starts on ${formatScheduleDate(taskStart)}, before "${task.sprint.name}" starts on ${formatScheduleDate(sprintStart)}.`,
+      422,
+      "TASK_START_BEFORE_SPRINT"
+    );
+  }
+
+  if (taskEnd.getTime() > sprintEnd.getTime()) {
+    throw new AppError(
+      `"${task.title}" ends on ${formatScheduleDate(taskEnd)}, after "${task.sprint.name}" ends on ${formatScheduleDate(sprintEnd)}.`,
+      422,
+      "TASK_END_AFTER_SPRINT"
+    );
+  }
 }
 
 function buildReviewSnapshot(task, actor, overrides = {}) {
@@ -559,6 +623,7 @@ export async function createTaskService(actor, payload) {
     title: normalizeText(payload.title),
     description: normalizeText(payload.description) || null,
     priority: payload.priority,
+    storyPoints: normalizeStoryPoints(payload.storyPoints),
     status: "TODO",
     assigneeUserId: assignee.id,
     createdByUserId: actor.id,
@@ -592,12 +657,19 @@ export async function updateTaskService(actor, taskId, payload) {
   assertTaskManager(task, actor);
 
   const { nextStartDate, nextEndDate } = buildUpdatedDateRange(task, payload);
+  if (payload.startDate !== undefined || payload.endDate !== undefined) {
+    assertTaskDatesFitAssignedSprint(task, nextStartDate, nextEndDate);
+  }
+
   const updateData = {};
   let shouldResetWorkflow = false;
 
   if (payload.title !== undefined) updateData.title = normalizeText(payload.title);
   if (payload.description !== undefined) updateData.description = normalizeText(payload.description) || null;
   if (payload.priority !== undefined) updateData.priority = payload.priority;
+  if (payload.storyPoints !== undefined) updateData.storyPoints = normalizeStoryPoints(payload.storyPoints, task.storyPoints);
+  if (payload.actualPoints !== undefined) updateData.actualPoints = payload.actualPoints === null ? null : normalizeStoryPoints(payload.actualPoints, task.actualPoints ?? task.storyPoints);
+  if (payload.unplanned !== undefined) updateData.unplanned = Boolean(payload.unplanned);
   if (payload.taskType !== undefined) updateData.taskType = payload.taskType;
 
   if (payload.integrationMode !== undefined) {

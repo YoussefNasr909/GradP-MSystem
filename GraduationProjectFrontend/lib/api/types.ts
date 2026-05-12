@@ -266,6 +266,10 @@ export type ApiTask = {
   status: ApiTaskStatus
   rawStatus: string
   priority: ApiTaskPriority
+  sprintId: string | null
+  storyPoints: number
+  actualPoints: number | null
+  unplanned: boolean
   startDate: string | null
   endDate: string | null
   acceptedAt: string | null
@@ -296,6 +300,100 @@ export type ApiTask = {
     canBootstrapGithub: boolean
     canOpenPullRequest: boolean
     canResyncGithub: boolean
+  }
+}
+
+export type ApiSprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED"
+
+export type ApiSprintTask = {
+  id: string
+  teamId: string
+  sprintId: string | null
+  title: string
+  description: string
+  status: ApiTaskStatus
+  rawStatus: string
+  priority: ApiTaskPriority
+  taskType: ApiTaskType
+  integrationMode: ApiTaskIntegrationMode
+  origin: ApiTaskOrigin
+  labels: string[]
+  storyPoints: number
+  actualPoints: number | null
+  unplanned: boolean
+  startDate: string | null
+  endDate: string | null
+  acceptedAt: string | null
+  submittedForReviewAt: string | null
+  reviewedAt: string | null
+  githubIssueNumber: number | null
+  githubIssueUrl: string | null
+  githubPullRequestNumber: number | null
+  githubPullRequestUrl: string | null
+  createdAt: string
+  updatedAt: string
+  assignee: ApiTeamUser | null
+  createdBy: ApiTeamUser | null
+  isPastEndDate: boolean
+}
+
+export type ApiSprintStats = {
+  totalTasks: number
+  completedTasks: number
+  totalStoryPoints: number
+  completedStoryPoints: number
+  unplannedTasks: number
+  unplannedStoryPoints: number
+  progress: number
+}
+
+export type ApiSprint = {
+  id: string
+  teamId: string
+  name: string
+  goal: string
+  startDate: string
+  endDate: string
+  status: ApiSprintStatus
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+  createdBy: ApiTeamUser | null
+  tasks: ApiSprintTask[]
+  stats: ApiSprintStats
+}
+
+export type ApiSprintBoard = {
+  team: {
+    id: string
+    name: string
+    teamRole: ApiTeamRole | "ADMIN" | "DOCTOR" | "TA"
+  }
+  sprints: ApiSprint[]
+  backlogTasks: ApiSprintTask[]
+  metrics: {
+    totalTasks: number
+    backlogCount: number
+    backlogStoryPoints: number
+    activeSprintId: string | null
+    activeSprintName: string | null
+    activeProgress: number
+    overdueTasks: number
+    statusDistribution: Array<{ status: ApiTaskStatus; count: number; storyPoints: number }>
+    velocity: Array<{
+      sprintId: string
+      name: string
+      status: ApiSprintStatus
+      completedStoryPoints: number
+      totalStoryPoints: number
+      completedTasks: number
+      totalTasks: number
+    }>
+    plannedVsUnplanned: Array<{ sprintId: string; name: string; planned: number; unplanned: number }>
+    burndown: Array<{ date: string; label: string; ideal: number; remaining: number }>
+  }
+  permissions: {
+    canManage: boolean
   }
 }
 

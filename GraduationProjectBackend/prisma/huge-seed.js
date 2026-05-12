@@ -45,6 +45,12 @@ const DELIVERABLE_TO_PHASE = {
   PRESENTATION: "DEPLOYMENT",
 };
 
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
 
 async function main() {
   const password = "demo123";
@@ -54,6 +60,7 @@ async function main() {
   await prisma.submission.deleteMany();
   await prisma.weeklyReport.deleteMany();
   await prisma.task.deleteMany();
+  await prisma.sprint.deleteMany();
   await prisma.gitHubSyncCursor.deleteMany();
   await prisma.gitHubWebhookDelivery.deleteMany();
   await prisma.gitHubTeamRepository.deleteMany();
@@ -188,6 +195,47 @@ async function main() {
     });
     teams.push(team);
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const seededSprints = [];
+    const sprintTemplates = [
+      {
+        name: `${team.name} Sprint 1`,
+        goal: "Stabilize core requirements and complete the first planned feature set.",
+        startDate: addDays(today, -28),
+        endDate: addDays(today, -15),
+        status: "COMPLETED",
+        completedAt: addDays(today, -15),
+      },
+      {
+        name: `${team.name} Sprint 2`,
+        goal: "Deliver the active implementation slice and clear review-ready tasks.",
+        startDate: addDays(today, -7),
+        endDate: addDays(today, 6),
+        status: "ACTIVE",
+        completedAt: null,
+      },
+      {
+        name: `${team.name} Sprint 3`,
+        goal: "Prepare the next round of testing, polish, and deployment tasks.",
+        startDate: addDays(today, 7),
+        endDate: addDays(today, 20),
+        status: "PLANNED",
+        completedAt: null,
+      },
+    ];
+
+    for (const sprintTemplate of sprintTemplates) {
+      const sprint = await prisma.sprint.create({
+        data: {
+          teamId: team.id,
+          createdByUserId: leader.id,
+          ...sprintTemplate,
+        },
+      });
+      seededSprints.push(sprint);
+    }
+
     // Add 1-3 members to each team
     const numMembers = faker.number.int({ min: 1, max: 3 });
     const members = [];
@@ -208,18 +256,37 @@ async function main() {
     console.log(`Seeding tasks for team: ${team.name}...`);
     const allTeamUsers = [leader, ...members];
     for (let k = 0; k < 40; k++) {
+      const sprint = k < 30 ? seededSprints[Math.floor(k / 10)] : null;
+      const taskStatus = sprint?.status === "COMPLETED"
+        ? faker.helpers.arrayElement(["DONE", "DONE", "DONE", "APPROVED", "REVIEW"])
+        : sprint?.status === "ACTIVE"
+          ? faker.helpers.arrayElement(["TODO", "IN_PROGRESS", "IN_PROGRESS", "REVIEW", "DONE"])
+          : faker.helpers.arrayElement(TASK_STATUSES);
+      const storyPoints = faker.helpers.arrayElement([1, 2, 3, 5, 8]);
+      const isDone = taskStatus === "DONE";
+      const dueDate = sprint
+        ? faker.date.between({ from: sprint.startDate, to: sprint.endDate })
+        : faker.date.future();
+
       await prisma.task.create({
         data: {
           teamId: team.id,
+          sprintId: sprint?.id ?? null,
           title: faker.hacker.phrase(),
           description: faker.lorem.paragraph(),
-          status: faker.helpers.arrayElement(TASK_STATUSES),
+          status: taskStatus,
           priority: faker.helpers.arrayElement(TASK_PRIORITIES),
           taskType: faker.helpers.arrayElement(TASK_TYPES),
+          storyPoints,
+          actualPoints: isDone ? Math.max(1, storyPoints + faker.number.int({ min: -1, max: 2 })) : null,
+          unplanned: Boolean(sprint) && faker.datatype.boolean({ probability: 0.18 }),
           assigneeUserId: faker.helpers.arrayElement(allTeamUsers).id,
           createdByUserId: leader.id,
           labels: [faker.hacker.adjective(), faker.hacker.noun()],
-          dueDate: faker.date.future(),
+          dueDate,
+          acceptedAt: ["IN_PROGRESS", "REVIEW", "APPROVED", "DONE"].includes(taskStatus) ? faker.date.recent() : null,
+          submittedForReviewAt: ["REVIEW", "APPROVED", "DONE"].includes(taskStatus) ? faker.date.recent() : null,
+          reviewedAt: ["APPROVED", "DONE"].includes(taskStatus) ? faker.date.recent() : null,
           createdAt: faker.date.past(),
         },
       });
@@ -330,6 +397,7 @@ async function main() {
     - 10 TAs
     - 200 Students
     - 30 Teams
+    - 90 Sprints
     - 1200 Tasks
     - 240 Weekly Reports
     - ~50 Interactions (Invitations/Join Requests)

@@ -135,6 +135,12 @@ enum TaskReviewDecision {
   CHANGES_REQUESTED
 }
 
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
 enum DeliverableType {
   SRS
   UML
@@ -368,6 +374,7 @@ model User {
   assignedTasks           Task[]             @relation("TaskAssignee")
   createdTasks            Task[]             @relation("TaskCreator")
   reviewedTasks           Task[]             @relation("TaskReviewer")
+  createdSprints          Sprint[]           @relation("SprintCreator")
   submittedWeeklyReports  WeeklyReport[]     @relation("WeeklyReportSubmitter")
   submittedSubmissions    Submission[]       @relation("SubmissionSubmitter")
   reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
@@ -464,6 +471,7 @@ model Team {
   supervisorRequests TeamSupervisorRequest[]
   githubRepository GitHubTeamRepository?
   tasks        Task[]
+  sprints      Sprint[]
   weeklyReports WeeklyReport[]
   submissions  Submission[]
   documents    TeamDocument[]
@@ -669,6 +677,7 @@ model GitHubSyncCursor {
 model Task {
   id                      String               @id @default(cuid())
   teamId                  String
+  sprintId                String?
   taskType                TaskType             @default(OTHER)
   integrationMode         TaskIntegrationMode  @default(MANUAL)
   origin                  TaskOrigin           @default(GPMS)
@@ -691,6 +700,9 @@ model Task {
   description             String?
   status                  TaskStatus           @default(BACKLOG)
   priority                TaskPriority         @default(MEDIUM)
+  storyPoints             Int                  @default(3)
+  actualPoints            Int?
+  unplanned               Boolean              @default(false)
   assigneeUserId          String?
   createdByUserId         String?
   reviewedByUserId        String?
@@ -710,17 +722,43 @@ model Task {
   updatedAt               DateTime             @updatedAt
 
   team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sprint     Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   assignee   User? @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   createdBy  User? @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   reviewedBy User? @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([teamId, githubIssueNumber])
   @@index([teamId, status])
+  @@index([teamId, sprintId])
+  @@index([sprintId, status])
   @@index([assigneeUserId])
   @@index([createdByUserId])
   @@index([reviewedByUserId])
   @@index([teamId, integrationMode])
   @@index([teamId, githubPullRequestNumber])
+}
+
+model Sprint {
+  id              String       @id @default(cuid())
+  teamId          String
+  name            String
+  goal            String?
+  startDate       DateTime
+  endDate         DateTime
+  status          SprintStatus @default(PLANNED)
+  completedAt     DateTime?
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  team      Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy User?  @relation("SprintCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  tasks     Task[]
+
+  @@unique([teamId, name])
+  @@index([teamId, status])
+  @@index([teamId, startDate, endDate])
+  @@index([createdByUserId])
 }
 
 model WeeklyReport {
