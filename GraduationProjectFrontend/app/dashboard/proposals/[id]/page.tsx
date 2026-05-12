@@ -22,6 +22,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { proposalsApi } from "@/lib/api/proposals"
 import type { ApiProposal, ApiProposalStatus } from "@/lib/api/proposals"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 // ─── Status meta ─────────────────────────────────────────────────────────────
 
@@ -132,18 +133,17 @@ export default function ProposalDetailPage() {
     }
   }
 
-  async function handleDelete() {
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  async function performDelete() {
     if (!proposal) return
-    if (!confirm("Delete this draft? This cannot be undone.")) return
-    setBusy(true)
     try {
       await proposalsApi.delete(proposal.id)
       toast.success("Draft deleted")
       router.push("/dashboard/proposals")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
-    } finally {
-      setBusy(false)
+      throw e
     }
   }
 
@@ -264,7 +264,7 @@ export default function ProposalDetailPage() {
               </Button>
             )}
             {canDelete && (
-              <Button variant="outline" size="sm" onClick={() => void handleDelete()} disabled={busy} className="text-destructive border-destructive/30 hover:bg-destructive/10">
+              <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} disabled={busy} className="text-destructive border-destructive/30 hover:bg-destructive/10">
                 <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
               </Button>
             )}
@@ -444,6 +444,15 @@ export default function ProposalDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete this proposal draft?"
+        description="The entire proposal will be permanently removed and your team will need to start over from scratch."
+        confirmLabel="Delete draft"
+        onConfirm={performDelete}
+      />
     </motion.div>
   )
 }

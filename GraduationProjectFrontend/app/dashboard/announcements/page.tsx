@@ -23,6 +23,7 @@ import { announcementsApi, audienceApi, type Announcement, type AnnouncementAudi
 import { toast } from "sonner"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { teamsApi } from "@/lib/api/teams"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
@@ -154,14 +155,22 @@ export default function AnnouncementsPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this announcement?")) return
+  // Delete confirmation — stores the target id so the dialog can render even
+  // after we lose hover focus on the row's trash button.
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const deleteTarget = useMemo(
+    () => (deleteTargetId ? items.find((a) => a.id === deleteTargetId) ?? null : null),
+    [deleteTargetId, items],
+  )
+
+  async function performDelete(id: string) {
     try {
       await announcementsApi.delete(id)
       setItems((prev) => prev.filter((a) => a.id !== id))
       toast.success("Announcement deleted")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
+      throw e // keep dialog open so the user sees the failure
     }
   }
 
@@ -307,7 +316,7 @@ export default function AnnouncementsPage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDelete(a.id)}
+                            onClick={() => setDeleteTargetId(a.id)}
                             aria-label="Delete announcement"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -322,6 +331,19 @@ export default function AnnouncementsPage() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTargetId(null) }}
+        title="Delete this announcement?"
+        description={
+          deleteTarget
+            ? `"${deleteTarget.title}" will be removed for everyone who can see it. This can't be undone.`
+            : "This announcement will be removed for everyone who can see it. This can't be undone."
+        }
+        onConfirm={async () => { if (deleteTargetId) await performDelete(deleteTargetId) }}
+      />
 
       {/* Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

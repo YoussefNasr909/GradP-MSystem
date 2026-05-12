@@ -47,6 +47,7 @@ import { getDefaultRubric } from "@/components/dashboard/rubric-editor"
 import type { RubricItem } from "@/lib/api/submissions"
 import { teamsApi } from "@/lib/api/teams"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -119,19 +120,29 @@ function NotesPanel({ teamId }: { teamId: string }) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this note?")) return
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function performDelete(id: string) {
     try {
       await supervisorNotesApi.delete(id)
       setNotes((prev) => prev.filter((n) => n.id !== id))
       toast.success("Note deleted")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
+      throw e
     }
   }
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null) }}
+        title="Delete this note?"
+        description="The note is permanently removed. Other supervisors of this team won't see it anymore."
+        onConfirm={async () => { if (deleteId) await performDelete(deleteId) }}
+      />
+
       <div className="p-3 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-900/40">
         <p className="text-xs text-amber-800 dark:text-amber-400 flex items-center gap-1.5">
           <Lock className="h-3 w-3" /> These notes are private — only the team&apos;s Doctor, TA, and admins can see them.
@@ -199,7 +210,7 @@ function NotesPanel({ teamId }: { teamId: string }) {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-destructive shrink-0"
-                        onClick={() => handleDelete(n.id)}
+                        onClick={() => setDeleteId(n.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -261,19 +272,37 @@ function DeadlinesPanel({ teamId }: { teamId: string }) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this deadline?")) return
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const deleteTarget = useMemo(
+    () => (deleteId ? deadlines.find((d) => d.id === deleteId) ?? null : null),
+    [deleteId, deadlines],
+  )
+
+  async function performDelete(id: string) {
     try {
       await deadlinesApi.delete(id)
       setDeadlines((prev) => prev.filter((d) => d.id !== id))
       toast.success("Deadline deleted")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
+      throw e
     }
   }
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null) }}
+        title="Delete this deadline?"
+        description={
+          deleteTarget
+            ? `The ${deleteTarget.deliverableType} deadline (${new Date(deleteTarget.dueDate).toLocaleDateString()}) will be removed. Late submissions to this deliverable will no longer be flagged automatically.`
+            : "The deadline will be removed."
+        }
+        onConfirm={async () => { if (deleteId) await performDelete(deleteId) }}
+      />
+
       <Card className="p-4 border-border/50">
         <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Set a deadline</Label>
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] items-end">
@@ -352,7 +381,7 @@ function DeadlinesPanel({ teamId }: { teamId: string }) {
                   </p>
                   {d.note && <p className="text-xs mt-1">{d.note}</p>}
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(d.id)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(d.id)}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </Card>
@@ -699,14 +728,20 @@ function RubricsPanel({ teamId, userRole }: { teamId: string; userRole: string }
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Remove this custom rubric? Grading will fall back to the default.")) return
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const deleteTarget = useMemo(
+    () => (deleteId ? templates.find((t) => t.id === deleteId) ?? null : null),
+    [deleteId, templates],
+  )
+
+  async function performDelete(id: string) {
     try {
       await rubricTemplatesApi.delete(id)
       setTemplates((prev) => prev.filter((t) => t.id !== id))
       toast.success("Custom rubric removed")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
+      throw e
     }
   }
 
@@ -714,6 +749,19 @@ function RubricsPanel({ teamId, userRole }: { teamId: string; userRole: string }
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null) }}
+        title="Remove this custom rubric?"
+        description={
+          deleteTarget
+            ? `The custom rubric for ${deleteTarget.deliverableType} will be removed. Future grading will fall back to the global default for this deliverable.`
+            : "The custom rubric will be removed and grading will fall back to the global default."
+        }
+        confirmLabel="Remove"
+        onConfirm={async () => { if (deleteId) await performDelete(deleteId) }}
+      />
+
       <div className="p-3 rounded-lg bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40">
         <p className="text-xs text-purple-800 dark:text-purple-400 flex items-center gap-1.5">
           <Wand2 className="h-3 w-3" />
@@ -752,7 +800,7 @@ function RubricsPanel({ teamId, userRole }: { teamId: string; userRole: string }
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-destructive"
-                      onClick={() => handleDelete(existing.id)}
+                      onClick={() => setDeleteId(existing.id)}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>

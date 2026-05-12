@@ -42,6 +42,7 @@ import {
 } from "@/lib/api/submissions"
 import type { ApiTeamStage } from "@/lib/api/types"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 const PHASE_ICONS: Record<ApiTeamStage, React.ComponentType<{ className?: string }>> = {
   REQUIREMENTS: FileText,
@@ -350,15 +351,9 @@ export default function SDLCPage() {
     }
   }
 
-  async function handleAdvanceStage() {
-    if (!summary?.canAdvanceStage) return
-    if (
-      !confirm(
-        `Advance from "${summary.currentPhase?.label}" to "${summary.nextStage}"? This cannot be undone.`,
-      )
-    )
-      return
+  const [advanceConfirmOpen, setAdvanceConfirmOpen] = useState(false)
 
+  async function performAdvanceStage() {
     setAdvancing(true)
     try {
       const result = await submissionsApi.advanceStage()
@@ -366,6 +361,7 @@ export default function SDLCPage() {
       await loadSummary()
     } catch (e: any) {
       toast.error(e.message || "Failed to advance stage")
+      throw e
     } finally {
       setAdvancing(false)
     }
@@ -455,7 +451,7 @@ export default function SDLCPage() {
 
           {/* Advance Stage Button */}
           {isLeader && summary.canAdvanceStage && summary.nextStage && (
-            <Button onClick={handleAdvanceStage} disabled={advancing} className="gap-2">
+            <Button onClick={() => setAdvanceConfirmOpen(true)} disabled={advancing} className="gap-2">
               {advancing ? (
                 "Advancing..."
               ) : (
@@ -622,6 +618,16 @@ export default function SDLCPage() {
           </div>
         </div>
       </motion.div>
+
+      <ConfirmDialog
+        open={advanceConfirmOpen}
+        onOpenChange={setAdvanceConfirmOpen}
+        variant="warning"
+        title={`Advance to ${summary?.nextStage ?? "next stage"}?`}
+        description={`Your team will move from "${summary?.currentPhase?.label ?? "the current phase"}" to "${summary?.nextStage ?? "the next phase"}". This is irreversible — you can't go back to an earlier stage.`}
+        confirmLabel="Advance stage"
+        onConfirm={performAdvanceStage}
+      />
     </TeamRequiredGuard>
   )
 }

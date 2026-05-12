@@ -70,6 +70,7 @@ import {
 } from "@/lib/api/supervisor-tools"
 import { DefenseScheduler } from "@/components/dashboard/defense-scheduler"
 import { teamsApi } from "@/lib/api/teams"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import type { ApiTeamStage } from "@/lib/api/types"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -173,18 +174,29 @@ function SubmissionCommentsThread({ submissionId }: { submissionId: string }) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Delete this comment?")) return
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function performDelete(id: string) {
     try {
       await submissionCommentsApi.delete(id)
       setComments((prev) => prev.filter((c) => c.id !== id))
+      toast.success("Comment deleted")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to delete")
+      throw e
     }
   }
 
   return (
     <div className="rounded-xl border border-border/40 p-4">
+      <ConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(o) => { if (!o) setDeleteId(null) }}
+        title="Delete this comment?"
+        description="The comment will be removed from this discussion. Other participants will no longer see it."
+        onConfirm={async () => { if (deleteId) await performDelete(deleteId) }}
+      />
+
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
         <MessageSquare className="h-3.5 w-3.5" /> Discussion
         {comments.length > 0 && <Badge variant="secondary" className="text-[10px]">{comments.length}</Badge>}
@@ -212,7 +224,7 @@ function SubmissionCommentsThread({ submissionId }: { submissionId: string }) {
                   <span className="text-[10px] text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</span>
                   {c.authorUserId === currentUser?.id && (
                     <button
-                      onClick={() => handleDelete(c.id)}
+                      onClick={() => setDeleteId(c.id)}
                       className="ml-auto text-[10px] text-muted-foreground hover:text-destructive"
                     >
                       delete

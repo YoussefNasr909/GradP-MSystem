@@ -34,6 +34,7 @@ import { LeaderSupervisorsTab, SupervisorRequestInbox } from "./supervisors-pane
 import AdminTeamWorkspace from "./admin-team-workspace"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { TeamGradeCard } from "@/components/dashboard/team-grade-card"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { teamsApi } from "@/lib/api/teams"
 import type {
   ApiTeamDetail,
@@ -1660,8 +1661,9 @@ function SettingsCard({ team, onRefresh }: { team: ApiTeamDetail; onRefresh: () 
     }
   }
 
-  const removeTeam = async () => {
-    if (!window.confirm(`Delete ${team.name}? This removes the team, members, and invitations.`)) return
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const performTeamDelete = async () => {
     setBusy("delete")
     try {
       await teamsApi.delete(team.id)
@@ -1669,6 +1671,7 @@ function SettingsCard({ team, onRefresh }: { team: ApiTeamDetail; onRefresh: () 
       await onRefresh()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Couldn't delete the team.")
+      throw err
     } finally {
       setBusy("")
     }
@@ -1821,7 +1824,7 @@ function SettingsCard({ team, onRefresh }: { team: ApiTeamDetail; onRefresh: () 
             className="w-full rounded-xl"
             variant="destructive"
             disabled={!!busy}
-            onClick={() => void removeTeam()}
+            onClick={() => setDeleteOpen(true)}
           >
             {busy === "delete" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -1832,6 +1835,15 @@ function SettingsCard({ team, onRefresh }: { team: ApiTeamDetail; onRefresh: () 
           </Button>
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete ${team.name}?`}
+        description="The entire team — including all members, invitations, join requests, submissions, tasks, and chat history — will be permanently removed. This can't be undone."
+        confirmLabel="Delete team"
+        onConfirm={performTeamDelete}
+      />
     </div>
   )
 }
