@@ -121,21 +121,16 @@ async function resolveAudienceTeamIds(actor, audience, audienceParam) {
   }
 
   if (audience === "needsProposalApproval") {
-    // Teams whose proposal isn't APPROVED yet
+    // Teams whose proposal isn't APPROVED yet (incl. teams with no proposal at all).
+    // Single query: get every proposal across supervised teams, then bucket.
     const props = await prisma.proposal.findMany({
-      where: { teamId: { in: supervisedIds }, status: { not: "APPROVED" } },
-      select: { teamId: true },
-    });
-    // Also include teams with NO proposal at all
-    const haveProposalIds = new Set(props.map((p) => p.teamId));
-    const teamsWithoutProposal = supervisedIds.filter((id) => !haveProposalIds.has(id));
-    const allProps = await prisma.proposal.findMany({
       where: { teamId: { in: supervisedIds } },
-      select: { teamId: true },
+      select: { teamId: true, status: true },
     });
-    const everSeen = new Set(allProps.map((p) => p.teamId));
-    const noProposal = supervisedIds.filter((id) => !everSeen.has(id));
-    return Array.from(new Set([...props.map((p) => p.teamId), ...noProposal]));
+    const approvedTeamIds = new Set(
+      props.filter((p) => p.status === "APPROVED").map((p) => p.teamId),
+    );
+    return supervisedIds.filter((id) => !approvedTeamIds.has(id));
   }
 
   return supervisedIds;

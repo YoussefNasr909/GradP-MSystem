@@ -535,7 +535,77 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
     });
   }
 
+  // Auto-suggest stage advance: if this approval was the last required
+  // deliverable for the team's current phase, nudge the leader.
+  await maybeNudgeStageAdvance(submission.teamId, submission.sdlcPhase);
+
   return toSubmissionResponse(updated);
+}
+
+/**
+ * Internal helper. Called after a doctor finalizes a submission grade —
+ * checks whether all required deliverables in the team's current phase are
+ * now APPROVED, and if so notifies the leader they can advance the stage.
+ *
+ * Silent if anything is missing / the team has already advanced. Errors are
+ * swallowed because this is a notification courtesy, never the critical path.
+ */
+async function maybeNudgeStageAdvance(teamId, approvedPhase) {
+  try {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true, stage: true, leaderId: true },
+    });
+    if (!team) return;
+    // Only nudge if the approved submission was for the team's CURRENT phase.
+    // (Doctors can also approve back-fills from earlier phases — we ignore those.)
+    if (team.stage !== approvedPhase) return;
+
+    const config = SDLC_PHASE_DELIVERABLES[team.stage];
+    if (!config || config.required.length === 0) return;
+
+    // Are all required deliverables for this phase now APPROVED?
+    const approved = await prisma.submission.findMany({
+      where: {
+        teamId,
+        sdlcPhase: team.stage,
+        status: "APPROVED",
+        deliverableType: { in: config.required },
+      },
+      select: { deliverableType: true },
+    });
+    const approvedSet = new Set(approved.map((s) => s.deliverableType));
+    const allDone = config.required.every((d) => approvedSet.has(d));
+    if (!allDone) return;
+
+    const currentIdx = STAGE_ORDER.indexOf(team.stage);
+    const nextStage = STAGE_ORDER[currentIdx + 1];
+    if (!nextStage) return; // Already in final stage
+
+    // Avoid notification spam: don't nudge twice in a row.
+    // We check whether the leader already has an unread "ready to advance" notification.
+    const existing = await prisma.notification.findFirst({
+      where: {
+        userId: team.leaderId,
+        type: "SYSTEM",
+        read: false,
+        title: { startsWith: "Ready to advance" },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await notify({
+      userId: team.leaderId,
+      type: "SYSTEM",
+      title: `Ready to advance to ${nextStage}`,
+      message: `All required deliverables for ${team.stage} have been approved. You can advance your project to the ${nextStage} phase from the Submissions page.`,
+      actionUrl: "/dashboard/submissions",
+    });
+  } catch (err) {
+    // Best-effort: never let a notification failure block a grade save.
+    console.warn(`[notify] maybeNudgeStageAdvance failed for team ${teamId}:`, err?.message);
+  }
 }
 
 export async function requestRevisionService(actor, submissionId, { feedback }) {

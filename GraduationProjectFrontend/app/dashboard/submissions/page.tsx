@@ -65,8 +65,11 @@ import {
 } from "@/lib/api/submissions"
 import {
   submissionCommentsApi,
+  rubricTemplatesApi,
   type SubmissionComment,
 } from "@/lib/api/supervisor-tools"
+import { DefenseScheduler } from "@/components/dashboard/defense-scheduler"
+import { teamsApi } from "@/lib/api/teams"
 import type { ApiTeamStage } from "@/lib/api/types"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -278,9 +281,30 @@ function SubmissionDetailDialog({
   const isTa     = userRole === "TA"
   const isDoctor = userRole === "DOCTOR" || userRole === "ADMIN"
 
+  /**
+   * Resolve which rubric to preload for grading:
+   *   1. If the submission already has a saved rubric, use it (re-grade path).
+   *   2. Else, check for a team-specific custom rubric template.
+   *   3. Else, fall back to the global default template for this deliverable type.
+   */
+  async function resolveInitialRubric(sub: ApiSubmission): Promise<RubricItem[]> {
+    if (sub.rubric && sub.rubric.length > 0) return sub.rubric
+    try {
+      const templates = await rubricTemplatesApi.list(sub.teamId)
+      const match = templates.find((t) => t.deliverableType === sub.deliverableType)
+      if (match && match.rubric.length > 0) {
+        // Custom template — initialise with zero scores (criteria structure only)
+        return match.rubric.map((c) => ({ name: c.name, score: 0, maxScore: c.maxScore }))
+      }
+    } catch { /* fall through to default */ }
+    return getDefaultRubric(sub.deliverableType)
+  }
+
   const [gradeDialogOpen,    setGradeDialogOpen]    = useState(false)
   const [taReviewDialogOpen, setTaReviewDialogOpen] = useState(false)
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false)
+  const [defenseOpen, setDefenseOpen] = useState(false)
+  const [defenseParticipantIds, setDefenseParticipantIds] = useState<string[]>([])
   const [grade, setGrade] = useState("")
   const [recommendedGrade, setRecommendedGrade] = useState("")
   const [gradeFeedback, setGradeFeedback] = useState("")
@@ -745,13 +769,33 @@ function SubmissionDetailDialog({
                     ) : (
                       <div className="text-xs text-muted-foreground">
                         No defense meeting linked yet.
-                        {isDoctor && (
-                          <Link
-                            href={`/dashboard/meetings?createForSubmission=${submission.id}&teamId=${submission.teamId}`}
-                            className="block mt-2 text-primary hover:underline"
+                        {(isDoctor || userRole === "TA") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 h-7 text-xs border-purple-500/30 text-purple-700 dark:text-purple-400 hover:bg-purple-500/10"
+                            onClick={async () => {
+                              // Pre-fetch participant IDs (leader + doctor + ta + members) for conflict check
+                              try {
+                                const team = await teamsApi.getById(submission.teamId)
+                                const ids = [
+                                  team.leader?.id,
+                                  team.doctor?.id,
+                                  team.ta?.id,
+                                  ...team.members.map((m) => m.user.id),
+                                ].filter((v): v is string => Boolean(v))
+                                setDefenseParticipantIds(ids)
+                              } catch {
+                                // Best-effort — empty array means no conflict check
+                                setDefenseParticipantIds([])
+                              }
+                              setOpen(false)
+                              setDefenseOpen(true)
+                            }}
                           >
-                            Schedule defense meeting →
-                          </Link>
+                            <Calendar className="h-3 w-3 mr-1.5" />
+                            Schedule defense meeting
+                          </Button>
                         )}
                       </div>
                     )}
@@ -840,12 +884,8 @@ function SubmissionDetailDialog({
         onOpenChange={(open) => {
           setGradeDialogOpen(open)
           if (open) {
-            // Initialise rubric from existing submission rubric, or TA's rubric, or default
-            const initial =
-              (submission.rubric && submission.rubric.length > 0)
-                ? submission.rubric
-                : getDefaultRubric(submission.deliverableType)
-            setDoctorRubric(initial)
+            // Async load: saved rubric → team custom template → global default
+            void resolveInitialRubric(submission).then(setDoctorRubric)
             setOverrideReason("")
           }
         }}
@@ -938,11 +978,7 @@ function SubmissionDetailDialog({
         onOpenChange={(open) => {
           setTaReviewDialogOpen(open)
           if (open) {
-            const initial =
-              (submission.rubric && submission.rubric.length > 0)
-                ? submission.rubric
-                : getDefaultRubric(submission.deliverableType)
-            setTaRubric(initial)
+            void resolveInitialRubric(submission).then(setTaRubric)
           }
         }}
       >
@@ -1097,6 +1133,22 @@ function SubmissionDetailDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Defense scheduler (DEPLOYMENT phase only, supervisor only) */}
+      <DefenseScheduler
+        open={defenseOpen}
+        onOpenChange={setDefenseOpen}
+        submissionId={submission.id}
+        teamId={submission.teamId}
+        participantUserIds={defenseParticipantIds}
+        onScheduled={async () => {
+          // Re-fetch this submission so the dialog shows the new linked meeting
+          try {
+            const refreshed = await submissionsApi.get(submission.id)
+            onGraded(refreshed)
+          } catch { /* ignore */ }
+        }}
+      />
     </>
   )
 }

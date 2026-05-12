@@ -3,7 +3,6 @@
 import type React from "react"
 import { useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { useTheme } from "next-themes"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useSettingsStore } from "@/lib/stores/settings-store"
 import { useUIStore } from "@/lib/stores/ui-store"
@@ -12,16 +11,10 @@ const ACTIVITY_EVENTS = ["mousedown", "keydown", "touchstart", "scroll", "pointe
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { setTheme } = useTheme()
   const { accessToken, currentUser, logout } = useAuthStore()
   const { settings, loadSettings, reset } = useSettingsStore()
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed)
   const logoutTimerRef = useRef<number | null>(null)
-  const setThemeRef = useRef(setTheme)
-
-  useEffect(() => {
-    setThemeRef.current = setTheme
-  }, [setTheme])
 
   useEffect(() => {
     if (!accessToken || !currentUser) {
@@ -38,7 +31,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement
     const { appearance } = settings
 
-    setThemeRef.current(appearance.theme)
+    // NOTE: theme is intentionally NOT applied here. The active theme is owned
+    // by `next-themes` (driven by the topbar toggle, persisted to localStorage).
+    // Letting the DB-stored value override on every settings load was causing
+    // the light→dark flip when navigating to /dashboard/settings.
     root.style.fontSize = `${appearance.fontSize}px`
     root.classList.toggle("app-compact", appearance.compactMode)
     root.classList.toggle("app-reduced-motion", appearance.reducedMotion)

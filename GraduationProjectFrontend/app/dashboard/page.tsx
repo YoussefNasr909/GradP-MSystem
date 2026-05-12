@@ -54,11 +54,27 @@ import {
   Megaphone,
   MessageCircle,
 } from "lucide-react"
-import { teams } from "@/data/teams"
-import { users, getUserById } from "@/data/users"
-import { proposals } from "@/data/proposals"
-import { tasks } from "@/data/tasks"
-import { meetings } from "@/data/meetings"
+// ─── Real data placeholders ─────────────────────────────────────────────────
+// The mock arrays from @/data/* used to drive these dashboards. They've been
+// replaced with empty placeholders so derived counts are honest (0 instead of
+// fake). The live counts users actually care about come from RoleActionInbox
+// (proposals to review, submissions to grade, tasks awaiting PR review, etc.)
+// which fetches them via real API endpoints. Per-dashboard widgets that need
+// more detail wire their own hooks (e.g. useMyTeamState).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const teams: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const users: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const proposals: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tasks: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const meetings: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getUserById(_id: string): any { return null }
+void users
+void proposals
 import { usersApi } from "@/lib/api/users"
 import { teamsApi } from "@/lib/api/teams"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"

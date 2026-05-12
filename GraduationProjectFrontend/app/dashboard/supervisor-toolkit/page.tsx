@@ -25,6 +25,10 @@ import {
   AlertTriangle,
   Megaphone,
   CalendarPlus,
+  ListChecks,
+  Wand2,
+  Save,
+  RotateCcw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -32,11 +36,15 @@ import {
   supervisorNotesApi,
   deadlinesApi,
   activityApi,
+  rubricTemplatesApi,
   type SupervisorNote,
   type Deadline,
   type ActivityEvent,
   type DeliverableType,
+  type RubricTemplate,
 } from "@/lib/api/supervisor-tools"
+import { getDefaultRubric } from "@/components/dashboard/rubric-editor"
+import type { RubricItem } from "@/lib/api/submissions"
 import { teamsApi } from "@/lib/api/teams"
 import { toast } from "sonner"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
@@ -438,6 +446,269 @@ function ActivityPanel({ teamId }: { teamId: string }) {
   )
 }
 
+// ─── Rubrics Panel ──────────────────────────────────────────────────────────
+//
+// Per-team custom rubric overrides. When a team has a custom rubric for a
+// deliverable type, the grading dialog will preload it instead of the global
+// default. Only the team's doctor can manage these (backend enforces it).
+function RubricsPanel({ teamId, userRole }: { teamId: string; userRole: string }) {
+  const [templates, setTemplates] = useState<RubricTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editingType, setEditingType] = useState<DeliverableType | null>(null)
+  const [draft, setDraft] = useState<RubricItem[]>([])
+  const [saving, setSaving] = useState(false)
+
+  const canEdit = userRole === "DOCTOR" || userRole === "ADMIN"
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const rows = await rubricTemplatesApi.list(teamId)
+      setTemplates(rows)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load rubrics")
+    } finally {
+      setLoading(false)
+    }
+  }, [teamId])
+
+  useEffect(() => { void load() }, [load])
+
+  function startEdit(type: DeliverableType) {
+    const existing = templates.find((t) => t.deliverableType === type)
+    const initial = existing ? [...existing.rubric] : getDefaultRubric(type)
+    setDraft(initial)
+    setEditingType(type)
+  }
+
+  function updateCriterion(i: number, patch: Partial<RubricItem>) {
+    setDraft((curr) => curr.map((c, idx) => (idx === i ? { ...c, ...patch } : c)))
+  }
+  function addCriterion() {
+    setDraft((curr) => [...curr, { name: "", score: 0, maxScore: 10 }])
+  }
+  function removeCriterion(i: number) {
+    setDraft((curr) => curr.filter((_, idx) => idx !== i))
+  }
+  function resetToDefault() {
+    if (!editingType) return
+    setDraft(getDefaultRubric(editingType))
+  }
+
+  async function handleSave() {
+    if (!editingType) return
+    if (draft.length === 0) {
+      toast.error("Add at least one criterion.")
+      return
+    }
+    if (draft.some((c) => !c.name.trim())) {
+      toast.error("Every criterion needs a name.")
+      return
+    }
+    setSaving(true)
+    try {
+      await rubricTemplatesApi.upsert({
+        teamId,
+        deliverableType: editingType,
+        rubric: draft.map((c) => ({
+          name: c.name.trim(),
+          score: 0,                    // criteria scores aren't stored in the template; only structure
+          maxScore: c.maxScore,
+        })),
+      })
+      toast.success(`Custom ${editingType} rubric saved.`)
+      setEditingType(null)
+      await load()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save rubric")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Remove this custom rubric? Grading will fall back to the default.")) return
+    try {
+      await rubricTemplatesApi.delete(id)
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+      toast.success("Custom rubric removed")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete")
+    }
+  }
+
+  const draftTotal = draft.reduce((s, c) => s + (Number(c.maxScore) || 0), 0)
+
+  return (
+    <div className="space-y-4">
+      <div className="p-3 rounded-lg bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-900/40">
+        <p className="text-xs text-purple-800 dark:text-purple-400 flex items-center gap-1.5">
+          <Wand2 className="h-3 w-3" />
+          Override the default rubric for any deliverable type. When this team is graded,
+          the saved rubric will preload instead of the global default.
+          {!canEdit && <span className="ml-1 italic">(Read-only — TA can&apos;t edit official rubrics.)</span>}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-4"><Skeleton className="h-20 w-full" /></Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {DELIVERABLE_TYPES.map((type) => {
+            const existing = templates.find((t) => t.deliverableType === type)
+            return (
+              <Card key={type} className={cn(
+                "p-4 border-border/50 transition-colors",
+                existing && "border-purple-500/30 bg-purple-500/5",
+              )}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">{type}</Badge>
+                    {existing && (
+                      <Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-700 dark:text-purple-400">
+                        Custom
+                      </Badge>
+                    )}
+                  </div>
+                  {existing && canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => handleDelete(existing.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {existing
+                    ? `${existing.rubric.length} criteria · total ${existing.rubric.reduce((s, c) => s + (c.maxScore || 0), 0)} pts`
+                    : "Using global default rubric"}
+                </p>
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    variant={existing ? "outline" : "default"}
+                    className="w-full"
+                    onClick={() => startEdit(type)}
+                  >
+                    {existing ? "Edit" : "Customize"}
+                  </Button>
+                )}
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Editor dialog */}
+      {editingType && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditingType(null) }}
+        >
+          <Card className="w-full max-w-lg max-h-[85vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <ListChecks className="h-5 w-5 text-purple-500" />
+                  Customize {editingType} Rubric
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Define the criteria you'll use to grade this deliverable for this team.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_90px_40px] gap-2 text-[10px] uppercase tracking-wider text-muted-foreground px-1">
+                <span>Criterion</span>
+                <span className="text-right">Max points</span>
+                <span />
+              </div>
+              <AnimatePresence initial={false}>
+                {draft.map((c, i) => (
+                  <motion.div
+                    key={i}
+                    layout
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    className="grid grid-cols-[1fr_90px_40px] gap-2 items-center"
+                  >
+                    <Input
+                      value={c.name}
+                      onChange={(e) => updateCriterion(i, { name: e.target.value })}
+                      placeholder="e.g. Documentation Quality"
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={c.maxScore}
+                      onChange={(e) =>
+                        updateCriterion(i, {
+                          maxScore: Math.max(1, Math.min(100, Number(e.target.value) || 1)),
+                        })
+                      }
+                      className="h-8 text-sm text-center tabular-nums"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => removeCriterion(i)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={addCriterion}>
+                  <Plus className="h-3 w-3 mr-1" /> Add criterion
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={resetToDefault}>
+                  <RotateCcw className="h-3 w-3 mr-1" /> Reset to default
+                </Button>
+              </div>
+              <Badge variant="outline" className="font-mono">{draftTotal} max pts</Badge>
+            </div>
+
+            {draftTotal !== 100 && (
+              <p className="text-[10px] text-amber-700 dark:text-amber-500 mt-2">
+                ⚠ Criteria max totals to {draftTotal}, not 100. Grading still scales to /100, but
+                a clean 100-point breakdown reads better.
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <Button onClick={handleSave} disabled={saving} className="flex-1">
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? "Saving…" : "Save rubric"}
+              </Button>
+              <Button variant="outline" onClick={() => setEditingType(null)} disabled={saving}>
+                Cancel
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function SupervisorToolkitPage() {
@@ -561,6 +832,13 @@ export default function SupervisorToolkitPage() {
               <CalendarClock className="h-3.5 w-3.5 mr-1.5" />
               Deadlines
             </TabsTrigger>
+            <TabsTrigger
+              value="rubrics"
+              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+            >
+              <ListChecks className="h-3.5 w-3.5 mr-1.5" />
+              Rubrics
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="activity" className="mt-4">
@@ -573,6 +851,10 @@ export default function SupervisorToolkitPage() {
 
           <TabsContent value="deadlines" className="mt-4">
             <DeadlinesPanel teamId={selectedTeamId} />
+          </TabsContent>
+
+          <TabsContent value="rubrics" className="mt-4">
+            <RubricsPanel teamId={selectedTeamId} userRole={(currentUser?.role ?? "").toUpperCase()} />
           </TabsContent>
         </Tabs>
       ) : null}

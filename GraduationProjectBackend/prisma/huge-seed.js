@@ -202,6 +202,8 @@ async function cleanup() {
   await prisma.announcement.deleteMany();
   await prisma.teamDeliverableDeadline.deleteMany();
   await prisma.teamSupervisorNote.deleteMany();
+  await prisma.teamRubricTemplate.deleteMany();
+  await prisma.submissionComment.deleteMany();
 
   // Team work
   await prisma.proposal.deleteMany();
@@ -803,6 +805,162 @@ async function seedWeeklyReportsForTeam(team, leader) {
   }
 }
 
+/**
+ * Seed a handful of comment threads on existing submissions so reviewers see
+ * conversation starters when they open the dialog. Picks ~30% of approved
+ * submissions per team and adds 2-4 comments to each.
+ */
+async function seedSubmissionCommentsForTeam(team, leader, doctor, ta) {
+  const subs = await prisma.submission.findMany({
+    where: { teamId: team.id },
+    select: { id: true, deliverableType: true, status: true },
+    take: 6,
+  });
+
+  const seedSamples = [
+    { from: "leader",  text: "Uploaded the latest version. Let me know if anything's unclear." },
+    { from: "ta",      text: "Looks solid. One concern — the testing section feels light. Can you add edge cases?" },
+    { from: "leader",  text: "Updated. Added 6 edge case tests + boundary checks. Ready for re-review." },
+    { from: "doctor",  text: "Good iteration. I'll finalize the grade once the defense meeting wraps up." },
+    { from: "ta",      text: "Could you clarify the second use case diagram? The actor relationships are ambiguous." },
+    { from: "leader",  text: "Reworked it — actors are now color-coded and grouped by access tier." },
+    { from: "doctor",  text: "Strong work overall. Cross-referenced your scope doc and everything aligns." },
+  ];
+
+  for (const sub of subs) {
+    if (Math.random() > 0.35) continue; // ~35% chance of having a thread
+    const commentCount = faker.number.int({ min: 2, max: 4 });
+    const picks = pickSome(seedSamples, commentCount);
+    let createdAt = daysAgo(faker.number.int({ min: 1, max: 30 }));
+    for (const sample of picks) {
+      const author = sample.from === "leader" ? leader
+        : sample.from === "doctor"           ? doctor
+        : sample.from === "ta"               ? ta
+        : leader;
+      if (!author) continue;
+      await prisma.submissionComment.create({
+        data: {
+          submissionId: sub.id,
+          authorUserId: author.id,
+          authorRole: author.role,
+          content: sample.text,
+          createdAt,
+        },
+      }).catch(() => {});
+      createdAt = addDays(createdAt, faker.number.int({ min: 0, max: 3 }));
+    }
+  }
+}
+
+/**
+ * Seed 1-2 custom rubric templates per team (for the team's current phase
+ * deliverable), so doctors can see the "Custom" badge in the toolkit and the
+ * grading dialog will pre-load a tailored rubric.
+ */
+async function seedCustomRubricsForTeam(team, doctor) {
+  if (!doctor) return;
+
+  // Slightly tweaked rubric variations doctors might use in practice
+  const variations = {
+    SRS: [
+      { name: "Problem Definition",        score: 0, maxScore: 25 },
+      { name: "Stakeholder Analysis",      score: 0, maxScore: 15 },
+      { name: "Functional Requirements",   score: 0, maxScore: 25 },
+      { name: "Non-Functional Requirements", score: 0, maxScore: 15 },
+      { name: "Use Cases",                 score: 0, maxScore: 20 },
+    ],
+    CODE: [
+      { name: "Functionality",        score: 0, maxScore: 30 },
+      { name: "Architecture",         score: 0, maxScore: 20 },
+      { name: "Test Coverage",        score: 0, maxScore: 20 },
+      { name: "Code Quality",         score: 0, maxScore: 15 },
+      { name: "Documentation",        score: 0, maxScore: 15 },
+    ],
+    TEST_PLAN: [
+      { name: "Test Strategy",        score: 0, maxScore: 25 },
+      { name: "Unit Tests",            score: 0, maxScore: 25 },
+      { name: "Integration Tests",     score: 0, maxScore: 20 },
+      { name: "Edge Cases",            score: 0, maxScore: 15 },
+      { name: "Bug Documentation",     score: 0, maxScore: 15 },
+    ],
+    PRESENTATION: [
+      { name: "Content Coverage",     score: 0, maxScore: 25 },
+      { name: "Visual Design",         score: 0, maxScore: 20 },
+      { name: "Delivery",              score: 0, maxScore: 25 },
+      { name: "Q&A Handling",          score: 0, maxScore: 20 },
+      { name: "Audience Engagement",   score: 0, maxScore: 10 },
+    ],
+  };
+
+  // Pick 1-2 deliverable types to customize for this team
+  const types = pickSome(Object.keys(variations), faker.number.int({ min: 1, max: 2 }));
+  for (const type of types) {
+    await prisma.teamRubricTemplate.create({
+      data: {
+        teamId: team.id,
+        deliverableType: type,
+        rubric: variations[type],
+        createdByUserId: doctor.id,
+      },
+    }).catch(() => {}); // unique constraint — safe to skip if collide
+  }
+}
+
+/**
+ * Seed grade history on a few approved submissions per team to show the
+ * revision audit trail. Marks 1-2 submissions per team as having been
+ * unlocked + re-graded.
+ */
+async function seedGradeHistoryForTeam(team, doctor) {
+  if (!doctor) return;
+
+  const approved = await prisma.submission.findMany({
+    where: { teamId: team.id, status: "APPROVED", grade: { not: null } },
+    select: { id: true, grade: true, feedback: true, deliverableType: true },
+    take: 4,
+  });
+
+  // ~20% chance per approved submission of having a re-grade history
+  for (const sub of approved) {
+    if (Math.random() > 0.2) continue;
+
+    const previousGrade = Math.max(0, Math.min(100, (sub.grade ?? 75) - faker.number.int({ min: 3, max: 10 })));
+    const history = [
+      {
+        event: "unlocked",
+        snapshotGrade: previousGrade,
+        snapshotFeedback: sub.feedback ?? "Initial grade.",
+        snapshotRubric: null,
+        snapshotReviewedBy: `${doctor.firstName} ${doctor.lastName}`,
+        snapshotReviewedAt: daysAgo(faker.number.int({ min: 30, max: 60 })).toISOString(),
+        reason: pick([
+          "Student appealed — additional evidence supplied.",
+          "Re-examined the rubric and recomputed the score.",
+          "Rubric updated mid-semester; bringing this in line.",
+          "Caught a counting error on the testing criterion.",
+        ]),
+        by: doctor.id,
+        byName: `${doctor.firstName} ${doctor.lastName}`,
+        at: daysAgo(faker.number.int({ min: 14, max: 28 })).toISOString(),
+      },
+      {
+        event: "regraded",
+        previousGrade,
+        newGrade: sub.grade,
+        reason: "Re-graded after appeal.",
+        by: doctor.id,
+        byName: `${doctor.firstName} ${doctor.lastName}`,
+        at: daysAgo(faker.number.int({ min: 7, max: 14 })).toISOString(),
+      },
+    ];
+
+    await prisma.submission.update({
+      where: { id: sub.id },
+      data: { gradeHistory: history },
+    }).catch(() => {});
+  }
+}
+
 // ─── Global content (announcements, interactions) ───────────────────────────
 
 async function seedGlobalAnnouncements(doctors, tas) {
@@ -983,6 +1141,10 @@ async function main() {
     const sprints = await seedSprintsForTeam(teamForChildren, leader);
     await seedTasksForTeam(teamForChildren, allTeamUsers, leader, ta, sprints);
     await seedWeeklyReportsForTeam(teamForChildren, leader);
+    // New: comments + custom rubrics + grade history (depend on submissions existing)
+    await seedSubmissionCommentsForTeam(teamForChildren, leader, doctor, ta);
+    await seedCustomRubricsForTeam(teamForChildren, doctor);
+    await seedGradeHistoryForTeam(teamForChildren, doctor);
 
     if ((i + 1) % 5 === 0) {
       console.log(`  ✓ Seeded ${i + 1}/${TEAM_COUNT} teams (current: ${team.name}, stage=${stage})`);
@@ -1008,6 +1170,11 @@ async function main() {
     notes: await prisma.teamSupervisorNote.count(),
     deadlines: await prisma.teamDeliverableDeadline.count(),
     announcements: await prisma.announcement.count(),
+    submissionComments: await prisma.submissionComment.count(),
+    customRubrics: await prisma.teamRubricTemplate.count(),
+    submissionsWithHistory: await prisma.submission.count({
+      where: { gradeHistory: { not: null } },
+    }),
     invitations: await prisma.teamInvitation.count(),
     joinRequests: await prisma.teamJoinRequest.count(),
     supervisorRequests: await prisma.teamSupervisorRequest.count(),
@@ -1031,6 +1198,9 @@ async function main() {
   console.log(`  Supervisor notes:     ${counts.notes}     (private per team)`);
   console.log(`  Deadlines:            ${counts.deadlines}`);
   console.log(`  Announcements:        ${counts.announcements}`);
+  console.log(`  Submission comments:  ${counts.submissionComments}     (threads on selected submissions)`);
+  console.log(`  Custom rubrics:       ${counts.customRubrics}      (team-specific overrides)`);
+  console.log(`  Submissions w/ history: ${counts.submissionsWithHistory}    (re-graded after appeal)`);
   console.log(`  Join requests:        ${counts.joinRequests}`);
   console.log(`  Invitations:          ${counts.invitations}`);
   console.log(`  Supervisor requests:  ${counts.supervisorRequests}`);

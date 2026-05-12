@@ -57,6 +57,7 @@ export default function ReviewWorkPage() {
   const [selectedTask, setSelectedTask] = useState<ApiTask | null>(null)
   const [reviewComment, setReviewComment] = useState("")
   const [submittingReview, setSubmittingReview] = useState(false)
+  const [mergeMethod, setMergeMethod] = useState<"merge" | "squash" | "rebase">("squash")
 
   const fetchData = useCallback(async () => {
     setError(false)
@@ -100,7 +101,7 @@ export default function ReviewWorkPage() {
       const updated = await tasksApi.approve(task.id, {
         reviewComment: reviewComment.trim() || undefined,
         mergePullRequest: Boolean(task.github?.pullRequest.number),
-        mergeMethod: "squash",
+        mergeMethod,
       })
       setTasks(prev => prev.filter(t => t.id !== updated.id))
       setSelectedTask(null)
@@ -321,6 +322,22 @@ export default function ReviewWorkPage() {
                 />
               </div>
 
+              {selectedTask.github?.pullRequest.number && (
+                <div>
+                  <Label>Merge method</Label>
+                  <Select value={mergeMethod} onValueChange={(v) => setMergeMethod(v as "merge" | "squash" | "rebase")}>
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="squash">Squash and merge — collapse all commits into one</SelectItem>
+                      <SelectItem value="merge">Create merge commit — preserve full history</SelectItem>
+                      <SelectItem value="rebase">Rebase and merge — replay commits onto base</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="flex gap-2 flex-col sm:flex-row">
                 <Button
                   onClick={() => void handleApprove(selectedTask)}
@@ -340,9 +357,11 @@ export default function ReviewWorkPage() {
                   Request Changes
                 </Button>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Approving a GitHub-linked task will merge the PR with a squash commit.
-              </p>
+              {selectedTask.github?.pullRequest.number && (
+                <p className="text-[10px] text-muted-foreground">
+                  Approving a GitHub-linked task will merge the PR using the selected method.
+                </p>
+              )}
             </div>
           )}
         </DialogContent>
