@@ -82,7 +82,7 @@ const navigationGroups = [
       { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin", "doctor", "ta"] },
       { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
       { name: "SDLC Phases", href: "/dashboard/sdlc", icon: Workflow, roles: ["leader", "member"] },
-      { name: "Weekly Progress", href: "/dashboard/weekly-progress", icon: ClipboardList, roles: ["leader", "member"] },
+      { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
       { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
     ],
   },

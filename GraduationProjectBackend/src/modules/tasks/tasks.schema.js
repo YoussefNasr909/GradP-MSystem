@@ -13,6 +13,7 @@ const dateStringSchema = z
 const taskTitleSchema = z.string().trim().min(3, "Task title must be at least 3 characters").max(200);
 const taskDescriptionSchema = z.string().trim().max(2000).optional();
 const reviewCommentSchema = z.string().trim().min(3, "Review comment must be at least 3 characters").max(10000);
+const pointsSchema = z.coerce.number().int().min(0).max(99);
 
 export const listTasksSchema = z.object({
   body: z.any().optional(),
@@ -34,6 +35,7 @@ export const createTaskSchema = z.object({
       title: taskTitleSchema,
       description: taskDescriptionSchema,
       priority: z.enum(TASK_PRIORITY_VALUES),
+      storyPoints: pointsSchema.optional(),
       taskType: z.enum(TASK_TYPE_VALUES).optional(),
       integrationMode: z.enum(TASK_INTEGRATION_MODE_VALUES).optional(),
       startDate: dateStringSchema,
@@ -54,6 +56,9 @@ export const updateTaskSchema = z.object({
       title: taskTitleSchema.optional(),
       description: taskDescriptionSchema,
       priority: z.enum(TASK_PRIORITY_VALUES).optional(),
+      storyPoints: pointsSchema.optional(),
+      actualPoints: pointsSchema.nullable().optional(),
+      unplanned: z.boolean().optional(),
       taskType: z.enum(TASK_TYPE_VALUES).optional(),
       integrationMode: z.enum(TASK_INTEGRATION_MODE_VALUES).optional(),
       startDate: dateStringSchema.optional(),

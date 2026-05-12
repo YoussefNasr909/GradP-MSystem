@@ -24,6 +24,7 @@ import deadlinesRouter from "../modules/deadlines/deadlines.routes.js";
 import announcementsRouter from "../modules/announcements/announcements.routes.js";
 import submissionCommentsRouter from "../modules/submission-comments/submission-comments.routes.js";
 import rubricTemplatesRouter from "../modules/rubric-templates/rubric-templates.routes.js";
+import sprintsRouter from "../modules/sprints/sprints.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -53,4 +54,5 @@ router.use("/deadlines", deadlinesRouter);
 router.use("/announcements", announcementsRouter);
 router.use("/submission-comments", submissionCommentsRouter);
 router.use("/rubric-templates", rubricTemplatesRouter);
+router.use("/sprints", sprintsRouter);
 export default router;

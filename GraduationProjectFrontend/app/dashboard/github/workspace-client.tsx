@@ -884,7 +884,7 @@ const FileTreeItem = memo(function FileTreeItem({
   isSelected: boolean
   isLastRow: boolean
   canDelete: boolean
-  busyAction: string
+  busyAction: string | null
   onOpenFile: (path: string) => void
   onOpenDirectory: (path: string) => void
   onRequestDelete: (item: { path: string; type: string; name: string }) => void
@@ -5473,7 +5473,7 @@ export function GitHubWorkspaceClient() {
                                     isSelected={selectedFilePath === item.path}
                                     isLastRow={index === visibleTreeItems.length - 1}
                                     canDelete={canAuthorRepositoryChanges}
-                                    busyAction={busyAction ?? ""}
+                                    busyAction={busyAction}
                                     onOpenFile={openFile}
                                     onOpenDirectory={openDirectory}
                                     onRequestDelete={requestDeleteTreeItem}
@@ -9881,5 +9881,4 @@ function ActionRow({
     </div>
   )
 }
-
 

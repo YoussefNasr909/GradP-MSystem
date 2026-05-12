@@ -29,6 +29,7 @@ const taskTeamSelect = {
 export const taskSelect = {
   id: true,
   teamId: true,
+  sprintId: true,
   taskType: true,
   integrationMode: true,
   origin: true,
@@ -51,6 +52,9 @@ export const taskSelect = {
   description: true,
   status: true,
   priority: true,
+  storyPoints: true,
+  actualPoints: true,
+  unplanned: true,
   assigneeUserId: true,
   createdByUserId: true,
   reviewedByUserId: true,
@@ -71,6 +75,15 @@ export const taskSelect = {
   assignee: { select: teamUserSelect },
   createdBy: { select: teamUserSelect },
   reviewedBy: { select: teamUserSelect },
+  sprint: {
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      status: true,
+    },
+  },
   team: { select: taskTeamSelect },
 };
 

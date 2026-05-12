@@ -124,6 +124,12 @@ function daysFromNow(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
 /**
  * Build a realistic rubric whose criteria scores sum to `targetGrade` out of 100.
  * We distribute the loss proportionally across criteria so percentages look natural.
@@ -202,6 +208,7 @@ async function cleanup() {
   await prisma.submission.deleteMany();
   await prisma.weeklyReport.deleteMany();
   await prisma.task.deleteMany();
+  await prisma.sprint.deleteMany();
   await prisma.risk.deleteMany();
   await prisma.teamResource.deleteMany();
   await prisma.teamDocument.deleteMany();
@@ -690,27 +697,89 @@ async function seedMeetingsForTeam(team, leader, doctor, ta) {
   }
 }
 
-async function seedTasksForTeam(team, allTeamUsers, leader, ta) {
+async function seedSprintsForTeam(team, leader) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sprintTemplates = [
+    {
+      name: `${team.name} Sprint 1`,
+      goal: "Stabilize core requirements and complete the first planned feature set.",
+      startDate: addDays(today, -28),
+      endDate: addDays(today, -15),
+      status: "COMPLETED",
+      completedAt: addDays(today, -15),
+    },
+    {
+      name: `${team.name} Sprint 2`,
+      goal: "Deliver the active implementation slice and clear review-ready tasks.",
+      startDate: addDays(today, -7),
+      endDate: addDays(today, 6),
+      status: "ACTIVE",
+      completedAt: null,
+    },
+    {
+      name: `${team.name} Sprint 3`,
+      goal: "Prepare the next round of testing, polish, and deployment tasks.",
+      startDate: addDays(today, 7),
+      endDate: addDays(today, 20),
+      status: "PLANNED",
+      completedAt: null,
+    },
+  ];
+
+  const sprints = [];
+  for (const sprintTemplate of sprintTemplates) {
+    const sprint = await prisma.sprint.create({
+      data: {
+        teamId: team.id,
+        createdByUserId: leader.id,
+        ...sprintTemplate,
+      },
+    });
+    sprints.push(sprint);
+  }
+
+  return sprints;
+}
+
+async function seedTasksForTeam(team, allTeamUsers, leader, ta, sprints = []) {
   for (let k = 0; k < 40; k++) {
-    const status = pick(TASK_STATUSES);
+    const sprint = k < 30 ? sprints[Math.floor(k / 10)] : null;
+    const status = sprint?.status === "COMPLETED"
+      ? pick(["DONE", "DONE", "DONE", "APPROVED", "REVIEW"])
+      : sprint?.status === "ACTIVE"
+        ? pick(["TODO", "IN_PROGRESS", "IN_PROGRESS", "REVIEW", "DONE"])
+        : pick(TASK_STATUSES);
     const assignee = pick(allTeamUsers);
     const isReviewed = status === "APPROVED" || status === "DONE";
+    const storyPoints = pick([1, 2, 3, 5, 8]);
+    const dueDate = sprint
+      ? faker.date.between({ from: sprint.startDate, to: sprint.endDate })
+      : faker.date.future();
+    const startDate = sprint
+      ? faker.date.between({ from: sprint.startDate, to: dueDate })
+      : daysAgo(faker.number.int({ min: 0, max: 45 }));
 
     await prisma.task.create({
       data: {
         teamId: team.id,
+        sprintId: sprint?.id ?? null,
         title: faker.hacker.phrase(),
         description: faker.lorem.paragraph(),
         status,
         priority: pick(TASK_PRIORITIES),
         taskType: pick(TASK_TYPES),
+        storyPoints,
+        actualPoints: status === "DONE" ? Math.max(1, storyPoints + faker.number.int({ min: -1, max: 2 })) : null,
+        unplanned: Boolean(sprint) && faker.datatype.boolean({ probability: 0.18 }),
         assigneeUserId: assignee.id,
         createdByUserId: leader.id,
         reviewedByUserId: isReviewed && ta ? ta.id : null,
         reviewedAt: isReviewed ? daysAgo(faker.number.int({ min: 1, max: 30 })) : null,
         reviewDecision: isReviewed ? "APPROVED" : null,
         labels: [faker.hacker.adjective(), faker.hacker.noun()],
-        dueDate: faker.date.future(),
+        startDate,
+        dueDate,
         createdAt: faker.date.past(),
         acceptedAt: status !== "BACKLOG" && status !== "TODO" ? daysAgo(faker.number.int({ min: 1, max: 60 })) : null,
         submittedForReviewAt: status === "REVIEW" || isReviewed ? daysAgo(faker.number.int({ min: 1, max: 14 })) : null,
@@ -911,7 +980,8 @@ async function main() {
     await seedDeadlinesForTeam(teamForChildren, doctor, ta);
     await seedRisksForTeam(teamForChildren, leader, doctor);
     await seedMeetingsForTeam(teamForChildren, leader, doctor, ta);
-    await seedTasksForTeam(teamForChildren, allTeamUsers, leader, ta);
+    const sprints = await seedSprintsForTeam(teamForChildren, leader);
+    await seedTasksForTeam(teamForChildren, allTeamUsers, leader, ta, sprints);
     await seedWeeklyReportsForTeam(teamForChildren, leader);
 
     if ((i + 1) % 5 === 0) {
@@ -930,6 +1000,7 @@ async function main() {
     teams: await prisma.team.count(),
     proposals: await prisma.proposal.count(),
     submissions: await prisma.submission.count(),
+    sprints: await prisma.sprint.count(),
     tasks: await prisma.task.count(),
     weeklyReports: await prisma.weeklyReport.count(),
     risks: await prisma.risk.count(),
@@ -952,6 +1023,7 @@ async function main() {
   console.log(`  Proposals:            ${counts.proposals}`);
   console.log(`  Submissions:          ${counts.submissions}`);
   console.log(`    Two-step grading + rubric data, mix of states`);
+  console.log(`  Sprints:              ${counts.sprints}`);
   console.log(`  Tasks:                ${counts.tasks}`);
   console.log(`  Weekly reports:       ${counts.weeklyReports}`);
   console.log(`  Risks:                ${counts.risks}`);
