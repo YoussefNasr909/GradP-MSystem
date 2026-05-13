@@ -79,10 +79,29 @@ function getTeamSearchScore(team, search) {
 
   const teamName = normalizeSearchValue(team.name);
   const bio = normalizeSearchValue(team.bio);
+  const stack = (team.stack ?? []).map(normalizeSearchValue);
+  const leaderName = normalizeSearchValue(team.leader?.fullName ?? buildFullName(team.leader));
+  const supervisorNames = [team.doctor, team.ta]
+    .map((user) => normalizeSearchValue(user?.fullName ?? buildFullName(user)))
+    .filter(Boolean);
   const teamNameWeight = getMatchWeight(teamName, normalizedSearch);
   const bioWeight = getMatchWeight(bio, normalizedSearch);
+  const stackWeight = Math.max(...stack.map((item) => getMatchWeight(item, normalizedSearch)), 0);
+  const leaderWeight = getMatchWeight(leaderName, normalizedSearch);
+  const supervisorWeight = Math.max(...supervisorNames.map((name) => getMatchWeight(name, normalizedSearch)), 0);
 
-  return Math.max(teamNameWeight > 0 ? teamNameWeight + 180 : 0, bioWeight > 0 ? bioWeight + 80 : 0);
+  return Math.max(
+    teamNameWeight > 0 ? teamNameWeight + 180 : 0,
+    stackWeight > 0 ? stackWeight + 140 : 0,
+    leaderWeight > 0 ? leaderWeight + 110 : 0,
+    supervisorWeight > 0 ? supervisorWeight + 100 : 0,
+    bioWeight > 0 ? bioWeight + 80 : 0,
+  );
+}
+
+function matchesTeamSearch(team, search) {
+  if (!normalizeSearchValue(search)) return true;
+  return getTeamSearchScore(team, search) > 0;
 }
 
 function compareTeams(left, right, search) {
@@ -260,9 +279,17 @@ function assertCanManageTeam(team, actor) {
 function assertCanViewTeam(team, actor, { hasPendingInvitation = false, hasPendingRequest = false } = {}) {
   assertTeamExists(team);
 
+  if (actor.role === ROLES.DOCTOR && team.doctor?.id !== actor.id) {
+    throw new AppError("This team is not assigned to you.", 403, "TEAM_VIEW_FORBIDDEN");
+  }
+
+  if (actor.role === ROLES.TA && team.ta?.id !== actor.id) {
+    throw new AppError("This team is not assigned to you.", 403, "TEAM_VIEW_FORBIDDEN");
+  }
+
   if (team.visibility === TEAM_VISIBILITIES.PUBLIC) return;
 
-  const isStaff = [ROLES.ADMIN, ROLES.DOCTOR, ROLES.TA].includes(actor.role);
+  const isStaff = actor.role === ROLES.ADMIN;
   const isLeader = team.leader.id === actor.id;
   const isMember = team.members.some((member) => member.user.id === actor.id);
 
@@ -416,20 +443,16 @@ function toSupervisorRequestResponse(supervisorRequest, actor) {
   };
 }
 
-function buildTeamsWhere({ search, stage, visibility, actor }) {
+function buildTeamsWhere({ stage, visibility, actor }) {
   const where = {};
-  const normalizedSearch = normalizeText(search);
-
-  if (normalizedSearch) {
-    where.OR = [
-      { name: { contains: normalizedSearch, mode: "insensitive" } },
-      { bio: { contains: normalizedSearch, mode: "insensitive" } },
-    ];
-  }
 
   if (stage) where.stage = stage;
 
-  if ([ROLES.ADMIN, ROLES.DOCTOR, ROLES.TA].includes(actor.role)) {
+  if (actor.role === ROLES.DOCTOR) {
+    where.doctorId = actor.id;
+  } else if (actor.role === ROLES.TA) {
+    where.taId = actor.id;
+  } else if (actor.role === ROLES.ADMIN) {
     if (visibility) where.visibility = visibility;
   } else {
     where.visibility = TEAM_VISIBILITIES.PUBLIC;
@@ -489,7 +512,7 @@ async function getPendingStateMaps(userId) {
 export async function listTeamsService(actor, { page, limit, search, stage, visibility, availability }) {
   const teamContext = await getUserTeamContext(actor.id);
   const pendingMaps = actor.role === ROLES.STUDENT ? await getPendingStateMaps(actor.id) : null;
-  const rawTeams = await listTeams(buildTeamsWhere({ search, stage, visibility, actor }));
+  const rawTeams = await listTeams(buildTeamsWhere({ stage, visibility, actor }));
   const normalizedSearch = normalizeText(search);
 
   const annotated = rawTeams
@@ -500,6 +523,7 @@ export async function listTeamsService(actor, { page, limit, search, stage, visi
       }),
     )
     .filter((team) => {
+      if (!matchesTeamSearch(team, normalizedSearch)) return false;
       if (availability === "open") return !team.isFull;
       if (availability === "full") return team.isFull;
       return true;

@@ -17,6 +17,7 @@ import {
   Upload,
   GraduationCap,
   ChevronDown,
+  Workflow,
   CheckCircle2,
   Crown,
   Calendar,
@@ -61,7 +62,7 @@ const navigationGroups = [
         name: "Supervision",
         href: "/dashboard/supervisor-toolkit",
         icon: StickyNote,
-        roles: ["doctor", "ta"],
+        roles: ["admin", "doctor", "ta"],
       },
       // User Management (formerly "Admin Panel") — the admin's primary tool.
       // Moved here from Management & Reports so it's one click away on login.
@@ -81,7 +82,7 @@ const navigationGroups = [
         name: "GitHub",
         href: "/dashboard/github",
         icon: Github,
-        roles: ["leader", "member", "doctor", "ta"],
+        roles: ["leader", "member", "doctor", "ta", "admin"],
       },
       {
         name: "Gamification",
@@ -94,8 +95,10 @@ const navigationGroups = [
   {
     name: "Team & Projects",
     items: [
-      { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin", "doctor", "ta"] },
+      { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin"] },
+      { name: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["doctor", "ta"] },
       { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
+      { name: "SDLC Phases", href: "/dashboard/sdlc", icon: Workflow, roles: ["leader", "member"] },
       { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
       { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
     ],
@@ -107,10 +110,10 @@ const navigationGroups = [
         name: "Calendar",
         href: "/dashboard/calendar",
         icon: Calendar,
-        roles: ["doctor", "ta", "leader", "member"],
+        roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       // Proposals — created by leader, reviewed by doctor only (TA is not in the proposal loop)
-      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["doctor", "leader", "member"] },
+      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["admin", "doctor", "leader", "member"] },
       {
         name: "Submissions",
         href: "/dashboard/submissions",
@@ -125,13 +128,13 @@ const navigationGroups = [
         name: "Meetings",
         href: "/dashboard/meetings",
         icon: Video,
-        roles: ["doctor", "ta", "leader", "member"],
+        roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       {
         name: "Discussions",
         href: "/dashboard/discussions",
         icon: MessageCircle,
-        roles: ["doctor", "ta", "leader", "member"],
+        roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       {
         name: "Chat & Q/A",
@@ -143,7 +146,7 @@ const navigationGroups = [
         name: "Resources",
         href: "/dashboard/resources",
         icon: BookOpen,
-        roles: ["doctor", "ta", "leader", "member"],
+        roles: ["admin", "doctor", "ta", "leader", "member"],
       },
       { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
       // Announcements — supervisors post, everyone reads
@@ -155,9 +158,9 @@ const navigationGroups = [
     items: [
       { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor"] },
       { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
-      // Risks: leaders log them, TAs approve monitoring, supervisors confirm resolution.
-      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "member", "ta", "doctor"] },
-      // Supervision + User Management stay in the Main group as primary workspaces.
+      // Risks — created by leader, approved by doctor (TA is not the risk approver)
+      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "doctor", "admin"] },
+      // (Supervision + User Management moved to the Main group — primary supervisor/admin workspaces.)
       { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
     ],
   },
