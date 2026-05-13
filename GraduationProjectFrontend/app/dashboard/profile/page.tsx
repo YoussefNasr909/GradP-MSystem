@@ -843,7 +843,7 @@ useEffect(() => {
                   </div>
                   <Progress value={myTeam.progress} />
                   <div className="flex -space-x-2">
-                    {myTeam.memberIds.slice(0, 5).map((memberId) => {
+                    {myTeam.memberIds.slice(0, 5).map((memberId: string) => {
                       const member = getUserById(memberId)
                       return member ? (
                         <Avatar key={memberId} className="h-8 w-8 border-2 border-background">

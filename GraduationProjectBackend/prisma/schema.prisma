@@ -1001,6 +1001,10 @@ model TeamGroupMessage {
   conversationId String
   senderId       String
   content        String
+  fileUrl        String?
+  fileName       String?
+  fileSize       Int?
+  fileType       String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

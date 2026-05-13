@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   FileText, Plus, Search, Filter, Clock, CheckCircle2, XCircle, RotateCcw,
-  AlertCircle, Sparkles, ArrowRight, RefreshCw, FileEdit,
+  AlertCircle, Sparkles, ArrowRight, RefreshCw, FileEdit, LockKeyhole, ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -151,6 +151,40 @@ function EmptyLeader() {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+function ProposalWorkflowSummary() {
+  return (
+    <Card className="p-5 border-border/50">
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Professional Flow</h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-4">
+            {["Draft", "Submit", "Doctor Review", "Approved"].map((step, index) => (
+              <div key={step} className="rounded-lg border border-border/60 p-3">
+                <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  {index + 1}
+                </div>
+                <p className="text-sm font-medium">{step}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <LockKeyhole className="h-4 w-4 text-amber-600" />
+            <h3 className="text-sm font-semibold">Approval gate</h3>
+          </div>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Teams can plan while the proposal is under review, but official SDLC submissions, phase advancement, and formal risk approval unlock only after doctor approval.
+          </p>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 export default function ProposalsPage() {
   const { currentUser } = useAuthStore()
   const role = currentUser?.role?.toLowerCase() ?? ""
@@ -250,6 +284,8 @@ export default function ProposalsPage() {
           </div>
         </div>
       </div>
+
+      <ProposalWorkflowSummary />
 
       {/* Stats (supervisor/admin only) */}
       {(isSupervisor || isAdmin) && !loading && (

@@ -18,7 +18,7 @@ export const getTeamGroupConversationMessagesSchema = z.object({
 
 export const sendTeamGroupMessageSchema = z.object({
   body: z.object({
-    content: z.string().trim().max(4000),
+    content: z.string().trim().max(4000).optional().default(""),
   }),
   query: z.any().optional(),
   params: z.object({

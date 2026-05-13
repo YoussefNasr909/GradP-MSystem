@@ -61,7 +61,7 @@ export const updateRiskSchema = z.object({
 
 export const approveRiskSchema = z.object({
   body: z.object({
-    severity: z.enum(RISK_SEVERITY_VALUES),
+    severity: z.enum(RISK_SEVERITY_VALUES).optional(),
     approvalNote: riskNotesSchema,
   }),
   query: z.any().optional(),

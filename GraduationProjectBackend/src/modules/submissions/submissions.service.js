@@ -195,6 +195,64 @@ export function assertPhaseSubmissionGate(phaseSubmissions = [], deliverableType
   }
 }
 
+export function getRequiredDeliverablesForPhase(phase) {
+  return SDLC_PHASE_DELIVERABLES[phase]?.required ?? [];
+}
+
+export function isOptionalEvidenceSubmission(submission = {}) {
+  const title = typeof submission.title === "string" ? submission.title.trim().toLowerCase() : "";
+  return title.startsWith("optional:");
+}
+
+export function isRequiredDeliverableForPhase(deliverableType, phase) {
+  return getRequiredDeliverablesForPhase(phase).includes(deliverableType);
+}
+
+export function shouldEnforcePhaseSubmissionGate({ deliverableType, sdlcPhase, title } = {}) {
+  return isRequiredDeliverableForPhase(deliverableType, sdlcPhase) && !isOptionalEvidenceSubmission({ title });
+}
+
+export function getEarliestIncompleteRequiredPhase(submissions = []) {
+  for (const phase of STAGE_ORDER) {
+    const required = getRequiredDeliverablesForPhase(phase);
+    if (required.length === 0) continue;
+
+    const approvedTypes = new Set(
+      submissions
+        .filter((s) => s.sdlcPhase === phase && s.status === "APPROVED" && !isOptionalEvidenceSubmission(s))
+        .map((s) => s.deliverableType),
+    );
+
+    if (required.some((deliverableType) => !approvedTypes.has(deliverableType))) {
+      return phase;
+    }
+  }
+
+  return STAGE_ORDER[STAGE_ORDER.length - 1];
+}
+
+export function isPhaseUnlockedForSubmission(sdlcPhase, unlockedPhase) {
+  const requestedIndex = STAGE_ORDER.indexOf(sdlcPhase);
+  const unlockedIndex = STAGE_ORDER.indexOf(unlockedPhase);
+
+  return requestedIndex >= 0 && unlockedIndex >= 0 && requestedIndex <= unlockedIndex;
+}
+
+async function assertTeamProposalApproved(teamId) {
+  const proposal = await prisma.proposal.findUnique({
+    where: { teamId },
+    select: { status: true },
+  });
+
+  if (proposal?.status !== "APPROVED") {
+    throw new AppError(
+      "SDLC submissions are locked until the team's proposal is approved by the doctor.",
+      423,
+      "PROPOSAL_APPROVAL_REQUIRED",
+    );
+  }
+}
+
 async function resolveActorTeam(actor) {
   if (actor.role === ROLES.LEADER) {
     return findTeamByLeaderId(actor.id);
@@ -261,7 +319,20 @@ export async function createSubmissionService(actor, payload, file) {
     throw new AppError("You must have a team to submit deliverables.", 403, "NO_TEAM");
   }
 
+  await assertTeamProposalApproved(team.id);
+
   const { deliverableType, sdlcPhase, title, notes, deadline, fileUrl } = payload;
+
+  const teamSubmissions = await listSubmissionsByFilter({ teamIds: [team.id] });
+  const unlockedPhase = getEarliestIncompleteRequiredPhase(teamSubmissions);
+
+  if (!isPhaseUnlockedForSubmission(sdlcPhase, unlockedPhase)) {
+    throw new AppError(
+      `Submissions are locked for "${sdlcPhase}". Complete and receive supervisor approval through "${unlockedPhase}" first.`,
+      423,
+      "SUBMISSION_PHASE_LOCKED",
+    );
+  }
 
   // Validate deliverable belongs to the claimed SDLC phase
   const expectedPhase = DELIVERABLE_TO_PHASE[deliverableType];
@@ -274,7 +345,16 @@ export async function createSubmissionService(actor, payload, file) {
   }
 
   const phaseSubmissions = await listSubmissionsByTeamAndPhase(team.id, sdlcPhase);
-  assertPhaseSubmissionGate(phaseSubmissions, deliverableType, sdlcPhase);
+  if (shouldEnforcePhaseSubmissionGate({ deliverableType, sdlcPhase, title })) {
+    const requiredPhaseSubmissions = phaseSubmissions.filter((submission) =>
+      shouldEnforcePhaseSubmissionGate({
+        deliverableType: submission.deliverableType,
+        sdlcPhase: submission.sdlcPhase,
+        title: submission.title,
+      }),
+    );
+    assertPhaseSubmissionGate(requiredPhaseSubmissions, deliverableType, sdlcPhase);
+  }
 
   const latestVersion = await getLatestVersionForDeliverable(team.id, deliverableType);
   const version = latestVersion + 1;
@@ -799,6 +879,8 @@ export async function advanceStageService(actor, query) {
   if (currentIndex === STAGE_ORDER.length - 1) {
     throw new AppError("Team is already in the final SDLC stage.", 409, "ALREADY_FINAL_STAGE");
   }
+
+  await assertTeamProposalApproved(team.id);
 
   const currentConfig = SDLC_PHASE_DELIVERABLES[team.stage];
   if (currentConfig.required.length > 0) {

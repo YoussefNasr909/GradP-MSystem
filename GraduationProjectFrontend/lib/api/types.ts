@@ -956,6 +956,7 @@ export type ApiChatRelation =
   | "TEAM_DOCTOR"
   | "TEAM_TA"
   | "SUPERVISED_TEAM_LEADER"
+  | "ADMIN_DIRECT"
   | "STUDENT_PEER"
   | "STAFF_PEER"
 
@@ -1061,6 +1062,10 @@ export type ApiTeamGroupChatMessage = {
   id: string
   conversationId: string
   content: string
+  fileUrl: string | null
+  fileName: string | null
+  fileSize: number | null
+  fileType: string | null
   senderId: string
   sender: ApiChatUser
   createdAt: string
@@ -1106,6 +1111,8 @@ export type ApiRiskSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
 export type ApiRisk = {
   id: string
   team: ApiChatTeamSummary
+  proposalStatus: "DRAFT" | "SUBMITTED" | "UNDER_REVIEW" | "REVISION_REQUESTED" | "APPROVED" | "REJECTED" | null
+  isPreliminary: boolean
   title: string
   description: string
   category: string
