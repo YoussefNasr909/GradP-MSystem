@@ -94,7 +94,8 @@ const navigationGroups = [
   {
     name: "Team & Projects",
     items: [
-      { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin", "doctor", "ta"] },
+      { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin"] },
+      { name: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["doctor", "ta"] },
       { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
       { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
       { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
@@ -117,8 +118,10 @@ const navigationGroups = [
         icon: Upload,
         roles: ["leader", "member", "doctor", "ta"],
       },
-      // Review Work — TA-only (their main job: first-pass review of tasks/PRs)
-      { name: "Review Work", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta"] },
+      // Review Tasks — TA and Leader both review submitted task work.
+      // Either approval moves the task forward; supplementary reviews
+      // from the other reviewer still get recorded for the audit trail.
+      { name: "Review Tasks", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta", "leader", "admin"] },
       // Grades Overview (formerly Evaluations) — admin + doctor only (final grade owner)
       { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
       {

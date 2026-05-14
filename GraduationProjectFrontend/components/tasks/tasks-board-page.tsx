@@ -4,22 +4,28 @@ import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   Clock,
   ExternalLink,
+  FileText,
   FolderGit2,
   GitBranch,
   GitPullRequest,
   LayoutGrid,
+  Link2,
   List,
   Loader2,
+  Paperclip,
   Plus,
   RefreshCw,
   Search,
   Target,
+  Trash2,
+  Upload,
   UserCheck,
   UserRound,
 } from "lucide-react"
@@ -29,7 +35,7 @@ import { useAuthStore } from "@/lib/stores/auth-store"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { tasksApi } from "@/lib/api/tasks"
 import { teamsApi } from "@/lib/api/teams"
-import type { ApiTask, ApiTaskIntegrationMode, ApiTaskPriority, ApiTaskStatus, ApiTaskType, ApiTeamMember, ApiTeamSummary } from "@/lib/api/types"
+import type { ApiTask, ApiTaskIntegrationMode, ApiTaskPriority, ApiTaskStatus, ApiTaskSubmissionEvidence, ApiTaskType, ApiTeamMember, ApiTeamSummary } from "@/lib/api/types"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -127,6 +133,11 @@ const TASK_COLUMNS: Array<{ status: ApiTaskStatus; label: string; color: string 
   { status: "DONE", label: "Done", color: "bg-emerald-500" },
 ]
 
+/** Minimum length for a "Request Resubmission" comment. Mirrors the backend
+ *  guard in tasks.service.js (TASK_REVIEW_COMMENT_REQUIRED) and the reviews
+ *  page constant — keep these in sync if you change one. */
+const RESUBMISSION_MIN_LENGTH = 10
+
 function defaultIntegrationModeForTaskType(taskType: ApiTaskType) {
   return GITHUB_DEFAULT_TASK_TYPES.has(taskType) ? "GITHUB" : "MANUAL"
 }
@@ -153,6 +164,13 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return "Not available"
   return date.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+}
+
+function formatFileSize(value?: number | null) {
+  if (!value || value <= 0) return "Unknown size"
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function formatDateRange(task: ApiTask) {
@@ -230,8 +248,18 @@ function buildEditableDraft(task: ApiTask): TaskFormState {
 }
 
 function getTaskNextStep(task: ApiTask, currentUserId?: string | null) {
+  const isResubmissionRequested = task.reviewDecision === "CHANGES_REQUESTED"
+
   if (task.status === "DONE") {
-    return { title: "Task completed", description: "No additional action is required unless the task is edited or reopened by the leader." }
+    return { title: "Task completed", description: "No additional action is required unless the task is edited or reopened by the team leader." }
+  }
+  if (isResubmissionRequested && task.status === "TODO") {
+    return {
+      title: "Resubmission requested",
+      description: task.assignee?.id === currentUserId
+        ? "Accept the task again, address the TA note, then submit it for another review."
+        : `${task.assignee?.fullName || "The assignee"} needs to restart the task and address the TA note before resubmitting.`,
+    }
   }
   if (task.awaitingAcceptance) {
     return {
@@ -242,19 +270,33 @@ function getTaskNextStep(task: ApiTask, currentUserId?: string | null) {
     }
   }
   if (task.status === "IN_PROGRESS") {
+    if (isResubmissionRequested) {
+      return {
+        title: task.assignee?.id === currentUserId ? "Address TA feedback and resubmit" : "Resubmission is in progress",
+        description: task.assignee?.id === currentUserId
+          ? "Use the TA review note below as the checklist for your next submission."
+          : `${task.assignee?.fullName || "The assignee"} is updating the work after TA feedback.`,
+      }
+    }
+    if (task.integrationMode === "MANUAL" && task.assignee?.id === currentUserId && !task.manualReviewGate?.ready) {
+      return {
+        title: "Attach evidence before review",
+        description: "Add at least one file or link below. Then you can send the manual task to TA review.",
+      }
+    }
     return {
       title: task.assignee?.id === currentUserId ? "Finish the work and submit it" : "Work is in progress",
       description: task.integrationMode === "GITHUB"
         ? "Make sure the issue, branch, pull request, and at least one commit are linked before submitting for review."
-        : "Once the work is complete, send it to the leader for review.",
+        : "Attach evidence, then send the completed work to the TA for review.",
     }
   }
   if (task.status === "REVIEW") {
     return {
-      title: "Leader review is pending",
+      title: "TA review is pending",
       description: task.permissions.canApprove || task.permissions.canReject
-        ? "You can approve the task or send it back with requested changes."
-        : "The task is waiting for the team leader to review the submission.",
+        ? "You can approve the task or request a resubmission with a clear reason."
+        : "The task is waiting for the assigned TA to review the submission.",
     }
   }
   if (task.status === "APPROVED") {
@@ -301,7 +343,9 @@ function buildWorkflowConfirmation(task: ApiTask, action: TaskWorkflowAction) {
     case "accept": return { title: "Accept this task?", description: "This confirms ownership and moves the task from To Do into In Progress.", actionLabel: "Accept task" }
     case "submit": return {
       title: "Submit for review?",
-      description: task.integrationMode === "GITHUB" ? "This will send the task to leader review using the linked GitHub evidence." : "This will send the task to the leader for review.",
+      description: task.integrationMode === "GITHUB"
+        ? "This will send the task to TA review using the linked GitHub evidence."
+        : "This will lock the current manual evidence and send the task to TA review.",
       actionLabel: "Submit for review",
     }
     case "approve": return {
@@ -309,7 +353,7 @@ function buildWorkflowConfirmation(task: ApiTask, action: TaskWorkflowAction) {
       description: task.integrationMode === "GITHUB" ? "Approve the task and optionally keep it in Approved until the pull request is merged." : "Approve the task and move it to Done.",
       actionLabel: "Approve task",
     }
-    case "reject": default: return { title: "Request changes?", description: "This will move the task back to In Progress and keep your review notes attached.", actionLabel: "Request changes" }
+    case "reject": default: return { title: "Request resubmission?", description: "This will move the task back to To Do and keep your TA review reason attached for the student.", actionLabel: "Request resubmission" }
   }
 }
 
@@ -380,6 +424,12 @@ export function TasksBoardPage() {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSavingTask, setIsSavingTask] = useState(false)
   const [taskActionInFlight, setTaskActionInFlight] = useState("")
+  const [taskEvidence, setTaskEvidence] = useState<ApiTaskSubmissionEvidence[]>([])
+  const [isLoadingEvidence, setIsLoadingEvidence] = useState(false)
+  const [evidenceTitle, setEvidenceTitle] = useState("")
+  const [evidenceUrl, setEvidenceUrl] = useState("")
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null)
+  const [evidenceActionInFlight, setEvidenceActionInFlight] = useState("")
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
   const requestedTaskId = searchParams.get("taskId")
@@ -425,6 +475,23 @@ export function TasksBoardPage() {
     }
   }
 
+  async function refreshTaskEvidence(taskId: string, mode: ApiTaskIntegrationMode) {
+    if (mode !== "MANUAL") {
+      setTaskEvidence([])
+      return
+    }
+
+    setIsLoadingEvidence(true)
+    try {
+      setTaskEvidence(await tasksApi.listEvidence(taskId))
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't load task evidence.")
+      setTaskEvidence([])
+    } finally {
+      setIsLoadingEvidence(false)
+    }
+  }
+
   const activeTeamId = requestedTeamId ?? fallbackTeam?.id ?? team?.id
 
   useEffect(() => {
@@ -456,12 +523,20 @@ export function TasksBoardPage() {
       setMergeOnApprove(false)
       setPendingWorkflowAction(null)
       setDetailTab("overview")
+      setTaskEvidence([])
+      setEvidenceTitle("")
+      setEvidenceUrl("")
+      setEvidenceFile(null)
       return
     }
     setDetailDraft(buildEditableDraft(selectedTask))
     setReviewCommentDraft(selectedTask.reviewComment ?? selectedTask.reviewFeedback ?? "")
     setMergeOnApprove(false)
     setDetailTab("overview")
+    setEvidenceTitle("")
+    setEvidenceUrl("")
+    setEvidenceFile(null)
+    void refreshTaskEvidence(selectedTask.id, selectedTask.integrationMode)
   }, [selectedTask?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredTasks = useMemo(() => {
@@ -495,8 +570,14 @@ export function TasksBoardPage() {
 
   function requestTaskWorkflowAction(action: TaskWorkflowAction) {
     if (!selectedTask) return
-    if (action === "reject" && !reviewCommentDraft.trim()) {
-      toast.error("Add review comments before requesting changes.")
+    if (action === "reject" && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH) {
+      toast.error(
+        `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
+      )
+      return
+    }
+    if (action === "submit" && selectedTask.integrationMode === "MANUAL" && !selectedTask.manualReviewGate?.ready) {
+      toast.error("Add at least one file or link before submitting this manual task.")
       return
     }
     setPendingWorkflowAction(action)
@@ -560,13 +641,22 @@ export function TasksBoardPage() {
 
   async function handleTaskWorkflowAction(action: TaskWorkflowAction) {
     if (!selectedTask) return
-    if (action === "reject" && !reviewCommentDraft.trim()) { toast.error("Add review comments before requesting changes."); return }
+    if (action === "reject" && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH) {
+      toast.error(
+        `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
+      )
+      return
+    }
+    if (action === "submit" && selectedTask.integrationMode === "MANUAL" && !selectedTask.manualReviewGate?.ready) {
+      toast.error("Add at least one file or link before submitting this manual task.")
+      return
+    }
     setTaskActionInFlight(action)
     try {
       if (action === "accept") { await tasksApi.accept(selectedTask.id); toast.success("Task accepted and moved to In Progress.") }
       if (action === "submit") {
         await tasksApi.submitForReview(selectedTask.id)
-        toast.success(selectedTask.integrationMode === "GITHUB" ? "Task sent to review. The leader can now inspect the linked PR and commits." : "Task sent to review.")
+        toast.success(selectedTask.integrationMode === "GITHUB" ? "Task sent to TA review with the linked PR and commits." : "Manual evidence locked and sent to TA review.")
       }
       if (action === "approve") {
         await tasksApi.approve(selectedTask.id, { reviewComment: reviewCommentDraft.trim() || undefined, mergePullRequest: selectedTask.integrationMode === "GITHUB" ? mergeOnApprove : undefined })
@@ -574,13 +664,74 @@ export function TasksBoardPage() {
       }
       if (action === "reject") {
         await tasksApi.reject(selectedTask.id, { reviewComment: reviewCommentDraft.trim() })
-        toast.success("Task sent back to In Progress with review notes.")
+        toast.success("Resubmission requested. The task moved back to To Do with your TA note.")
       }
       await refreshTasks()
+      if (selectedTask.integrationMode === "MANUAL") {
+        await refreshTaskEvidence(selectedTask.id, selectedTask.integrationMode)
+      }
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Couldn't update the task workflow.")
     } finally {
       setTaskActionInFlight("")
+    }
+  }
+
+  async function handleAddEvidenceLink() {
+    if (!selectedTask) return
+    const url = evidenceUrl.trim()
+    if (!url) { toast.error("Add an evidence link first."); return }
+    setEvidenceActionInFlight("link")
+    try {
+      await tasksApi.addEvidenceLink(selectedTask.id, {
+        title: evidenceTitle.trim() || undefined,
+        url,
+      })
+      toast.success("Evidence link added.")
+      setEvidenceTitle("")
+      setEvidenceUrl("")
+      await refreshTaskEvidence(selectedTask.id, selectedTask.integrationMode)
+      await refreshTasks()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't add evidence link.")
+    } finally {
+      setEvidenceActionInFlight("")
+    }
+  }
+
+  async function handleUploadEvidenceFile() {
+    if (!selectedTask) return
+    if (!evidenceFile) { toast.error("Choose an evidence file first."); return }
+    setEvidenceActionInFlight("file")
+    try {
+      const formData = new FormData()
+      formData.append("file", evidenceFile)
+      if (evidenceTitle.trim()) formData.append("title", evidenceTitle.trim())
+      await tasksApi.uploadEvidenceFile(selectedTask.id, formData)
+      toast.success("Evidence file uploaded.")
+      setEvidenceTitle("")
+      setEvidenceFile(null)
+      await refreshTaskEvidence(selectedTask.id, selectedTask.integrationMode)
+      await refreshTasks()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't upload evidence file.")
+    } finally {
+      setEvidenceActionInFlight("")
+    }
+  }
+
+  async function handleDeleteEvidence(evidence: ApiTaskSubmissionEvidence) {
+    if (!selectedTask) return
+    setEvidenceActionInFlight(evidence.id)
+    try {
+      await tasksApi.deleteEvidence(selectedTask.id, evidence.id)
+      toast.success("Evidence removed.")
+      await refreshTaskEvidence(selectedTask.id, selectedTask.integrationMode)
+      await refreshTasks()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't remove evidence.")
+    } finally {
+      setEvidenceActionInFlight("")
     }
   }
 
@@ -695,7 +846,7 @@ export function TasksBoardPage() {
 
   if (supportNeedsTeamState && teamStateError) {
     return (
-      <TeamRequiredGuard pageName="Tasks & Boards" pageDescription="Manage your team's tasks, GitHub-backed work, and leader review flow in one place." icon={<ClipboardList className="h-10 w-10 text-primary" />}>
+      <TeamRequiredGuard pageName="Tasks & Boards" pageDescription="Manage your team's tasks, GitHub-backed work, and TA review flow in one place." icon={<ClipboardList className="h-10 w-10 text-primary" />}>
         <div className="rounded-[20px] border border-destructive/30 bg-destructive/[0.04] p-6">
           <h2 className="text-lg font-semibold text-destructive">Could not load your supervised teams</h2>
           <p className="mt-1 text-sm text-muted-foreground">{teamStateError}</p>
@@ -711,7 +862,7 @@ export function TasksBoardPage() {
   return (
     <TeamRequiredGuard
       pageName="Tasks & Boards"
-      pageDescription="Manage your team's tasks, GitHub-backed work, and leader review flow in one place."
+      pageDescription="Manage your team's tasks, GitHub-backed work, and TA review flow in one place."
       icon={<ClipboardList className="h-10 w-10 text-primary" />}
     >
       <div className="space-y-4 sm:space-y-5">
@@ -730,9 +881,9 @@ export function TasksBoardPage() {
                 <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tasks & Board</h1>
                 <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
                   {isLeader
-                    ? "Create tasks, assign work, connect to GitHub, and approve submissions when ready."
+                    ? "Create tasks, assign work, connect to GitHub, and track TA review decisions."
                     : isMember
-                      ? "Accept assigned tasks, track progress, link GitHub work, and submit for leader review."
+                      ? "Accept assigned tasks, track progress, link GitHub work, and submit for TA review."
                       : "Inspect team tasks, review progress, and track GitHub-backed work."}
                 </p>
               </div>
@@ -1098,10 +1249,24 @@ export function TasksBoardPage() {
             {selectedTask && detailDraft && (() => {
               const timeline = buildWorkflowTimeline(selectedTask)
               const reviewDecision = getReviewDecisionMeta(selectedTask.reviewDecision)
+              const hasReviewRecord = Boolean(selectedTask.reviewedAt || selectedTask.reviewFeedback || selectedTask.reviewDecision)
+              const isResubmissionRequested = selectedTask.reviewDecision === "CHANGES_REQUESTED"
               const nextStep = getTaskNextStep(selectedTask, currentUser?.id)
               const hasGithub = Boolean(selectedTask.github)
+              const isManualTask = selectedTask.integrationMode === "MANUAL"
               const githubReady = selectedTask.github?.reviewGate?.ready
               const canEdit = selectedTask.permissions.canEdit && selectedTask.origin === "GPMS"
+              const draftEvidence = taskEvidence.filter((item) => !item.submittedAt)
+              const submittedEvidence = taskEvidence.filter((item) => item.submittedAt)
+              const canAddManualEvidence =
+                isManualTask &&
+                selectedTask.origin === "GPMS" &&
+                selectedTask.status === "IN_PROGRESS" &&
+                selectedTask.assignee?.id === currentUser?.id
+              const needsManualEvidence =
+                canAddManualEvidence &&
+                !selectedTask.manualReviewGate?.ready
+              const showSubmitAction = selectedTask.permissions.canSubmitForReview || needsManualEvidence
 
               const tabs: Array<{ value: DetailTab; label: string; dot?: boolean }> = [
                 { value: "overview", label: "Overview" },
@@ -1245,31 +1410,302 @@ export function TasksBoardPage() {
                         ))}
                       </div>
 
-                      {/* Review feedback */}
-                      {selectedTask.reviewFeedback && (
-                        <div className="rounded-[16px] border border-amber-500/20 bg-amber-500/[0.05] p-4">
-                          <div className="mb-2 flex items-center gap-2">
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">Review note</p>
-                            {reviewDecision && (
-                              <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium", reviewDecision.className)}>
-                                {reviewDecision.label}
-                              </span>
-                            )}
+                      {isManualTask && (
+                        <div className={cn(
+                          "space-y-4 rounded-[16px] border p-4",
+                          needsManualEvidence ? "border-amber-500/25 bg-amber-500/[0.05]" : "border-border/60 bg-muted/10",
+                        )}>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <Paperclip className="h-4 w-4 text-primary" />
+                                <p className="text-sm font-semibold">Manual submission evidence</p>
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                Files and links here are attached to this task. Draft evidence locks when you submit for TA review.
+                              </p>
+                            </div>
+                            <Badge variant={selectedTask.manualReviewGate?.ready ? "secondary" : "outline"} className="rounded-full">
+                              {selectedTask.manualReviewGate?.ready ? `${draftEvidence.length} ready` : "Evidence needed"}
+                            </Badge>
                           </div>
-                          <p className="text-sm leading-6 text-muted-foreground">{selectedTask.reviewFeedback}</p>
+
+                          {canAddManualEvidence && (
+                            <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
+                              <Input
+                                value={evidenceTitle}
+                                onChange={(event) => setEvidenceTitle(event.target.value)}
+                                placeholder="Evidence title, optional"
+                                className="rounded-xl"
+                              />
+                              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                <Input
+                                  value={evidenceUrl}
+                                  onChange={(event) => setEvidenceUrl(event.target.value)}
+                                  placeholder="https://figma.com/file/... or https://drive.google.com/..."
+                                  className="rounded-xl"
+                                />
+                                <Button
+                                  variant="outline"
+                                  className="gap-1.5 rounded-xl bg-transparent"
+                                  onClick={() => void handleAddEvidenceLink()}
+                                  disabled={evidenceActionInFlight !== "" || !evidenceUrl.trim()}
+                                >
+                                  {evidenceActionInFlight === "link" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                                  Add Link
+                                </Button>
+                              </div>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-border/70 bg-background px-4 text-sm font-medium transition-colors hover:bg-muted">
+                                  <Upload className="h-4 w-4" />
+                                  Choose File
+                                  <input
+                                    type="file"
+                                    className="sr-only"
+                                    accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt,.png,.jpg,.jpeg,.webp"
+                                    onChange={(event) => setEvidenceFile(event.target.files?.[0] ?? null)}
+                                  />
+                                </label>
+                                <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                                  {evidenceFile ? `${evidenceFile.name} - ${formatFileSize(evidenceFile.size)}` : "PDF, Office files, ZIP, TXT, PNG, JPG, or WEBP"}
+                                </p>
+                                <Button
+                                  className="rounded-xl"
+                                  onClick={() => void handleUploadEvidenceFile()}
+                                  disabled={evidenceActionInFlight !== "" || !evidenceFile}
+                                >
+                                  {evidenceActionInFlight === "file" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                  Upload
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {needsManualEvidence && (
+                            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-200">
+                              Add at least one new draft file or link before submitting this manual task for TA review.
+                            </div>
+                          )}
+
+                          {isLoadingEvidence ? (
+                            <p className="text-sm text-muted-foreground">Loading evidence...</p>
+                          ) : taskEvidence.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-border/70 px-4 py-5 text-center">
+                              <FileText className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+                              <p className="text-sm font-medium">No evidence attached yet</p>
+                              <p className="mt-1 text-xs text-muted-foreground">Manual tasks need at least one file or link before TA review.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {[
+                                { label: "Draft evidence", items: draftEvidence },
+                                { label: "Submitted evidence", items: submittedEvidence },
+                              ].filter((group) => group.items.length > 0).map((group) => (
+                                <div key={group.label} className="space-y-2">
+                                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group.label}</p>
+                                  <div className="space-y-2">
+                                    {group.items.map((item) => (
+                                      <div key={item.id} className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-2">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                          {item.type === "LINK" ? <Link2 className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <a href={item.url} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium hover:text-primary hover:underline">
+                                            {item.title}
+                                          </a>
+                                          <p className="truncate text-xs text-muted-foreground">
+                                            {item.type === "FILE" ? `${item.fileName || "File"} - ${formatFileSize(item.fileSize)}` : item.url}
+                                          </p>
+                                        </div>
+                                        {item.submittedAt ? (
+                                          <Badge variant="secondary" className="hidden text-[10px] sm:inline-flex">Locked</Badge>
+                                        ) : canAddManualEvidence && item.uploadedBy?.id === currentUser?.id ? (
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 rounded-lg p-0 text-muted-foreground hover:text-destructive"
+                                            onClick={() => void handleDeleteEvidence(item)}
+                                            disabled={evidenceActionInFlight !== ""}
+                                            title="Remove evidence"
+                                          >
+                                            {evidenceActionInFlight === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Leader review form */}
-                      {(selectedTask.permissions.canApprove || selectedTask.permissions.canReject) && (
+                      {/* Review timeline — every review (Leader + TA) on this task.
+                          Fallback to the legacy single-field block if no rows yet. */}
+                      {Array.isArray(selectedTask.reviews) && selectedTask.reviews.length > 0 ? (
+                        <div className="rounded-[16px] border border-border/60 bg-card/40 p-4">
+                          <div className="mb-3 flex items-center justify-between">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                              Reviews ({selectedTask.reviews.length})
+                            </p>
+                            <span className="text-[10px] text-muted-foreground/70">Newest first</span>
+                          </div>
+                          <div className="space-y-2.5">
+                            {selectedTask.reviews.map((review) => {
+                              const isApproved = review.decision === "APPROVED"
+                              const roleLabel =
+                                review.reviewerRole === "LEADER"
+                                  ? "Team Leader"
+                                  : review.reviewerRole === "TA"
+                                    ? "TA"
+                                    : "Admin"
+                              return (
+                                <div
+                                  key={review.id}
+                                  className={cn(
+                                    "rounded-[14px] border px-3 py-3",
+                                    isApproved
+                                      ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+                                      : "border-amber-500/25 bg-amber-500/[0.05]",
+                                  )}
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-semibold">
+                                        {review.reviewer?.fullName || "Reviewer"}
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "rounded-full border-0 px-2 py-0 text-[10px]",
+                                          review.reviewerRole === "LEADER"
+                                            ? "bg-violet-500/15 text-violet-700 dark:text-violet-400"
+                                            : review.reviewerRole === "TA"
+                                              ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400"
+                                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+                                        )}
+                                      >
+                                        {roleLabel}
+                                      </Badge>
+                                    </div>
+                                    <span
+                                      className={cn(
+                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                        isApproved
+                                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                                          : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                                      )}
+                                    >
+                                      {isApproved ? "Approved" : "Resubmission requested"}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-[11px] text-muted-foreground">{formatDateTime(review.createdAt)}</p>
+                                  {review.comment ? (
+                                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{review.comment}</p>
+                                  ) : (
+                                    <p className="mt-2 text-xs italic text-muted-foreground/70">No written note.</p>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        hasReviewRecord && (
+                          <div className={cn(
+                            "rounded-[16px] border p-4",
+                            isResubmissionRequested
+                              ? "border-amber-500/25 bg-amber-500/[0.06]"
+                              : "border-emerald-500/20 bg-emerald-500/[0.05]",
+                          )}>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <p className={cn(
+                                "text-xs font-semibold uppercase tracking-[0.14em]",
+                                isResubmissionRequested ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400",
+                              )}>
+                                {isResubmissionRequested ? "Resubmission requested" : "Task reviewed"}
+                              </p>
+                              {reviewDecision && (
+                                <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium", reviewDecision.className)}>
+                                  {reviewDecision.label}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                              <span>Reviewed by {selectedTask.reviewedBy?.fullName || "Reviewer"}</span>
+                              <span>{formatDateTime(selectedTask.reviewedAt)}</span>
+                            </div>
+                            {selectedTask.reviewFeedback ? (
+                              <p className="mt-3 text-sm leading-6 text-muted-foreground">{selectedTask.reviewFeedback}</p>
+                            ) : (
+                              <p className="mt-3 text-sm leading-6 text-muted-foreground">No written note was added.</p>
+                            )}
+                          </div>
+                        )
+                      )}
+
+                      {/* Reviewer form — visible to both team leader and TA */}
+                      {(selectedTask.permissions.canApprove || selectedTask.permissions.canReject) && (() => {
+                        const actorRoleLabel =
+                          selectedTask.actorReviewerRole === "LEADER"
+                            ? "Team Leader"
+                            : selectedTask.actorReviewerRole === "TA"
+                              ? "TA"
+                              : selectedTask.actorReviewerRole === "ADMIN"
+                                ? "Admin"
+                                : "Reviewer"
+                        const isSupplementary = selectedTask.status !== "REVIEW"
+                        return (
                         <div className="space-y-3 rounded-[16px] border border-border/60 bg-muted/10 p-4">
                           <div>
-                            <p className="text-sm font-semibold">Leader Review</p>
-                            <p className="text-xs text-muted-foreground">Your comment stays attached. Requesting changes moves the task back to In Progress.</p>
+                            <p className="text-sm font-semibold">{actorRoleLabel} Review</p>
+                            <p className="text-xs text-muted-foreground">
+                              {isSupplementary
+                                ? "This task was already closed by another reviewer. Your follow-up review is recorded but won't change the task status."
+                                : "Your comment stays attached. Requesting resubmission moves the task back to To Do."}
+                            </p>
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="task-review-comment" className="text-xs">Review Comment</Label>
-                            <Textarea id="task-review-comment" value={reviewCommentDraft} onChange={(e) => setReviewCommentDraft(e.target.value)} placeholder="Add approval notes or explain what needs to change" className="resize-none rounded-xl" rows={3} />
+                            <div className="flex items-center justify-between gap-2">
+                              <Label htmlFor="task-review-comment" className="text-xs">
+                                Review Comment
+                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                                  (required for Request Resubmission)
+                                </span>
+                              </Label>
+                              <span
+                                className={cn(
+                                  "text-[10px] tabular-nums",
+                                  reviewCommentDraft.trim().length >= RESUBMISSION_MIN_LENGTH
+                                    ? "text-muted-foreground/70"
+                                    : "text-amber-600 dark:text-amber-400",
+                                )}
+                              >
+                                {reviewCommentDraft.trim().length} / {RESUBMISSION_MIN_LENGTH} min for resubmission
+                              </span>
+                            </div>
+                            <Textarea
+                              id="task-review-comment"
+                              value={reviewCommentDraft}
+                              onChange={(e) => setReviewCommentDraft(e.target.value)}
+                              placeholder="Approval note (optional), or the exact reason the student must resubmit (required)"
+                              className={cn(
+                                "resize-none rounded-xl transition-colors",
+                                reviewCommentDraft.trim().length > 0 &&
+                                  reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH
+                                  ? "border-amber-500/50 focus-visible:ring-amber-500/30"
+                                  : "",
+                              )}
+                              rows={3}
+                            />
+                            {reviewCommentDraft.trim().length > 0 &&
+                            reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH ? (
+                              <p className="flex items-center gap-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                                <AlertCircle className="h-3 w-3" />
+                                Resubmission needs at least {RESUBMISSION_MIN_LENGTH} characters so the student knows what to fix.
+                              </p>
+                            ) : null}
                           </div>
                           {selectedTask.integrationMode === "GITHUB" && selectedTask.github?.pullRequest?.number && (
                             <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-3">
@@ -1281,7 +1717,8 @@ export function TasksBoardPage() {
                             </label>
                           )}
                         </div>
-                      )}
+                        )
+                      })()}
                     </div>
 
                     {/* ── GitHub tab ── */}
@@ -1509,8 +1946,13 @@ export function TasksBoardPage() {
                           Accept & Start
                         </Button>
                       )}
-                      {selectedTask.permissions.canSubmitForReview && (
-                        <Button className="h-9 rounded-xl" onClick={() => requestTaskWorkflowAction("submit")} disabled={taskActionInFlight !== ""}>
+                      {showSubmitAction && (
+                        <Button
+                          className="h-9 rounded-xl"
+                          onClick={() => requestTaskWorkflowAction("submit")}
+                          disabled={taskActionInFlight !== "" || needsManualEvidence}
+                          title={needsManualEvidence ? "Add at least one file or link before submitting" : undefined}
+                        >
                           {taskActionInFlight === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit for Review"}
                         </Button>
                       )}
@@ -1519,11 +1961,24 @@ export function TasksBoardPage() {
                           {taskActionInFlight === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
                         </Button>
                       )}
-                      {selectedTask.permissions.canReject && (
-                        <Button variant="outline" className="h-9 rounded-xl border-destructive/30 bg-transparent text-destructive hover:bg-destructive/5" onClick={() => requestTaskWorkflowAction("reject")} disabled={taskActionInFlight !== ""}>
-                          {taskActionInFlight === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Changes"}
-                        </Button>
-                      )}
+                      {selectedTask.permissions.canReject && (() => {
+                        const commentTooShort = reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH
+                        return (
+                          <Button
+                            variant="outline"
+                            className="h-9 rounded-xl border-destructive/30 bg-transparent text-destructive hover:bg-destructive/5 disabled:opacity-50"
+                            onClick={() => requestTaskWorkflowAction("reject")}
+                            disabled={taskActionInFlight !== "" || commentTooShort}
+                            title={
+                              commentTooShort
+                                ? `Add at least ${RESUBMISSION_MIN_LENGTH} characters to the review comment first`
+                                : undefined
+                            }
+                          >
+                            {taskActionInFlight === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Resubmission"}
+                          </Button>
+                        )
+                      })()}
                     </div>
                     <Button variant="ghost" className="h-9 rounded-xl" onClick={() => setSelectedTaskId(null)}>Close</Button>
                   </div>

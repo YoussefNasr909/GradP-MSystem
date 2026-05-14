@@ -3,7 +3,9 @@ import type {
   ApiTask,
   ApiTaskIntegrationMode,
   ApiTaskPriority,
+  ApiTaskReview,
   ApiTaskStatus,
+  ApiTaskSubmissionEvidence,
   ApiTaskType,
 } from "./types"
 
@@ -48,6 +50,11 @@ type OpenTaskPullRequestPayload = {
   reviewerLogins?: string[]
 }
 
+type AddTaskEvidenceLinkPayload = {
+  title?: string
+  url: string
+}
+
 function buildTasksQuery(params: ListTasksParams = {}) {
   const searchParams = new URLSearchParams()
 
@@ -74,6 +81,22 @@ export const tasksApi = {
       method: "PATCH",
       body: payload,
     }),
+  listEvidence: (id: string) =>
+    apiRequest<ApiTaskSubmissionEvidence[]>(`/tasks/${id}/evidence`),
+  uploadEvidenceFile: (id: string, payload: FormData) =>
+    apiRequest<ApiTaskSubmissionEvidence>(`/tasks/${id}/evidence/file`, {
+      method: "POST",
+      body: payload,
+    }),
+  addEvidenceLink: (id: string, payload: AddTaskEvidenceLinkPayload) =>
+    apiRequest<ApiTaskSubmissionEvidence>(`/tasks/${id}/evidence/link`, {
+      method: "POST",
+      body: payload,
+    }),
+  deleteEvidence: (id: string, evidenceId: string) =>
+    apiRequest<ApiTaskSubmissionEvidence>(`/tasks/${id}/evidence/${evidenceId}`, {
+      method: "DELETE",
+    }),
   accept: (id: string) =>
     apiRequest<ApiTask>(`/tasks/${id}/accept`, {
       method: "POST",
@@ -92,6 +115,7 @@ export const tasksApi = {
       method: "POST",
       body: payload,
     }),
+  listReviews: (id: string) => apiRequest<ApiTaskReview[]>(`/tasks/${id}/reviews`),
   bootstrapGithub: (id: string) =>
     apiRequest<ApiTask>(`/tasks/${id}/github/bootstrap`, {
       method: "POST",

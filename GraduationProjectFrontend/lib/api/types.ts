@@ -203,6 +203,20 @@ export type ApiTaskOrigin = "GPMS" | "GITHUB_IMPORT"
 
 export type ApiTaskReviewDecision = "APPROVED" | "CHANGES_REQUESTED"
 
+export type ApiTaskReviewerRole = "LEADER" | "TA" | "ADMIN"
+
+/** A single review action recorded on a task. Both the team Leader and the
+ *  team TA can each leave their own review on the same task — the first
+ *  APPROVED closes the task, subsequent reviews are supplementary. */
+export type ApiTaskReview = {
+  id: string
+  reviewerRole: ApiTaskReviewerRole
+  decision: ApiTaskReviewDecision
+  comment: string | null
+  createdAt: string | null
+  reviewer: ApiTeamUser | null
+}
+
 export type ApiTaskGitHubReviewGate = {
   ready: boolean
   hasIssue: boolean
@@ -210,6 +224,29 @@ export type ApiTaskGitHubReviewGate = {
   hasOpenPullRequest: boolean
   hasCommits: boolean
   missing: string[]
+}
+
+export type ApiTaskManualReviewGate = {
+  ready: boolean
+  draftEvidenceCount: number
+  submittedEvidenceCount: number
+  missing: string[]
+}
+
+export type ApiTaskSubmissionEvidence = {
+  id: string
+  taskId: string
+  teamId: string
+  type: "FILE" | "LINK"
+  title: string
+  url: string
+  fileName: string | null
+  fileSize: number | null
+  fileType: string | null
+  uploadedBy: ApiTeamUser | null
+  submittedAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export type ApiTaskGitHubState = {
@@ -291,6 +328,12 @@ export type ApiTask = {
   awaitingAcceptance: boolean
   isPastEndDate: boolean
   github: ApiTaskGitHubState | null
+  manualReviewGate: ApiTaskManualReviewGate | null
+  /** The current actor's reviewer role on this task's team — LEADER, TA, ADMIN
+   *  or null if they aren't a reviewer. Used by the UI to label review actions. */
+  actorReviewerRole: ApiTaskReviewerRole | null
+  /** Full review timeline, newest first. Both Leader and TA reviews live here. */
+  reviews: ApiTaskReview[]
   permissions: {
     canAccept: boolean
     canSubmitForReview: boolean

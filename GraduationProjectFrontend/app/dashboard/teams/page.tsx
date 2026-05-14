@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation"
 import { motion, useReducedMotion } from "framer-motion"
 import {
   ArrowRight,
-  Briefcase,
   Check,
   CheckCircle2,
   Crown,
@@ -59,6 +58,7 @@ export default function TeamsPage() {
   const [availability, setAvailability] = useState<"all" | "open" | "full">("all")
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [selectedTeam, setSelectedTeam] = useState<ApiTeamSummary | null>(null)
@@ -70,20 +70,22 @@ export default function TeamsPage() {
   const deferredSearch = useDeferredValue(search)
   const isLeader = currentUser?.role === "leader"
   const isStudent = currentUser?.role === "member"
-  const isSupportRole = currentUser?.role === "doctor" || currentUser?.role === "ta" || currentUser?.role === "admin"
+  const isSupervisorRole = currentUser?.role === "doctor" || currentUser?.role === "ta"
+  const isAdmin = currentUser?.role === "admin"
+  const isSupportRole = isSupervisorRole || isAdmin
   const hasTeam = Boolean(myTeamState?.team)
-
-  const [viewMode, setViewMode] = useState<"all" | "supervised">(isSupportRole ? "supervised" : "all")
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  const pageSize = isSupportRole ? 8 : 9
 
   const loadTeams = async () => {
     const result = await teamsApi.list({
       page,
-      limit: 9,
+      limit: pageSize,
       search: deferredSearch || undefined,
       availability: availability === "all" ? undefined : availability,
     })
     setTeams(result.items)
+    setTotalItems(result.meta.total)
     setTotalPages(result.meta.totalPages || 1)
   }
 
@@ -95,13 +97,14 @@ export default function TeamsPage() {
     teamsApi
       .list({
         page,
-        limit: 9,
+        limit: pageSize,
         search: deferredSearch || undefined,
         availability: availability === "all" ? undefined : availability,
       })
       .then((result) => {
         if (cancelled) return
         setTeams(result.items)
+        setTotalItems(result.meta.total)
         setTotalPages(result.meta.totalPages || 1)
       })
       .catch((err: unknown) => {
@@ -115,7 +118,7 @@ export default function TeamsPage() {
     return () => {
       cancelled = true
     }
-  }, [availability, deferredSearch, page])
+  }, [availability, deferredSearch, page, pageSize])
 
   useEffect(() => {
     setPage(1)
@@ -169,7 +172,6 @@ export default function TeamsPage() {
       if (action === "accept") {
         await teamsApi.acceptSupervisorRequest(requestId)
         toast.success("Supervision request accepted. You are now supervising this team.")
-        setViewMode("supervised") // Automatically switch to show the new team
       } else {
         await teamsApi.declineSupervisorRequest(requestId)
         toast.success("Supervision request declined.")
@@ -220,47 +222,52 @@ export default function TeamsPage() {
     )
   }
 
-  const displayedTeams =
-    isSupportRole && viewMode === "supervised" ? myTeamState?.supervisedTeams || [] : teams
-
-  const openTeamsCount = (isSupportRole && viewMode === "supervised" ? (myTeamState?.supervisedTeams || []) : teams).filter((team) => !team.isFull).length
+  const displayedTeams = teams
+  const emptyCopy = isSupervisorRole
+    ? "No assigned teams match the current filters."
+    : "No teams match the current filters."
+  const heroTitle = isSupervisorRole ? "My Teams" : isAdmin ? "All Teams" : "Find your team"
+  const heroDescription = isStudent
+    ? "Compare project ideas, stages, and open seats. Send a request or use an invite code to join."
+    : isSupervisorRole
+      ? "Review only the teams assigned to you, with search and pagination scoped to your supervision work."
+      : isAdmin
+        ? "Browse every team in the system, check availability, and open the right workspace quickly."
+        : "Explore teams, check availability, and connect with the right workspace."
+  const openTeamsCount = displayedTeams.filter((team) => !team.isFull).length
   const pendingTeamsCount = teams.filter((team) => team.hasPendingRequest).length
   const invitationTeamsCount = teams.filter((team) => team.hasPendingInvitation).length
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 md:p-6 xl:p-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 md:p-5 xl:p-6">
       <motion.section
         {...getRevealMotion(reduceMotion)}
-        className="relative overflow-hidden rounded-[32px] border border-border/50 bg-gradient-to-br from-primary/5 via-background to-background shadow-sm"
+        className="relative overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-br from-primary/5 via-background to-background shadow-sm"
       >
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-0 top-0 -mr-16 -mt-16 h-72 w-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 px-6 py-8 sm:px-8 sm:py-10">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 lg:gap-12">
+        <div className="relative z-10 px-5 py-5 sm:px-6 sm:py-6">
+          <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center lg:gap-8">
             {/* Title + CTAs */}
-            <div className="space-y-5 max-w-2xl flex-1">
+            <div className="max-w-2xl flex-1 space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary font-medium px-3 py-1">
-                  Browse Teams
+                <Badge variant="outline" className="border-primary/20 bg-primary/5 px-2.5 py-0.5 text-primary font-medium">
+                  {isSupervisorRole ? "Assigned Teams" : "Browse Teams"}
                 </Badge>
-                {isStudent && <Badge variant="secondary" className="px-3 py-1">Student</Badge>}
-                {isSupportRole && <Badge variant="secondary" className="px-3 py-1 bg-amber-500/10 text-amber-600 border-0 hover:bg-amber-500/20">Support View</Badge>}
+                {isStudent && <Badge variant="secondary" className="px-2.5 py-0.5">Student</Badge>}
+                {isSupervisorRole && <Badge variant="secondary" className="border-0 bg-amber-500/10 px-2.5 py-0.5 text-amber-600 hover:bg-amber-500/20">Support View</Badge>}
               </div>
               
-              <div className="space-y-3">
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-foreground">
-                  {isSupportRole ? "Teams you supervise" : "Find your team"}
+              <div className="space-y-2">
+                <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  {heroTitle}
                 </h1>
-                <p className="text-base leading-relaxed text-muted-foreground/90">
-                  {isStudent
-                    ? "Compare project ideas, stages, and open seats. Send a request or use an invite code to join."
-                    : isSupportRole
-                      ? "Review team details, composition, and project stage across all your supervised workspaces."
-                      : "Explore teams, check availability, and connect with the right workspace."}
+                <p className="max-w-xl text-sm leading-6 text-muted-foreground/90">
+                  {heroDescription}
                 </p>
               </div>
 
-              <div className="flex flex-wrap gap-3 pt-2">
+              <div className="flex flex-wrap gap-3">
                 {isStudent && (
                   <Button className="h-11 rounded-2xl px-6 shadow-lg shadow-primary/15 font-semibold" onClick={() => setIsJoinCodeOpen(true)}>
                     <Hash className="mr-2 h-4 w-4" />
@@ -275,19 +282,13 @@ export default function TeamsPage() {
                     </Link>
                   </Button>
                 )}
-                {isSupportRole && (
-                  <Button variant="outline" className="h-11 rounded-2xl px-6 bg-background border-border/60 shadow-sm hover:bg-muted/50" onClick={() => setViewMode("supervised")}>
-                    <Briefcase className="mr-2 h-4 w-4" />
-                    My Teams
-                  </Button>
-                )}
               </div>
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto shrink-0">
-              <MetricCard label="Teams" value={String(displayedTeams.length)} helper="Visible results" />
-              <MetricCard label="Open" value={String(openTeamsCount)} helper="Available seats" />
+            <div className="grid w-full shrink-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:w-auto">
+              <MetricCard label="Teams" value={String(totalItems)} helper={isSupervisorRole ? "Assigned total" : "Matching total"} />
+              <MetricCard label="Open" value={String(openTeamsCount)} helper="On this page" />
               <div className="col-span-2 sm:col-span-1">
                 <MetricCard
                   label={isSupportRole ? "Requests" : "Pending"}
@@ -301,21 +302,6 @@ export default function TeamsPage() {
       </motion.section>
 
       <motion.section {...getRevealMotion(reduceMotion, 0.05)}>
-        {isSupportRole && (
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            <div className="flex h-9 items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 text-sm font-semibold text-primary">
-              <Briefcase className="h-3.5 w-3.5" />
-              Supervised Teams
-              {myTeamState?.supervisedTeams?.length ? (
-                <Badge className="h-5 rounded-full bg-primary/20 px-1.5 text-[10px] font-bold text-primary hover:bg-primary/30">
-                  {myTeamState.supervisedTeams.length}
-                </Badge>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">Showing teams assigned to you</p>
-          </div>
-        )}
-
         {isSupportRole && pendingSupervisionRequests.length > 0 && (
           <div className="mb-8 space-y-4">
             <div className="flex items-center gap-3">
@@ -381,48 +367,48 @@ export default function TeamsPage() {
           </div>
         )}
 
-        <Card className="border-border/70 shadow-sm">
-          <CardContent className="flex flex-col gap-3 p-4 sm:p-5 sm:flex-row">
-            <div className="relative min-w-0 flex-1">
+        <Card className="overflow-hidden border-border/70 bg-card/95 shadow-sm">
+          <CardContent className="p-0">
+            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:p-5">
+              <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-                placeholder="Search teams by name, idea, or stack…"
-                className="h-11 pl-9 rounded-xl"
+                placeholder="Search teams by name, idea, or stack..."
+                className="h-11 rounded-xl border-border/70 bg-background/80 pl-9"
               />
-            </div>
-            <div className="flex gap-2">
+              </div>
+              <div className="flex gap-2">
               <Select value={availability} onValueChange={(value) => { setAvailability(value as "all" | "open" | "full"); setPage(1) }}>
-                <SelectTrigger className="h-11 w-[130px] rounded-xl">
+                <SelectTrigger className="h-11 w-[130px] rounded-xl bg-background/80">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Teams</SelectItem>
+                  <SelectItem value="all">Any status</SelectItem>
                   <SelectItem value="open">Open</SelectItem>
                   <SelectItem value="full">Full</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="ghost" size="sm" className="h-11 rounded-xl px-4 shrink-0" onClick={clearFilters}>
+              <Button variant="ghost" size="sm" className="h-11 shrink-0 rounded-xl px-4" onClick={clearFilters}>
                 Reset
               </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      </motion.section>
 
-      {error && (
-        <Card className="border-destructive/25 bg-destructive/[0.04] shadow-none">
-          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
-        </Card>
-      )}
+            <div className="mx-4 h-px bg-border/40 sm:mx-5" />
 
-      <section className="space-y-4">
+            <div className="space-y-4 p-4 sm:p-5">
+              {error && (
+                <div className="rounded-2xl border border-destructive/25 bg-destructive/[0.04] p-4 text-sm text-destructive">
+                  {error}
+                </div>
+              )}
         <motion.div {...getRevealMotion(reduceMotion, 0.08)} className="flex items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            {teams.length > 0
-              ? `${teams.length} team${teams.length === 1 ? "" : "s"} found`
-              : "No teams match the current filters."}
+            {displayedTeams.length > 0
+              ? `${totalItems} team${totalItems === 1 ? "" : "s"} found`
+              : emptyCopy}
           </p>
           {totalPages > 1 && (
             <p className="text-xs text-muted-foreground">Page {page} / {Math.max(totalPages, 1)}</p>
@@ -435,15 +421,17 @@ export default function TeamsPage() {
               <p className="mt-3 text-sm text-muted-foreground">Loading teams and current availability.</p>
             </CardContent>
           </Card>
-        ) : teams.length === 0 ? (
+        ) : displayedTeams.length === 0 ? (
           <Card className="border-dashed border-border/70 shadow-none">
             <CardContent className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <Search className="h-6 w-6" />
               </div>
-              <h2 className="mt-4 text-xl font-semibold tracking-tight">No teams matched this search</h2>
+              <h2 className="mt-4 text-xl font-semibold tracking-tight">
+                {isSupervisorRole ? "No assigned teams matched this search" : "No teams matched this search"}
+              </h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                Try another keyword, change the availability filter, or clear everything to start again with the full list.
+                Try another keyword, change the availability filter, or clear everything to start again.
               </p>
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                 <Button variant="outline" className="rounded-xl" onClick={clearFilters}>Reset Filters</Button>
@@ -452,7 +440,7 @@ export default function TeamsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {displayedTeams.map((team, index) => {
               const fillPercent = team.maxMembers > 0 ? Math.round((team.memberCount / team.maxMembers) * 100) : 0
               const spotsLeft = Math.max(team.maxMembers - team.memberCount, 0)
@@ -476,32 +464,32 @@ export default function TeamsPage() {
                 >
                   <Card className={`flex h-full flex-col overflow-hidden border-border/70 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/25 hover:shadow-md ${isSupervisorOfTeam ? "ring-1 ring-primary/20" : ""}`}>
                     <div className={`h-1 w-full ${isSupervisorOfTeam ? "bg-gradient-to-r from-primary/60 to-primary/20" : team.isFull ? "bg-gradient-to-r from-muted-foreground/30 to-muted-foreground/10" : fillPercent >= 75 ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-gradient-to-r from-emerald-400 to-emerald-500"}`} />
-                    <CardContent className="flex h-full flex-col gap-5 p-5">
+                    <CardContent className="flex h-full flex-col gap-3.5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="secondary">{formatTeamVisibility(team.visibility)}</Badge>
+                          <Badge variant="secondary" className="text-[11px]">{formatTeamVisibility(team.visibility)}</Badge>
                           {isSupervisorOfTeam && (
-                            <Badge variant="outline" className="border-primary/30 bg-primary/5 text-primary">Supervising as {supervisorRole}</Badge>
+                            <Badge variant="outline" className="border-primary/30 bg-primary/5 text-[11px] text-primary">Supervising as {supervisorRole}</Badge>
                           )}
                         </div>
-                        <Badge variant={team.isFull ? "secondary" : "outline"} className={`rounded-full ${!team.isFull ? "border-emerald-500/30 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-400" : ""}`}>{team.isFull ? "Full" : "Open"}</Badge>
+                        <Badge variant={team.isFull ? "secondary" : "outline"} className={`rounded-full text-[11px] ${!team.isFull ? "border-emerald-500/30 bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-400" : ""}`}>{team.isFull ? "Full" : "Open"}</Badge>
                       </div>
 
-                      <div className="space-y-2">
-                        <h2 className="text-xl font-semibold tracking-tight break-words">{team.name}</h2>
-                        <p className="min-h-[72px] text-sm leading-6 text-muted-foreground line-clamp-3 break-words">{team.bio}</p>
+                      <div className="space-y-1.5">
+                        <h2 className="text-base font-semibold tracking-tight break-words">{team.name}</h2>
+                        <p className="min-h-[54px] text-xs leading-5 text-muted-foreground line-clamp-3 break-words">{team.bio}</p>
                       </div>
 
-                      <div className="rounded-2xl border border-border/60 bg-muted/15 p-3">
+                      <div className="rounded-xl border border-border/60 bg-muted/15 p-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-11 w-11 border border-border/60">
+                            <Avatar className="h-9 w-9 border border-border/60">
                               <AvatarImage src={team.leader.avatarUrl || "/placeholder.svg"} />
                               <AvatarFallback>{getAvatarInitial(team.leader)}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <p className="truncate font-medium">{getFullName(team.leader)}</p>
-                              <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Team Leader</p>
+                              <p className="truncate text-sm font-medium">{getFullName(team.leader)}</p>
+                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Team Leader</p>
                             </div>
                           </div>
                           {isSupervisorOfTeam && (
@@ -512,8 +500,8 @@ export default function TeamsPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/10 p-4">
-                        <div className="flex items-center justify-between text-sm">
+                      <div className="space-y-2.5 rounded-xl border border-border/60 bg-muted/10 p-3">
+                        <div className="flex items-center justify-between text-xs">
                           <span className="text-muted-foreground">Capacity</span>
                           <span className={`font-semibold ${team.isFull ? "text-muted-foreground" : fillPercent >= 75 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>{team.memberCount}/{team.maxMembers}</span>
                         </div>
@@ -530,8 +518,8 @@ export default function TeamsPage() {
                       <div className="flex flex-wrap gap-2">
                         {team.stack.length > 0 ? (
                           <>
-                            {team.stack.slice(0, 4).map((tech) => <Badge key={tech} variant="secondary" className="rounded-full bg-background/50 border-border/50 text-[11px]">{tech}</Badge>)}
-                            {team.stack.length > 4 && <Badge variant="outline" className="rounded-full text-[10px]">+{team.stack.length - 4}</Badge>}
+                            {team.stack.slice(0, 3).map((tech) => <Badge key={tech} variant="secondary" className="rounded-full bg-background/50 border-border/50 text-[10px]">{tech}</Badge>)}
+                            {team.stack.length > 3 && <Badge variant="outline" className="rounded-full text-[10px]">+{team.stack.length - 3}</Badge>}
                           </>
                         ) : (
                           <Badge variant="outline" className="rounded-full text-xs opacity-60">Stack not added yet</Badge>
@@ -545,7 +533,7 @@ export default function TeamsPage() {
                           </div>
                         )}
                         <div className="flex flex-col gap-2 sm:flex-row">
-                          <Button asChild variant="outline" className={`flex-1 rounded-xl bg-transparent ${isSupervisorOfTeam ? "border-primary/30 text-primary hover:bg-primary/5" : ""}`}>
+                          <Button asChild variant="outline" size="sm" className={`flex-1 rounded-xl bg-transparent ${isSupervisorOfTeam ? "border-primary/30 text-primary hover:bg-primary/5" : ""}`}>
                             <Link href={`/dashboard/teams/${team.id}`}>
                               {isSupervisorOfTeam ? "Open Workspace" : "View Details"}
                               {isSupervisorOfTeam && <ExternalLink className="ml-1.5 h-3.5 w-3.5" />}
@@ -571,9 +559,8 @@ export default function TeamsPage() {
             })}
           </div>
         )}
-      </section>
 
-      {totalPages > 1 && (
+              {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border/50 pt-2">
           <p className="text-sm text-muted-foreground">Page {page} of {Math.max(totalPages, 1)}</p>
           <div className="flex gap-2">
@@ -581,7 +568,11 @@ export default function TeamsPage() {
             <Button variant="outline" size="sm" className="h-9 rounded-xl" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</Button>
           </div>
         </div>
-      )}
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.section>
 
       <Dialog open={isJoinCodeOpen} onOpenChange={setIsJoinCodeOpen}>
         <DialogContent className="w-[94vw] max-w-md overflow-hidden rounded-[28px] p-0">
@@ -655,12 +646,10 @@ function CenteredState({ icon, title, description, actionHref, actionLabel }: { 
 
 function MetricCard({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
-    <div className="rounded-[20px] border border-border/60 bg-background/88 px-4 py-3 shadow-sm">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-tight">{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">{helper}</p>
+    <div className="rounded-2xl border border-border/60 bg-background/88 px-3.5 py-2.5 shadow-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className="mt-1 text-xl font-bold tracking-tight">{value}</p>
+      <p className="text-[11px] text-muted-foreground">{helper}</p>
     </div>
   )
 }
-
-

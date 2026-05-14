@@ -135,6 +135,17 @@ enum TaskReviewDecision {
   CHANGES_REQUESTED
 }
 
+enum TaskReviewerRole {
+  LEADER
+  TA
+  ADMIN
+}
+
+enum TaskSubmissionEvidenceType {
+  FILE
+  LINK
+}
+
 enum SprintStatus {
   PLANNED
   ACTIVE
@@ -383,6 +394,8 @@ model User {
   assignedTasks           Task[]             @relation("TaskAssignee")
   createdTasks            Task[]             @relation("TaskCreator")
   reviewedTasks           Task[]             @relation("TaskReviewer")
+  authoredTaskReviews     TaskReview[]       @relation("TaskReviewAuthor")
+  uploadedTaskEvidence    TaskSubmissionEvidence[] @relation("TaskEvidenceUploader")
   createdSprints          Sprint[]           @relation("SprintCreator")
   submittedWeeklyReports  WeeklyReport[]     @relation("WeeklyReportSubmitter")
   submittedSubmissions    Submission[]       @relation("SubmissionSubmitter")
@@ -488,6 +501,7 @@ model Team {
   supervisorRequests TeamSupervisorRequest[]
   githubRepository GitHubTeamRepository?
   tasks        Task[]
+  taskSubmissionEvidence TaskSubmissionEvidence[]
   sprints      Sprint[]
   weeklyReports WeeklyReport[]
   submissions  Submission[]
@@ -748,6 +762,8 @@ model Task {
   assignee   User? @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   createdBy  User? @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   reviewedBy User? @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  submissionEvidence TaskSubmissionEvidence[]
+  reviews    TaskReview[]
 
   @@unique([teamId, githubIssueNumber])
   @@index([teamId, status])
@@ -758,6 +774,53 @@ model Task {
   @@index([reviewedByUserId])
   @@index([teamId, integrationMode])
   @@index([teamId, githubPullRequestNumber])
+}
+
+/// One row per review action on a Task. Both the team leader and the team TA
+/// can leave a review on the same task, and either one's APPROVED moves the
+/// task forward (whichever lands first). The other party can still record a
+/// supplementary review afterward — that just appends another row without
+/// changing the task status. We keep the pointer fields on Task too (latest
+/// decisive review) so existing reads don't break.
+model TaskReview {
+  id              String              @id @default(cuid())
+  taskId          String
+  reviewerUserId  String
+  reviewerRole    TaskReviewerRole
+  decision        TaskReviewDecision
+  comment         String?
+  snapshot        Json?
+  createdAt       DateTime            @default(now())
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reviewer User @relation("TaskReviewAuthor", fields: [reviewerUserId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([reviewerUserId])
+}
+
+model TaskSubmissionEvidence {
+  id               String                     @id @default(cuid())
+  taskId           String
+  teamId           String
+  uploadedByUserId String
+  type             TaskSubmissionEvidenceType
+  title            String
+  url              String
+  fileName         String?
+  fileSize         Int?
+  fileType         String?
+  submittedAt      DateTime?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  team       Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("TaskEvidenceUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, submittedAt])
+  @@index([teamId, createdAt])
+  @@index([uploadedByUserId])
 }
 
 model Sprint {
