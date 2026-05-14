@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
   ChevronRight,
@@ -131,6 +132,11 @@ const TASK_COLUMNS: Array<{ status: ApiTaskStatus; label: string; color: string 
   { status: "APPROVED", label: "Approved", color: "bg-amber-500" },
   { status: "DONE", label: "Done", color: "bg-emerald-500" },
 ]
+
+/** Minimum length for a "Request Resubmission" comment. Mirrors the backend
+ *  guard in tasks.service.js (TASK_REVIEW_COMMENT_REQUIRED) and the reviews
+ *  page constant — keep these in sync if you change one. */
+const RESUBMISSION_MIN_LENGTH = 10
 
 function defaultIntegrationModeForTaskType(taskType: ApiTaskType) {
   return GITHUB_DEFAULT_TASK_TYPES.has(taskType) ? "GITHUB" : "MANUAL"
@@ -564,8 +570,10 @@ export function TasksBoardPage() {
 
   function requestTaskWorkflowAction(action: TaskWorkflowAction) {
     if (!selectedTask) return
-    if (action === "reject" && !reviewCommentDraft.trim()) {
-      toast.error("Add review comments before requesting changes.")
+    if (action === "reject" && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH) {
+      toast.error(
+        `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
+      )
       return
     }
     if (action === "submit" && selectedTask.integrationMode === "MANUAL" && !selectedTask.manualReviewGate?.ready) {
@@ -633,7 +641,12 @@ export function TasksBoardPage() {
 
   async function handleTaskWorkflowAction(action: TaskWorkflowAction) {
     if (!selectedTask) return
-    if (action === "reject" && !reviewCommentDraft.trim()) { toast.error("Add review comments before requesting changes."); return }
+    if (action === "reject" && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH) {
+      toast.error(
+        `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
+      )
+      return
+    }
     if (action === "submit" && selectedTask.integrationMode === "MANUAL" && !selectedTask.manualReviewGate?.ready) {
       toast.error("Add at least one file or link before submitting this manual task.")
       return
@@ -1654,8 +1667,45 @@ export function TasksBoardPage() {
                             </p>
                           </div>
                           <div className="space-y-1.5">
-                            <Label htmlFor="task-review-comment" className="text-xs">Review Comment</Label>
-                            <Textarea id="task-review-comment" value={reviewCommentDraft} onChange={(e) => setReviewCommentDraft(e.target.value)} placeholder="Add approval notes or explain why the student must resubmit" className="resize-none rounded-xl" rows={3} />
+                            <div className="flex items-center justify-between gap-2">
+                              <Label htmlFor="task-review-comment" className="text-xs">
+                                Review Comment
+                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                                  (required for Request Resubmission)
+                                </span>
+                              </Label>
+                              <span
+                                className={cn(
+                                  "text-[10px] tabular-nums",
+                                  reviewCommentDraft.trim().length >= RESUBMISSION_MIN_LENGTH
+                                    ? "text-muted-foreground/70"
+                                    : "text-amber-600 dark:text-amber-400",
+                                )}
+                              >
+                                {reviewCommentDraft.trim().length} / {RESUBMISSION_MIN_LENGTH} min for resubmission
+                              </span>
+                            </div>
+                            <Textarea
+                              id="task-review-comment"
+                              value={reviewCommentDraft}
+                              onChange={(e) => setReviewCommentDraft(e.target.value)}
+                              placeholder="Approval note (optional), or the exact reason the student must resubmit (required)"
+                              className={cn(
+                                "resize-none rounded-xl transition-colors",
+                                reviewCommentDraft.trim().length > 0 &&
+                                  reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH
+                                  ? "border-amber-500/50 focus-visible:ring-amber-500/30"
+                                  : "",
+                              )}
+                              rows={3}
+                            />
+                            {reviewCommentDraft.trim().length > 0 &&
+                            reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH ? (
+                              <p className="flex items-center gap-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                                <AlertCircle className="h-3 w-3" />
+                                Resubmission needs at least {RESUBMISSION_MIN_LENGTH} characters so the student knows what to fix.
+                              </p>
+                            ) : null}
                           </div>
                           {selectedTask.integrationMode === "GITHUB" && selectedTask.github?.pullRequest?.number && (
                             <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-3">
@@ -1911,11 +1961,24 @@ export function TasksBoardPage() {
                           {taskActionInFlight === "approve" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Approve"}
                         </Button>
                       )}
-                      {selectedTask.permissions.canReject && (
-                        <Button variant="outline" className="h-9 rounded-xl border-destructive/30 bg-transparent text-destructive hover:bg-destructive/5" onClick={() => requestTaskWorkflowAction("reject")} disabled={taskActionInFlight !== ""}>
-                          {taskActionInFlight === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Resubmission"}
-                        </Button>
-                      )}
+                      {selectedTask.permissions.canReject && (() => {
+                        const commentTooShort = reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH
+                        return (
+                          <Button
+                            variant="outline"
+                            className="h-9 rounded-xl border-destructive/30 bg-transparent text-destructive hover:bg-destructive/5 disabled:opacity-50"
+                            onClick={() => requestTaskWorkflowAction("reject")}
+                            disabled={taskActionInFlight !== "" || commentTooShort}
+                            title={
+                              commentTooShort
+                                ? `Add at least ${RESUBMISSION_MIN_LENGTH} characters to the review comment first`
+                                : undefined
+                            }
+                          >
+                            {taskActionInFlight === "reject" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Request Resubmission"}
+                          </Button>
+                        )
+                      })()}
                     </div>
                     <Button variant="ghost" className="h-9 rounded-xl" onClick={() => setSelectedTaskId(null)}>Close</Button>
                   </div>

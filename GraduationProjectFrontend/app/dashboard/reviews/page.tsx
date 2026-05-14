@@ -88,6 +88,10 @@ const PRIORITY_SORT: Record<ApiTaskPriority, number> = {
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20]
 
+/** Minimum length for a "Request Resubmission" comment. Forces the reviewer
+ *  to leave a meaningful, actionable reason — not just "no" or "redo." */
+const RESUBMISSION_MIN_LENGTH = 10
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -337,14 +341,17 @@ export default function ReviewTasksPage() {
   }
 
   async function handleReject(task: ApiTask) {
-    if (reviewComment.trim().length < 5) {
-      toast.error("Provide a reason before requesting resubmission.")
+    const trimmedComment = reviewComment.trim()
+    if (trimmedComment.length < RESUBMISSION_MIN_LENGTH) {
+      toast.error(
+        `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
+      )
       return
     }
 
     setSubmittingReview("reject")
     try {
-      const updated = await tasksApi.reject(task.id, { reviewComment: reviewComment.trim() })
+      const updated = await tasksApi.reject(task.id, { reviewComment: trimmedComment })
       setTasks((current) => current.filter((item) => item.id !== updated.id))
       setSelectedTask(null)
       setReviewComment("")
@@ -725,14 +732,44 @@ export default function ReviewTasksPage() {
               ) : null}
 
               <div>
-                <Label>{reviewerRoleLabel} review note</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label>
+                    {reviewerRoleLabel} review note
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      (required for Request Resubmission)
+                    </span>
+                  </Label>
+                  {/* Live counter — turns muted once the minimum is met */}
+                  <span
+                    className={cn(
+                      "text-[10px] tabular-nums",
+                      reviewComment.trim().length >= RESUBMISSION_MIN_LENGTH
+                        ? "text-muted-foreground/70"
+                        : "text-amber-600 dark:text-amber-400",
+                    )}
+                  >
+                    {reviewComment.trim().length} / {RESUBMISSION_MIN_LENGTH} min for resubmission
+                  </span>
+                </div>
                 <Textarea
                   value={reviewComment}
                   onChange={(event) => setReviewComment(event.target.value)}
-                  placeholder="Approval note, or the exact reason the student must resubmit..."
-                  className="mt-1.5 resize-none rounded-xl"
+                  placeholder="Approval note (optional), or the exact reason the student must resubmit (required)..."
+                  className={cn(
+                    "mt-1.5 resize-none rounded-xl transition-colors",
+                    // When the textarea is non-empty but below minimum, hint with an amber border
+                    reviewComment.trim().length > 0 && reviewComment.trim().length < RESUBMISSION_MIN_LENGTH
+                      ? "border-amber-500/50 focus-visible:ring-amber-500/30"
+                      : "",
+                  )}
                   rows={5}
                 />
+                {reviewComment.trim().length > 0 && reviewComment.trim().length < RESUBMISSION_MIN_LENGTH ? (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+                    <AlertCircle className="h-3 w-3" />
+                    Resubmission needs at least {RESUBMISSION_MIN_LENGTH} characters so the student knows what to fix.
+                  </p>
+                ) : null}
               </div>
 
               {selectedTask.reviews && selectedTask.reviews.length > 0 ? (
@@ -786,32 +823,43 @@ export default function ReviewTasksPage() {
                 </div>
               ) : null}
 
-              <DialogFooter className="gap-2 sm:gap-2">
-                <Button
-                  onClick={() => void handleApprove(selectedTask)}
-                  disabled={submittingReview !== null}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                >
-                  {submittingReview === "approve" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ThumbsUp className="mr-2 h-4 w-4" />
-                  )}
-                  {submittingReview === "approve" ? "Approving…" : "Approve Task"}
-                </Button>
-                <Button
-                  onClick={() => void handleReject(selectedTask)}
-                  disabled={submittingReview !== null}
-                  variant="outline"
-                  className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
-                >
-                  {submittingReview === "reject" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ThumbsDown className="mr-2 h-4 w-4" />
-                  )}
-                  {submittingReview === "reject" ? "Sending back…" : "Request Resubmission"}
-                </Button>
+              <DialogFooter className="flex-col gap-2 sm:gap-2">
+                {/* Inline reminder when reject is gated — explains why the button is disabled */}
+                {reviewComment.trim().length < RESUBMISSION_MIN_LENGTH && submittingReview === null ? (
+                  <p className="w-full text-center text-[11px] text-muted-foreground sm:text-left">
+                    Add a {RESUBMISSION_MIN_LENGTH}+ character review note to enable <b>Request Resubmission</b>.
+                  </p>
+                ) : null}
+                <div className="flex w-full gap-2">
+                  <Button
+                    onClick={() => void handleApprove(selectedTask)}
+                    disabled={submittingReview !== null}
+                    className="flex-1 bg-green-600 hover:bg-green-700"
+                  >
+                    {submittingReview === "approve" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ThumbsUp className="mr-2 h-4 w-4" />
+                    )}
+                    {submittingReview === "approve" ? "Approving…" : "Approve Task"}
+                  </Button>
+                  <Button
+                    onClick={() => void handleReject(selectedTask)}
+                    disabled={
+                      submittingReview !== null ||
+                      reviewComment.trim().length < RESUBMISSION_MIN_LENGTH
+                    }
+                    variant="outline"
+                    className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    {submittingReview === "reject" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <ThumbsDown className="mr-2 h-4 w-4" />
+                    )}
+                    {submittingReview === "reject" ? "Sending back…" : "Request Resubmission"}
+                  </Button>
+                </div>
               </DialogFooter>
             </div>
           ) : null}

@@ -12,7 +12,13 @@ const dateStringSchema = z
 
 const taskTitleSchema = z.string().trim().min(3, "Task title must be at least 3 characters").max(200);
 const taskDescriptionSchema = z.string().trim().max(2000).optional();
-const reviewCommentSchema = z.string().trim().min(3, "Review comment must be at least 3 characters").max(10000);
+// Resubmission reviews need 10+ characters so the student knows what to fix.
+// Approval comments (optional) keep their own loose validation downstream.
+const reviewCommentSchema = z
+  .string()
+  .trim()
+  .min(10, "Review comment must be at least 10 characters so the student knows what to fix")
+  .max(10000);
 const pointsSchema = z.coerce.number().int().min(0).max(99);
 const evidenceTitleSchema = z.string().trim().min(3, "Evidence title must be at least 3 characters").max(160).optional();
 const evidenceUrlSchema = z

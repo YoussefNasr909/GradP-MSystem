@@ -657,11 +657,29 @@ export function shouldMergeApprovedTaskPullRequest(payload = {}) {
   return payload.mergePullRequest === true;
 }
 
-export function buildTaskResubmissionUpdate(task, actor, reviewComment) {
-  const normalizedReviewComment = normalizeText(reviewComment);
-  if (!normalizedReviewComment) {
+/** Minimum length for a "Request Resubmission" comment. Kept in sync with the
+ *  frontend `RESUBMISSION_MIN_LENGTH` constant so the UX matches the API. */
+export const RESUBMISSION_COMMENT_MIN_LENGTH = 10;
+
+/** Throws a 422 if the review comment isn't long enough to be actionable.
+ *  Used by both `rejectTaskService` and `buildTaskResubmissionUpdate`. */
+export function assertReviewCommentMeetsMinimum(reviewComment) {
+  const normalized = normalizeText(reviewComment);
+  if (!normalized) {
     throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");
   }
+  if (normalized.length < RESUBMISSION_COMMENT_MIN_LENGTH) {
+    throw new AppError(
+      `Review comment must be at least ${RESUBMISSION_COMMENT_MIN_LENGTH} characters so the student knows what to fix.`,
+      422,
+      "TASK_REVIEW_COMMENT_TOO_SHORT",
+    );
+  }
+  return normalized;
+}
+
+export function buildTaskResubmissionUpdate(task, actor, reviewComment) {
+  const normalizedReviewComment = assertReviewCommentMeetsMinimum(reviewComment);
 
   return {
     status: "TODO",
@@ -1181,10 +1199,9 @@ export async function rejectTaskService(actor, taskId, payload) {
     throw new AppError("This task is not open for review.", 409, "TASK_NOT_REVIEWABLE");
   }
 
-  const reviewComment = normalizeText(payload.reviewComment);
-  if (!reviewComment) {
-    throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");
-  }
+  // Enforce a 10-char minimum so "no" / "bad" can't be a resubmission reason —
+  // the student needs something actionable to work from.
+  const reviewComment = assertReviewCommentMeetsMinimum(payload.reviewComment);
 
   let updatedTask = task;
 
