@@ -195,11 +195,11 @@ function getTaskFocusMessage(task: ApiTask) {
   }
 
   if (task.permissions.canSubmitForReview) {
-    return "The implementation looks ready. Wrap up and send it for leader review."
+    return "The implementation looks ready. Wrap up and send it for TA review."
   }
 
   if (task.status === "REVIEW") {
-    return "Your work is waiting for the team leader review, so shift your focus to the next assignment."
+    return "Your work is waiting for TA review, so shift your focus to the next assignment."
   }
 
   if (task.status === "APPROVED") {

@@ -14,6 +14,12 @@ const taskTitleSchema = z.string().trim().min(3, "Task title must be at least 3 
 const taskDescriptionSchema = z.string().trim().max(2000).optional();
 const reviewCommentSchema = z.string().trim().min(3, "Review comment must be at least 3 characters").max(10000);
 const pointsSchema = z.coerce.number().int().min(0).max(99);
+const evidenceTitleSchema = z.string().trim().min(3, "Evidence title must be at least 3 characters").max(160).optional();
+const evidenceUrlSchema = z
+  .string()
+  .trim()
+  .url("Enter a valid evidence link")
+  .refine((url) => /^https?:\/\//i.test(url), "Evidence links must start with http:// or https://");
 
 export const listTasksSchema = z.object({
   body: z.any().optional(),
@@ -119,6 +125,42 @@ export const taskGithubRouteSchema = z.object({
     id: z.string().trim().min(1, "Task id is required"),
   }),
 });
+
+export const taskEvidenceRouteSchema = z.object({
+  body: z.any().optional(),
+  query: z.any().optional(),
+  params: z.object({
+    id: z.string().trim().min(1, "Task id is required"),
+  }),
+});
+
+export const taskEvidenceDeleteSchema = z.object({
+  body: z.any().optional(),
+  query: z.any().optional(),
+  params: z.object({
+    id: z.string().trim().min(1, "Task id is required"),
+    evidenceId: z.string().trim().min(1, "Evidence id is required"),
+  }),
+});
+
+export const taskEvidenceLinkSchema = z.object({
+  body: z.object({
+    title: evidenceTitleSchema,
+    url: evidenceUrlSchema,
+  }),
+  query: z.any().optional(),
+  params: z.object({
+    id: z.string().trim().min(1, "Task id is required"),
+  }),
+});
+
+const taskEvidenceFileBodySchema = z.object({
+  title: evidenceTitleSchema,
+});
+
+export function parseTaskEvidenceFileBody(rawBody) {
+  return taskEvidenceFileBodySchema.parse(rawBody ?? {});
+}
 
 export const openTaskPullRequestSchema = z.object({
   body: z.object({

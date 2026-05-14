@@ -118,8 +118,10 @@ const navigationGroups = [
         icon: Upload,
         roles: ["leader", "member", "doctor", "ta"],
       },
-      // Review Work — TA-only (their main job: first-pass review of tasks/PRs)
-      { name: "Review Work", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta"] },
+      // Review Tasks — TA and Leader both review submitted task work.
+      // Either approval moves the task forward; supplementary reviews
+      // from the other reviewer still get recorded for the audit trail.
+      { name: "Review Tasks", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta", "leader", "admin"] },
       // Grades Overview (formerly Evaluations) — admin + doctor only (final grade owner)
       { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
       {

@@ -1822,12 +1822,12 @@ function TADashboard() {
       description: "Team discussions",
     },
     {
-      title: "Review Work",
+      title: "Review Tasks",
       icon: ClipboardCheck,
       href: "/dashboard/reviews",
       count: 3,
       color: "from-orange-500 to-amber-500",
-      description: "Tasks & PRs",
+      description: "TA task queue",
     },
     {
       title: "Files",

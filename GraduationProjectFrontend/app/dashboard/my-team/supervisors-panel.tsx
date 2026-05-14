@@ -1022,8 +1022,13 @@ function SupervisorCandidatesSection({
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // Derive a department filter dropdown from the visible candidates
-  const departments = Array.from(
-    new Set(candidates.map((c) => c.department).filter((d): d is string => Boolean(d))),
+  const departments: string[] = Array.from(
+    new Set(
+      candidates
+        .map((c) => c.department)
+        .filter((d): d is NonNullable<typeof d> => Boolean(d))
+        .map((d) => String(d)),
+    ),
   ).sort()
   const [departmentFilter, setDepartmentFilter] = useState<string>("ALL")
 

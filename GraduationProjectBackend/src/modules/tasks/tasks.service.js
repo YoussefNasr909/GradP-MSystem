@@ -10,11 +10,20 @@ import {
 } from "../github/github.service.js";
 import {
   createTask,
+  countDraftTaskEvidence,
+  createTaskEvidence,
+  createTaskReview,
+  deleteTaskEvidenceById,
   expireOverdueTasksByTeams,
   expireOverdueTasksByTeam,
+  findTaskEvidenceById,
   findTaskById,
+  listTaskEvidenceByTaskId,
+  listTaskReviewsByTaskId,
   listTasksByTeam,
   listTasksByTeamIds,
+  submitTaskForReviewById,
+  toTaskReviewResponse,
   updateTaskById,
 } from "./tasks.repository.js";
 import { notify } from "../../common/utils/notify.js";
@@ -152,8 +161,24 @@ function canManageTaskTeam(actor, team) {
   return actor.role === ROLES.ADMIN || team?.leader?.id === actor.id;
 }
 
+/**
+ * Returns { canReview, reviewerRole } for the actor against the given team.
+ *
+ * Both the team's TA and the team's Leader can review tasks. Admin can too.
+ * The leader is allowed to review tasks even when assigned to themselves —
+ * "either approval moves the task forward" is the workflow, so we don't gate
+ * self-review here.
+ *
+ * `reviewerRole` is the label we'll record on the TaskReview row (LEADER / TA /
+ * ADMIN). When the same user holds multiple roles (e.g. admin is also leader),
+ * we prefer the most specific team-level role.
+ */
 function canReviewTaskTeam(actor, team) {
-  return actor.role === ROLES.ADMIN || team?.ta?.id === actor.id;
+  if (!team) return { canReview: false, reviewerRole: null };
+  if (team.leader?.id === actor.id) return { canReview: true, reviewerRole: "LEADER" };
+  if (team.ta?.id === actor.id) return { canReview: true, reviewerRole: "TA" };
+  if (actor.role === ROLES.ADMIN) return { canReview: true, reviewerRole: "ADMIN" };
+  return { canReview: false, reviewerRole: null };
 }
 
 function canViewTaskTeam(actor, team) {
@@ -215,9 +240,11 @@ function assertTaskManager(task, actor) {
 }
 
 function assertTaskReviewer(task, actor) {
-  if (!canReviewTaskTeam(actor, task.team)) {
+  const { canReview, reviewerRole } = canReviewTaskTeam(actor, task.team);
+  if (!canReview) {
     throw new AppError("Only an assigned reviewer can review this task.", 403, "TASK_REVIEWER_ONLY");
   }
+  return reviewerRole;
 }
 
 function assertActorCanViewTask(task, actor) {
@@ -420,15 +447,32 @@ function buildGitHubState(task) {
   };
 }
 
+export function buildManualReviewGate(task) {
+  if (!isManualTask(task)) return null;
+
+  const evidence = Array.isArray(task.submissionEvidence) ? task.submissionEvidence : [];
+  const draftEvidenceCount = evidence.filter((item) => !item.submittedAt).length;
+  const submittedEvidenceCount = evidence.filter((item) => item.submittedAt).length;
+  const missing = draftEvidenceCount > 0 ? [] : ["manual_evidence"];
+
+  return {
+    ready: missing.length === 0,
+    draftEvidenceCount,
+    submittedEvidenceCount,
+    missing,
+  };
+}
+
 function toTaskResponse(task, actor) {
   const visibleStatus = normalizeVisibleStatus(task.status);
   const isAwaitingAcceptance = isGpmsManagedTask(task) && visibleStatus === "TODO" && !task.acceptedAt;
   const isAssignee = task.assigneeUserId === actor.id;
   const canManage = canManageTaskTeam(actor, task.team);
-  const canReview = canReviewTaskTeam(actor, task.team);
+  const { canReview, reviewerRole: actorReviewerRole } = canReviewTaskTeam(actor, task.team);
   const hasPastEndDate = Boolean(task.dueDate) && new Date(task.dueDate).getTime() < Date.now();
   const github = buildGitHubState(task);
   const reviewGate = github?.reviewGate ?? null;
+  const manualReviewGate = buildManualReviewGate(task);
   const canRejectGitHubApprovedTask = isRepoBackedTask(task) && visibleStatus === "APPROVED" && !task.githubPullRequestMergedAt;
 
   return {
@@ -470,18 +514,37 @@ function toTaskResponse(task, actor) {
     awaitingAcceptance: isAwaitingAcceptance,
     isPastEndDate: hasPastEndDate,
     github,
+    manualReviewGate,
+    actorReviewerRole,
+    reviews: Array.isArray(task.reviews)
+      ? task.reviews.map((review) => ({
+          id: review.id,
+          reviewerRole: review.reviewerRole,
+          decision: review.decision,
+          comment: review.comment ?? null,
+          createdAt: review.createdAt ? review.createdAt.toISOString() : null,
+          reviewer: toTaskUserSummary(review.reviewer),
+        }))
+      : [],
     permissions: {
       canAccept: isGpmsManagedTask(task) && isAssignee && task.status === "TODO" && !task.acceptedAt && !hasPastEndDate,
       canSubmitForReview:
         isGpmsManagedTask(task) &&
         isAssignee &&
         task.status === "IN_PROGRESS" &&
-        (!isRepoBackedTask(task) || Boolean(reviewGate?.ready)),
-      canApprove: isGpmsManagedTask(task) && canReview && task.status === "REVIEW",
+        (isRepoBackedTask(task) ? Boolean(reviewGate?.ready) : Boolean(manualReviewGate?.ready)),
+      // canApprove: primary review while in REVIEW, OR supplementary review on
+      // an already-approved/done task. Supplementary path lets the second
+      // reviewer (leader or TA) leave their own review after the first
+      // approval closed the task.
+      canApprove:
+        isGpmsManagedTask(task) &&
+        canReview &&
+        (task.status === "REVIEW" || task.status === "DONE" || (task.status === "APPROVED" && isRepoBackedTask(task))),
       canReject:
         isGpmsManagedTask(task) &&
         canReview &&
-        (task.status === "REVIEW" || canRejectGitHubApprovedTask),
+        (task.status === "REVIEW" || canRejectGitHubApprovedTask || task.status === "DONE" || task.status === "APPROVED"),
       canEdit: isGpmsManagedTask(task) && canManage,
       canBootstrapGithub: canWriteRepoBackedTask(actor, task) && !task.githubIssueNumber,
       canOpenPullRequest:
@@ -590,6 +653,31 @@ function buildReviewSnapshot(task, actor, overrides = {}) {
   };
 }
 
+export function shouldMergeApprovedTaskPullRequest(payload = {}) {
+  return payload.mergePullRequest === true;
+}
+
+export function buildTaskResubmissionUpdate(task, actor, reviewComment) {
+  const normalizedReviewComment = normalizeText(reviewComment);
+  if (!normalizedReviewComment) {
+    throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");
+  }
+
+  return {
+    status: "TODO",
+    acceptedAt: null,
+    submittedForReviewAt: null,
+    reviewedAt: new Date(),
+    reviewedByUserId: actor.id,
+    reviewFeedback: normalizedReviewComment,
+    reviewComment: normalizedReviewComment,
+    reviewDecision: "CHANGES_REQUESTED",
+    reviewSnapshot: buildReviewSnapshot(task, actor, {
+      requestedChanges: true,
+    }),
+  };
+}
+
 function buildMissingGitHubReviewEvidenceMessage(task) {
   const reviewGate = buildGitHubReviewGate(task);
   const messages = {
@@ -602,6 +690,16 @@ function buildMissingGitHubReviewEvidenceMessage(task) {
   const details = missing.map((item) => messages[item] ?? item);
 
   return `This repo-backed task cannot move to review yet. Please ${details.join(", ")} first.`;
+}
+
+function buildMissingManualReviewEvidenceMessage() {
+  return "This manual task cannot move to review yet. Upload at least one file or add one evidence link first.";
+}
+
+export function assertManualTaskHasDraftEvidence(draftEvidenceCount) {
+  if (Number(draftEvidenceCount ?? 0) < 1) {
+    throw new AppError(buildMissingManualReviewEvidenceMessage(), 409, "TASK_MANUAL_EVIDENCE_REQUIRED");
+  }
 }
 
 export async function listTasksService(actor, filters) {
@@ -771,15 +869,114 @@ export async function acceptTaskService(actor, taskId) {
     );
   }
 
+  const isResubmissionRestart = task.reviewDecision === "CHANGES_REQUESTED";
   const updated = await updateTaskById(task.id, {
     status: "IN_PROGRESS",
     acceptedAt: new Date(),
-    reviewFeedback: null,
-    reviewComment: null,
-    reviewDecision: null,
+    ...(isResubmissionRestart
+      ? {}
+      : {
+          reviewFeedback: null,
+          reviewComment: null,
+          reviewDecision: null,
+        }),
   });
 
   return toTaskResponse(updated, actor);
+}
+
+function assertManualEvidenceWriteAllowed(task, actor) {
+  assertGpmsManagedTask(task);
+  assertTaskAssignee(task, actor);
+
+  if (!isManualTask(task)) {
+    throw new AppError("Only manual tasks can use manual submission evidence.", 409, "TASK_EVIDENCE_MANUAL_ONLY");
+  }
+
+  // The assignee (student OR leader) may upload evidence on their own task.
+  // assertTaskAssignee above guarantees `actor.id === task.assigneeUserId`,
+  // so we just gate on the role being one of the two allowed assignee roles.
+  if (actor.role !== ROLES.STUDENT && actor.role !== ROLES.LEADER) {
+    throw new AppError("Only the assigned team member can add task submission evidence.", 403, "TASK_EVIDENCE_ASSIGNEE_ONLY");
+  }
+
+  if (task.status !== "IN_PROGRESS") {
+    throw new AppError("Evidence can be added only while the task is in progress.", 409, "TASK_EVIDENCE_TASK_NOT_IN_PROGRESS");
+  }
+}
+
+function normalizeEvidenceTitle(value, fallback = "Task evidence") {
+  const normalized = normalizeText(value);
+  const fallbackTitle = normalizeText(fallback) || "Task evidence";
+  return (normalized || fallbackTitle).slice(0, 160);
+}
+
+async function resolveTaskForEvidence(actor, taskId) {
+  let task = await findTaskById(taskId);
+  assertTaskExists(task);
+  task = await refreshTaskWorkflowState(task);
+  assertActorCanViewTask(task, actor);
+  return task;
+}
+
+export async function listTaskEvidenceService(actor, taskId) {
+  const task = await resolveTaskForEvidence(actor, taskId);
+  assertGpmsManagedTask(task);
+  return listTaskEvidenceByTaskId(task.id);
+}
+
+export async function createTaskEvidenceFileService(actor, taskId, payload) {
+  const task = await resolveTaskForEvidence(actor, taskId);
+  assertManualEvidenceWriteAllowed(task, actor);
+
+  return createTaskEvidence({
+    taskId: task.id,
+    teamId: task.teamId,
+    uploadedByUserId: actor.id,
+    type: "FILE",
+    title: normalizeEvidenceTitle(payload.title, payload.fileName),
+    url: payload.url,
+    fileName: payload.fileName ?? null,
+    fileSize: payload.fileSize ?? null,
+    fileType: payload.fileType ?? null,
+  });
+}
+
+export async function createTaskEvidenceLinkService(actor, taskId, payload) {
+  const task = await resolveTaskForEvidence(actor, taskId);
+  assertManualEvidenceWriteAllowed(task, actor);
+
+  return createTaskEvidence({
+    taskId: task.id,
+    teamId: task.teamId,
+    uploadedByUserId: actor.id,
+    type: "LINK",
+    title: normalizeEvidenceTitle(payload.title, payload.url),
+    url: payload.url,
+    fileName: null,
+    fileSize: null,
+    fileType: null,
+  });
+}
+
+export async function deleteTaskEvidenceService(actor, taskId, evidenceId) {
+  const task = await resolveTaskForEvidence(actor, taskId);
+  assertManualEvidenceWriteAllowed(task, actor);
+
+  const evidence = await findTaskEvidenceById(evidenceId);
+  if (!evidence || evidence.taskId !== task.id) {
+    throw new AppError("Evidence not found.", 404, "TASK_EVIDENCE_NOT_FOUND");
+  }
+
+  if (evidence.uploadedBy?.id !== actor.id) {
+    throw new AppError("You can delete only evidence you uploaded.", 403, "TASK_EVIDENCE_DELETE_FORBIDDEN");
+  }
+
+  if (evidence.submittedAt) {
+    throw new AppError("Submitted evidence is locked and cannot be deleted.", 409, "TASK_EVIDENCE_ALREADY_SUBMITTED");
+  }
+
+  return deleteTaskEvidenceById(evidence.id);
 }
 
 export async function submitTaskForReviewService(actor, taskId) {
@@ -799,28 +996,71 @@ export async function submitTaskForReviewService(actor, taskId) {
     if (!buildGitHubReviewGate(task)?.ready) {
       throw new AppError(buildMissingGitHubReviewEvidenceMessage(task), 409, "TASK_GITHUB_REVIEW_REQUIREMENTS_NOT_MET");
     }
+  } else {
+    const draftEvidenceCount = await countDraftTaskEvidence(task.id);
+    assertManualTaskHasDraftEvidence(draftEvidenceCount);
   }
 
-  const updated = await updateTaskById(task.id, {
+  const submittedAt = new Date();
+  const updated = await submitTaskForReviewById(task.id, {
     status: "REVIEW",
-    submittedForReviewAt: new Date(),
+    submittedForReviewAt: submittedAt,
     reviewFeedback: null,
     reviewComment: null,
     reviewDecision: null,
+  }, {
+    lockManualEvidence: isManualTask(task),
+    submittedAt,
   });
 
-  // Notify the team leader a task needs review
-  if (task.team?.leader?.id && task.team.leader.id !== actor.id) {
+  // Notify the assigned TA that a task needs review.
+  if (task.team?.ta?.id && task.team.ta.id !== actor.id) {
     await notify({
-      userId: task.team.leader.id,
+      userId: task.team.ta.id,
       type: "TASK_REVIEWED",
       title: "Task Ready for Review",
       message: `"${task.title}" has been submitted for review by ${buildFullName(actor)}.`,
-      actionUrl: "/dashboard/tasks",
+      actionUrl: "/dashboard/reviews",
     });
   }
 
   return toTaskResponse(updated, actor);
+}
+
+/**
+ * Notify the team-side counterpart reviewer about a review just submitted.
+ * If a LEADER reviewed, notify the TA (and vice versa) so they know there's
+ * already feedback on the task. The recipient can still leave their own
+ * follow-up review even if the task is already approved/done.
+ */
+async function notifyCounterpartReviewer(task, actor, reviewerRole, decision, reviewComment) {
+  const isApproved = decision === "APPROVED";
+  const verb = isApproved ? "approved" : "requested resubmission on";
+  const actorName = buildFullName(actor);
+  const baseMessage = `${actorName} (${reviewerRole === "LEADER" ? "Team Leader" : "TA"}) ${verb} "${task.title}".${
+    reviewComment ? ` Note: "${reviewComment}".` : ""
+  }`;
+
+  // LEADER reviewed → notify TA. TA reviewed → notify LEADER. ADMIN reviewed → notify both.
+  const recipients = [];
+  if (reviewerRole === "LEADER" && task.team?.ta?.id && task.team.ta.id !== actor.id) {
+    recipients.push(task.team.ta.id);
+  } else if (reviewerRole === "TA" && task.team?.leader?.id && task.team.leader.id !== actor.id) {
+    recipients.push(task.team.leader.id);
+  } else if (reviewerRole === "ADMIN") {
+    if (task.team?.leader?.id && task.team.leader.id !== actor.id) recipients.push(task.team.leader.id);
+    if (task.team?.ta?.id && task.team.ta.id !== actor.id) recipients.push(task.team.ta.id);
+  }
+
+  for (const userId of recipients) {
+    await notify({
+      userId,
+      type: "TASK_REVIEWED",
+      title: isApproved ? "Task Approved by Counterpart" : "Resubmission Requested by Counterpart",
+      message: `${baseMessage} You can still leave your own follow-up review.`,
+      actionUrl: "/dashboard/reviews",
+    });
+  }
 }
 
 export async function approveTaskService(actor, taskId, payload = {}) {
@@ -829,64 +1069,97 @@ export async function approveTaskService(actor, taskId, payload = {}) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskReviewer(task, actor);
+  const reviewerRole = assertTaskReviewer(task, actor);
 
-  if (task.status !== "REVIEW") {
-    throw new AppError("Only tasks in review can be approved.", 409, "TASK_NOT_IN_REVIEW");
-  }
+  // Allow either:
+  //  - a primary review while task is in REVIEW (closes the task)
+  //  - a supplementary review on an already-approved/done task (audit-only)
+  const isPrimaryReview = task.status === "REVIEW";
+  const isSupplementaryReview =
+    task.status === "DONE" || (task.status === "APPROVED" && isRepoBackedTask(task));
 
-  let merged = false;
-  if (isRepoBackedTask(task)) {
-    task = await resyncTaskGitHubStateService(actor, task.id);
-    if (!buildGitHubReviewGate(task)?.ready) {
-      throw new AppError(buildMissingGitHubReviewEvidenceMessage(task), 409, "TASK_GITHUB_REVIEW_REQUIREMENTS_NOT_MET");
-    }
-
-    await reviewTaskPullRequestService(actor, task.id, {
-      event: "APPROVE",
-      body: normalizeText(payload.reviewComment) || undefined,
-    });
-
-    if (payload.mergePullRequest) {
-      await mergeTaskPullRequestService(actor, task.id, {
-        mergeMethod: payload.mergeMethod,
-      });
-      merged = true;
-    }
-
-    task = await resyncTaskGitHubStateService(actor, task.id);
-    if (task.githubPullRequestMergedAt) {
-      merged = true;
-    }
+  if (!isPrimaryReview && !isSupplementaryReview) {
+    throw new AppError("This task is not open for review.", 409, "TASK_NOT_REVIEWABLE");
   }
 
   const reviewComment = normalizeText(payload.reviewComment) || null;
-  const updated = await updateTaskById(task.id, {
-    status: merged ? "DONE" : isRepoBackedTask(task) ? "APPROVED" : "DONE",
-    reviewedAt: new Date(),
-    reviewedByUserId: actor.id,
-    reviewFeedback: reviewComment,
-    reviewComment,
-    reviewDecision: "APPROVED",
-    reviewSnapshot: buildReviewSnapshot(task, actor, {
-      mergeRequested: Boolean(payload.mergePullRequest),
-      mergeMethod: payload.mergeMethod ?? null,
-      merged,
+  let merged = false;
+  let updatedTask = task;
+
+  if (isPrimaryReview) {
+    // The first APPROVED review closes the task. Run the full GitHub-merge / status-transition flow.
+    if (isRepoBackedTask(task)) {
+      task = await resyncTaskGitHubStateService(actor, task.id);
+      if (!buildGitHubReviewGate(task)?.ready) {
+        throw new AppError(buildMissingGitHubReviewEvidenceMessage(task), 409, "TASK_GITHUB_REVIEW_REQUIREMENTS_NOT_MET");
+      }
+
+      await reviewTaskPullRequestService(actor, task.id, {
+        event: "APPROVE",
+        body: reviewComment || undefined,
+      });
+
+      if (shouldMergeApprovedTaskPullRequest(payload)) {
+        await mergeTaskPullRequestService(actor, task.id, {
+          mergeMethod: payload.mergeMethod,
+        });
+        merged = true;
+      }
+
+      task = await resyncTaskGitHubStateService(actor, task.id);
+      if (task.githubPullRequestMergedAt) {
+        merged = true;
+      }
+    }
+
+    updatedTask = await updateTaskById(task.id, {
+      status: merged ? "DONE" : isRepoBackedTask(task) ? "APPROVED" : "DONE",
+      reviewedAt: new Date(),
+      reviewedByUserId: actor.id,
+      reviewFeedback: reviewComment,
+      reviewComment,
+      reviewDecision: "APPROVED",
+      reviewSnapshot: buildReviewSnapshot(task, actor, {
+        reviewerRole,
+        mergeRequested: shouldMergeApprovedTaskPullRequest(payload),
+        mergeMethod: payload.mergeMethod ?? null,
+        merged,
+      }),
+    });
+  }
+  // For supplementary reviews we deliberately leave the task's pointer fields
+  // and status alone — the TaskReview row below is the only record.
+
+  await createTaskReview({
+    taskId: task.id,
+    reviewerUserId: actor.id,
+    reviewerRole,
+    decision: "APPROVED",
+    comment: reviewComment,
+    snapshot: buildReviewSnapshot(task, actor, {
+      reviewerRole,
+      supplementary: !isPrimaryReview,
+      merged: isPrimaryReview ? merged : undefined,
     }),
   });
 
-  // Notify the assignee their task was approved
+  // Notify the assignee (student) — they care about every review on their task.
   if (task.assigneeUserId && task.assigneeUserId !== actor.id) {
     await notify({
       userId: task.assigneeUserId,
       type: "TASK_APPROVED",
-      title: "Task Approved",
-      message: `Your task "${task.title}" has been approved${reviewComment ? `: "${reviewComment}"` : "."}`,
+      title: isPrimaryReview ? "Task Approved" : "Additional Review: Approved",
+      message: `${buildFullName(actor)} (${
+        reviewerRole === "LEADER" ? "Team Leader" : reviewerRole === "TA" ? "TA" : "Admin"
+      }) approved your task "${task.title}"${reviewComment ? `: "${reviewComment}"` : "."}`,
       actionUrl: "/dashboard/tasks",
     });
   }
 
-  return toTaskResponse(updated, actor);
+  // Notify the other team reviewer so they see a second opinion is available.
+  await notifyCounterpartReviewer(task, actor, reviewerRole, "APPROVED", reviewComment);
+
+  return toTaskResponse(updatedTask, actor);
 }
 
 export async function rejectTaskService(actor, taskId, payload) {
@@ -895,11 +1168,17 @@ export async function rejectTaskService(actor, taskId, payload) {
   task = await refreshTaskWorkflowState(task);
   assertActorCanViewTask(task, actor);
   assertGpmsManagedTask(task);
-  assertTaskReviewer(task, actor);
+  const reviewerRole = assertTaskReviewer(task, actor);
 
-  const canRejectCurrentStatus = task.status === "REVIEW" || (isRepoBackedTask(task) && task.status === "APPROVED");
-  if (!canRejectCurrentStatus) {
-    throw new AppError("Only reviewed tasks can be sent back for changes.", 409, "TASK_NOT_IN_REVIEW");
+  // Reject is the inverse of approve:
+  //  - Primary "request resubmission" while task is in REVIEW (sends back to TODO)
+  //  - Supplementary concern on an already-approved/done task (audit-only)
+  const isPrimaryReview =
+    task.status === "REVIEW" || (isRepoBackedTask(task) && task.status === "APPROVED");
+  const isSupplementaryReview = !isPrimaryReview && (task.status === "DONE" || task.status === "APPROVED");
+
+  if (!isPrimaryReview && !isSupplementaryReview) {
+    throw new AppError("This task is not open for review.", 409, "TASK_NOT_REVIEWABLE");
   }
 
   const reviewComment = normalizeText(payload.reviewComment);
@@ -907,39 +1186,69 @@ export async function rejectTaskService(actor, taskId, payload) {
     throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");
   }
 
-  if (isRepoBackedTask(task) && task.githubPullRequestNumber) {
-    await reviewTaskPullRequestService(actor, task.id, {
-      event: "REQUEST_CHANGES",
-      body: reviewComment,
+  let updatedTask = task;
+
+  if (isPrimaryReview) {
+    const resubmissionUpdate = buildTaskResubmissionUpdate(task, actor, reviewComment);
+
+    if (isRepoBackedTask(task) && task.githubPullRequestNumber) {
+      await reviewTaskPullRequestService(actor, task.id, {
+        event: "REQUEST_CHANGES",
+        body: reviewComment,
+      });
+      task = await resyncTaskGitHubStateService(actor, task.id);
+      Object.assign(resubmissionUpdate, buildTaskResubmissionUpdate(task, actor, reviewComment));
+    }
+
+    // Tag the snapshot with reviewerRole so the audit/history shows who closed the task.
+    resubmissionUpdate.reviewSnapshot = buildReviewSnapshot(task, actor, {
+      reviewerRole,
+      requestedChanges: true,
     });
-    task = await resyncTaskGitHubStateService(actor, task.id);
+
+    updatedTask = await updateTaskById(task.id, resubmissionUpdate);
   }
 
-  const updated = await updateTaskById(task.id, {
-    status: "IN_PROGRESS",
-    submittedForReviewAt: null,
-    reviewedAt: new Date(),
-    reviewedByUserId: actor.id,
-    reviewFeedback: reviewComment,
-    reviewComment,
-    reviewDecision: "CHANGES_REQUESTED",
-    reviewSnapshot: buildReviewSnapshot(task, actor, {
+  await createTaskReview({
+    taskId: task.id,
+    reviewerUserId: actor.id,
+    reviewerRole,
+    decision: "CHANGES_REQUESTED",
+    comment: reviewComment,
+    snapshot: buildReviewSnapshot(task, actor, {
+      reviewerRole,
+      supplementary: !isPrimaryReview,
       requestedChanges: true,
     }),
   });
 
-  // Notify the assignee that changes were requested
+  // Notify the assignee — every "request resubmission" is something they need to see.
   if (task.assigneeUserId && task.assigneeUserId !== actor.id) {
     await notify({
       userId: task.assigneeUserId,
       type: "TASK_CHANGES_REQUESTED",
-      title: "Changes Requested",
-      message: `Changes requested on your task "${task.title}": "${reviewComment}".`,
+      title: isPrimaryReview ? "Resubmission Requested" : "Additional Review: Changes Requested",
+      message: `${buildFullName(actor)} (${
+        reviewerRole === "LEADER" ? "Team Leader" : reviewerRole === "TA" ? "TA" : "Admin"
+      }) requested changes on "${task.title}": "${reviewComment}".`,
       actionUrl: "/dashboard/tasks",
     });
   }
 
-  return toTaskResponse(updated, actor);
+  // Notify the counterpart reviewer.
+  await notifyCounterpartReviewer(task, actor, reviewerRole, "CHANGES_REQUESTED", reviewComment);
+
+  return toTaskResponse(updatedTask, actor);
+}
+
+export async function listTaskReviewsService(actor, taskId) {
+  let task = await findTaskById(taskId);
+  assertTaskExists(task);
+  task = await refreshTaskWorkflowState(task);
+  assertActorCanViewTask(task, actor);
+
+  const reviews = await listTaskReviewsByTaskId(task.id);
+  return reviews.map(toTaskReviewResponse);
 }
 
 export async function bootstrapTaskGithubService(actor, taskId) {
