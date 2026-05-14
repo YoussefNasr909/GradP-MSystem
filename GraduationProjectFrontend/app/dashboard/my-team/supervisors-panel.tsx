@@ -1022,12 +1022,11 @@ function SupervisorCandidatesSection({
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // Derive a department filter dropdown from the visible candidates
-  const departments: string[] = Array.from(
+  const departments = Array.from(
     new Set(
       candidates
         .map((c) => c.department)
-        .filter((d): d is NonNullable<typeof d> => Boolean(d))
-        .map((d) => String(d)),
+        .filter((d): d is NonNullable<ApiDirectoryUser["department"]> => Boolean(d)),
     ),
   ).sort()
   const [departmentFilter, setDepartmentFilter] = useState<string>("ALL")

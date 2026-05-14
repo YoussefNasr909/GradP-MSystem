@@ -224,7 +224,7 @@ const faqData: Record<string, Array<{ question: string; answer: string; helpful?
     {
       question: "How do I update my profile?",
       answer:
-        "Go to 'Profile' or 'Settings' from your user menu. You can update your personal information, profile picture, bio, and contact details.",
+        "Go to 'Settings' from your user menu. You can update your personal information, profile picture, bio, and contact details.",
       helpful: 112,
     },
     {

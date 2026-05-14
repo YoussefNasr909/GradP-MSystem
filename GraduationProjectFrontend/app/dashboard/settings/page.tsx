@@ -244,6 +244,7 @@ export default function SettingsPage() {
   const [savedSection, setSavedSection] = useState<SettingsTab | null>(null)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false)
+  const [profilePhotoDeleting, setProfilePhotoDeleting] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
 
   const settingsRef = useRef(settings)
@@ -318,6 +319,7 @@ export default function SettingsPage() {
   const browserPermission = typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   const canDisableTwoFactor = disablePassword.trim().length > 0 && (disableCode.trim().length > 0 || disableRecoveryCode.trim().length > 0)
   const currentAvatarUrl = currentUser?.avatar || currentUser?.avatarUrl
+  const hasProfilePhoto = Boolean(currentAvatarUrl)
   const linkedinUrl = profileForm.linkedinUrl.trim()
   const githubUsername = profileForm.githubUsername.trim().replace(/^@/, "")
   const githubProfileUrl = getGithubProfileUrl(githubUsername)
@@ -408,6 +410,28 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : "Could not upload profile photo.")
     } finally {
       setProfilePhotoUploading(false)
+    }
+  }
+
+  const removeProfilePhoto = async () => {
+    if (!hasProfilePhoto) {
+      toast.error("There is no profile photo to delete.")
+      return
+    }
+    if (!accessToken) {
+      toast.error("Please sign in again before deleting your photo.")
+      return
+    }
+
+    setProfilePhotoDeleting(true)
+    try {
+      const updated = await usersApi.removeMyAvatar(accessToken)
+      setAuth({ accessToken, user: mapApiUserToUiUser(updated), rememberSession })
+      toast.success("Profile photo deleted.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete profile photo.")
+    } finally {
+      setProfilePhotoDeleting(false)
     }
   }
 
@@ -674,10 +698,23 @@ export default function SettingsPage() {
                         size="icon"
                         className="absolute bottom-1 right-1 h-9 w-9 rounded-full shadow-sm"
                         onClick={() => profilePhotoInputRef.current?.click()}
-                        disabled={profilePhotoUploading}
+                        disabled={profilePhotoUploading || profilePhotoDeleting}
                         aria-label="Upload profile photo"
                       >
                         {profilePhotoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <div className="mt-3 flex items-center justify-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeProfilePhoto}
+                        disabled={!hasProfilePhoto || profilePhotoUploading || profilePhotoDeleting}
+                        className="h-8 rounded-full border-destructive/30 px-3 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive disabled:border-border/60 disabled:text-muted-foreground"
+                      >
+                        {profilePhotoDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        Delete photo
                       </Button>
                     </div>
                     <div className="mt-4">
@@ -1381,4 +1418,3 @@ function SettingsSaveButton({
     </Button>
   )
 }
-
