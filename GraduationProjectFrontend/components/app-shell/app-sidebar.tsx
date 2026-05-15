@@ -13,7 +13,6 @@ import {
   Award,
   BarChart3,
   ShieldCheck,
-  Search,
   Upload,
   GraduationCap,
   ChevronDown,
@@ -36,6 +35,7 @@ import {
   StickyNote,
   Megaphone,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -45,151 +45,108 @@ import { Button } from "@/components/ui/button"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-const navigationGroups = [
-  {
-    name: "Main",
-    items: [
-      {
-        name: "Dashboard",
-        href: "/dashboard",
-        icon: LayoutDashboard,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
-      // Supervision — the supervisor's daily workspace (activity, notes, deadlines, rubrics).
-      // Sits at the top of the sidebar for doctor/TA/admin since it's their main entry point.
-      {
-        name: "Supervision",
-        href: "/dashboard/supervisor-toolkit",
-        icon: StickyNote,
-        roles: ["doctor", "ta"],
-      },
-      // User Management (formerly "Admin Panel") — the admin's primary tool.
-      // Moved here from Management & Reports so it's one click away on login.
-      {
-        name: "User Management",
-        href: "/dashboard/admin",
-        icon: ShieldCheck,
-        roles: ["admin"],
-      },
-      {
-        name: "My Team",
-        href: "/dashboard/my-team",
-        icon: Crown,
-        roles: ["leader", "member"],
-      },
-      {
-        name: "GitHub",
-        href: "/dashboard/github",
-        icon: Github,
-        roles: ["leader", "member", "doctor", "ta"],
-      },
-      {
-        name: "Gamification",
-        href: "/dashboard/gamification",
-        icon: Trophy,
-        roles: ["leader", "member"],
-      },
-    ],
-  },
-  {
-    name: "Team & Projects",
-    items: [
-      { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin"] },
-      { name: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["doctor", "ta"] },
-      { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
-      { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
-      { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
-    ],
-  },
-  {
-    name: "Work & Collaboration",
-    items: [
-      {
-        name: "Calendar",
-        href: "/dashboard/calendar",
-        icon: Calendar,
-        roles: ["doctor", "ta", "leader", "member"],
-      },
-      // Proposals — created by leader, reviewed by doctor only (TA is not in the proposal loop)
-      { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["doctor", "leader", "member"] },
-      {
-        name: "Submissions",
-        href: "/dashboard/submissions",
-        icon: Upload,
-        roles: ["leader", "member", "doctor", "ta"],
-      },
-      // Review Tasks — TA and Leader both review submitted task work.
-      // Either approval moves the task forward; supplementary reviews
-      // from the other reviewer still get recorded for the audit trail.
-      { name: "Review Tasks", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta", "leader", "admin"] },
-      // Grades Overview (formerly Evaluations) — admin + doctor only (final grade owner)
-      { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
-      {
-        name: "Meetings",
-        href: "/dashboard/meetings",
-        icon: Video,
-        roles: ["doctor", "ta", "leader", "member"],
-      },
-      {
-        name: "Discussions",
-        href: "/dashboard/discussions",
-        icon: MessageCircle,
-        roles: ["doctor", "ta", "leader", "member"],
-      },
-      {
-        name: "Chat & Q/A",
-        href: "/dashboard/chat",
-        icon: MessageSquare,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
-      {
-        name: "Resources",
-        href: "/dashboard/resources",
-        icon: BookOpen,
-        roles: ["doctor", "ta", "leader", "member"],
-      },
-      { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
-      // Announcements — supervisors post, everyone reads
-      { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone, roles: ["admin", "doctor", "ta", "leader", "member"] },
-    ],
-  },
-  {
-    name: "Management & Reports",
-    items: [
-      { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor"] },
-      { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
-      // Risks: leaders log them, TAs approve monitoring, supervisors confirm resolution.
-      { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "member", "ta", "doctor"] },
-      // Supervision + User Management stay in the Main group as primary workspaces.
-      { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
-    ],
-  },
-  {
-    name: "Help & Support",
-    items: [
-      {
-        name: "Help Center",
-        href: "/dashboard/help",
-        icon: HelpCircle,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
-      { name: "FAQs", href: "/dashboard/faq", icon: BookOpen, roles: ["admin", "doctor", "ta", "leader", "member"] },
-      {
-        name: "Contact Support",
-        href: "/dashboard/support",
-        icon: LifeBuoy,
-        roles: ["admin", "doctor", "ta", "leader", "member"],
-      },
-    ],
-  },
+type Role = "admin" | "doctor" | "ta" | "leader" | "member"
+
+type NavigationItem = {
+  name: string
+  href: string
+  icon: LucideIcon
+  roles: Role[]
+}
+
+const navigationItems: NavigationItem[] = [
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Supervision", href: "/dashboard/supervisor-toolkit", icon: StickyNote, roles: ["doctor", "ta"] },
+  { name: "User Management", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
+  { name: "My Team", href: "/dashboard/my-team", icon: Crown, roles: ["leader", "member"] },
+  { name: "GitHub", href: "/dashboard/github", icon: Github, roles: ["leader", "member", "doctor", "ta"] },
+  { name: "Gamification", href: "/dashboard/gamification", icon: Trophy, roles: ["leader", "member"] },
+  { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin"] },
+  { name: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["doctor", "ta"] },
+  { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
+  { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
+  { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
+  { name: "Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["doctor", "ta", "leader", "member"] },
+  { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["doctor", "leader", "member"] },
+  { name: "Submissions", href: "/dashboard/submissions", icon: Upload, roles: ["leader", "member", "doctor", "ta"] },
+  { name: "Review Tasks", href: "/dashboard/reviews", icon: CheckCircle2, roles: ["ta", "leader"] },
+  { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
+  { name: "Meetings", href: "/dashboard/meetings", icon: Video, roles: ["doctor", "ta", "leader", "member"] },
+  { name: "Discussions", href: "/dashboard/discussions", icon: MessageCircle, roles: ["doctor", "ta", "leader", "member"] },
+  { name: "Chat", href: "/dashboard/chat", icon: MessageSquare, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Resources", href: "/dashboard/resources", icon: BookOpen, roles: ["doctor", "ta", "leader", "member"] },
+  { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
+  { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Analytics", href: "/dashboard/analytics", icon: TrendingUp, roles: ["admin", "doctor"] },
+  { name: "Reports", href: "/dashboard/reports", icon: BarChart3, roles: ["admin", "doctor"] },
+  { name: "Risk Management", href: "/dashboard/risk-management", icon: AlertTriangle, roles: ["leader", "member", "ta", "doctor"] },
+  { name: "System Logs", href: "/dashboard/admin/logs", icon: Activity, roles: ["admin"] },
+  { name: "Help Center", href: "/dashboard/help", icon: HelpCircle, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "FAQs", href: "/dashboard/faq", icon: BookOpen, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Contact Support", href: "/dashboard/support", icon: LifeBuoy, roles: ["admin", "doctor", "ta", "leader", "member"] },
 ]
+
+const navigationItemByName = Object.fromEntries(navigationItems.map((item) => [item.name, item])) as Record<
+  string,
+  NavigationItem
+>
+
+const roleNavigationGroups: Record<Role, { name: string; items: string[] }[]> = {
+  admin: [
+    { name: "Main", items: ["Dashboard", "User Management", "All Teams", "System Logs"] },
+    { name: "Management & Reports", items: ["Analytics", "Reports", "Grades Overview"] },
+    { name: "Communication", items: ["Announcements", "Chat"] },
+    { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+  doctor: [
+    { name: "Main", items: ["Dashboard", "Supervision", "My Teams", "Submissions", "Grades Overview", "Proposals"] },
+    {
+      name: "Work & Collaboration",
+      items: ["Meetings", "Calendar", "Risk Management", "Announcements", "Resources", "Documents", "GitHub", "Discussions", "Chat"],
+    },
+    { name: "Management & Reports", items: ["Analytics", "Reports"] },
+    { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+  ta: [
+    { name: "Main", items: ["Dashboard", "Review Tasks", "Supervision", "Submissions", "Risk Management", "My Teams"] },
+    {
+      name: "Work & Collaboration",
+      items: ["Meetings", "Calendar", "Announcements", "Resources", "Documents", "GitHub", "Discussions", "Chat"],
+    },
+    { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+  leader: [
+    { name: "Main", items: ["Dashboard", "My Team", "Tasks & Boards", "Sprints", "Submissions", "Proposals", "Review Tasks"] },
+    {
+      name: "Work & Collaboration",
+      items: ["GitHub", "Meetings", "Calendar", "Risk Management", "Time Tracker", "Documents", "Discussions", "Chat", "Resources", "Announcements"],
+    },
+    { name: "Growth", items: ["Gamification"] },
+    { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+  member: [
+    { name: "Main", items: ["Dashboard", "My Team", "Tasks & Boards", "Sprints", "Submissions", "GitHub"] },
+    {
+      name: "Work & Collaboration",
+      items: ["Meetings", "Calendar", "Time Tracker", "Documents", "Resources", "Discussions", "Chat", "Announcements", "Proposals", "Risk Management"],
+    },
+    { name: "Growth", items: ["Gamification"] },
+    { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
   const { currentUser } = useAuthStore()
   const { sidebarCollapsed, isMobileSidebarOpen, setMobileSidebarOpen } = useUIStore()
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Main", "Team & Projects"])
-  const isStudentRole = currentUser?.role === "leader" || currentUser?.role === "member"
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([
+    "Main",
+    "Management & Reports",
+    "Communication",
+    "Work & Collaboration",
+  ])
+  const currentRole = (currentUser?.role || "member") as Role
+  const isStudentRole = currentRole === "leader" || currentRole === "member"
   const { data: myTeamState, isLoading: myTeamLoading } = useMyTeamState(isStudentRole)
 
   const toggleGroup = (groupName: string) => {
@@ -198,21 +155,27 @@ export function AppSidebar() {
 
   const resolvedNavigationGroups = useMemo(() => {
     const shouldPromptTeamSetup = isStudentRole && !myTeamLoading && !myTeamState?.team
+    const groupsForRole = roleNavigationGroups[currentRole] ?? roleNavigationGroups.member
 
-    return navigationGroups.map((group) => ({
-      ...group,
-      items: group.items.map((item) => {
-        if (item.href !== "/dashboard/my-team") return item
+    return groupsForRole
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .map((itemName) => navigationItemByName[itemName])
+          .filter((item): item is NavigationItem => Boolean(item) && item.roles.includes(currentRole))
+          .map((item) => {
+            if (item.href !== "/dashboard/my-team") return item
 
-        if (!shouldPromptTeamSetup) return item
+            if (!shouldPromptTeamSetup) return item
 
-        return {
-          ...item,
-          name: currentUser?.role === "leader" ? "Create Team" : "Join Team",
-        }
-      }),
-    }))
-  }, [currentUser?.role, isStudentRole, myTeamLoading, myTeamState?.team])
+            return {
+              ...item,
+              name: currentRole === "leader" ? "Create Team" : "Join Team",
+            }
+          }),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [currentRole, isStudentRole, myTeamLoading, myTeamState?.team])
 
   return (
     <motion.aside
@@ -264,7 +227,7 @@ export function AppSidebar() {
       <ScrollArea className="h-[calc(100dvh-3.5rem)]">
         <nav className="space-y-1 p-2">
           {resolvedNavigationGroups.map((group, groupIndex) => {
-            const filteredItems = group.items.filter((item) => item.roles.includes(currentUser?.role || "member"))
+            const filteredItems = group.items
 
             if (filteredItems.length === 0) return null
 
@@ -337,7 +300,7 @@ export function AppSidebar() {
                       )
                       return (
                         <motion.div
-                          key={item.href}
+                          key={`${group.name}-${item.href}`}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.03, duration: 0.3 }}

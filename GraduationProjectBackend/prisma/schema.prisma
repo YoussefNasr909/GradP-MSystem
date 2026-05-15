@@ -512,6 +512,7 @@ model Team {
   supervisorNotes      TeamSupervisorNote[]
   deliverableDeadlines TeamDeliverableDeadline[]
   announcements        Announcement[]
+  announcementTargets  AnnouncementTargetTeam[]
   rubricTemplates      TeamRubricTemplate[]
   groupConversation TeamGroupConversation?
 
@@ -1386,13 +1387,14 @@ model TeamDeliverableDeadline {
   @@index([teamId])
 }
 
-// Announcements a supervisor broadcasts to all (or one) supervised team.
+// Announcements a supervisor broadcasts to target team(s).
 // On create, notifications are pushed to every member of the target team(s).
 model Announcement {
   id          String   @id @default(cuid())
   authorUserId String
   authorRole  Role
-  // null teamId = broadcast to ALL teams the author supervises
+  // Legacy direct target. Broadcasts and filtered audiences store concrete
+  // recipients in AnnouncementTargetTeam.
   teamId      String?
   title       String
   content     String
@@ -1402,7 +1404,20 @@ model Announcement {
 
   author User  @relation("AnnouncementAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
   team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  targetTeams AnnouncementTargetTeam[]
 
   @@index([authorUserId, createdAt])
   @@index([teamId, createdAt])
+}
+
+model AnnouncementTargetTeam {
+  announcementId String
+  teamId         String
+  createdAt      DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  team         Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, teamId])
+  @@index([teamId])
 }

@@ -3,7 +3,12 @@ import { auth } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { getSystemLogs, getUserActivity, getGradesOverview, getAnalytics, getTeamActivity } from "./admin.service.js";
-import { streamTeamReportCardPdf } from "./admin.pdf.js";
+import {
+  streamAnalyticsReportPdf,
+  streamGradesOverviewPdf,
+  streamSdlcPhasesPdf,
+  streamTeamReportCardPdf,
+} from "./admin.pdf.js";
 import { prisma } from "../../loaders/dbLoader.js";
 
 const router = Router();
@@ -64,14 +69,41 @@ router.get("/grades-overview", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req
 // GET /admin/analytics — admin + doctor (powers both /analytics and /reports pages)
 router.get("/analytics", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
   try {
-    const result = await getAnalytics();
+    const result = await getAnalytics({ actor: req.user });
     res.json({ ok: true, data: result });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /admin/teams/:teamId/activity — chronological feed
+// GET /admin/reports/grades.pdf - admin + doctor
+router.get("/reports/grades.pdf", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
+  try {
+    await streamGradesOverviewPdf(req.user, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/reports/sdlc-phases.pdf - admin + doctor
+router.get("/reports/sdlc-phases.pdf", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
+  try {
+    await streamSdlcPhasesPdf(req.user, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/reports/analytics.pdf - admin + doctor
+router.get("/reports/analytics.pdf", allowRoles(ROLES.ADMIN, ROLES.DOCTOR), async (req, res, next) => {
+  try {
+    await streamAnalyticsReportPdf(req.user, res);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /admin/teams/:teamId/activity - chronological feed
 // Visibility: admin sees all; doctor/ta only their teams; leader/member only their own team.
 router.get("/teams/:teamId/activity", async (req, res, next) => {
   try {

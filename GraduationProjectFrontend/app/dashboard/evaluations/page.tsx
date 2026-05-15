@@ -12,6 +12,8 @@ import { Progress } from "@/components/ui/progress"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Award,
+  ChevronLeft,
+  ChevronRight,
   TrendingUp,
   Users,
   CheckCircle2,
@@ -45,6 +47,9 @@ const STAGE_LABEL: Record<string, string> = {
   DEPLOYMENT: "Deployment",
   MAINTENANCE: "Maintenance",
 }
+
+const SDLC_PHASES = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"] as const
+const TEAM_PAGE_SIZE = 5
 
 const STAGE_COLOR: Record<string, string> = {
   REQUIREMENTS: "border-blue-500/30 text-blue-500 bg-blue-500/5",
@@ -102,8 +107,9 @@ function StatCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="min-w-0"
     >
-      <Card className="p-5 border-border/50 hover:border-border/80 transition-all hover:shadow-md relative overflow-hidden">
+      <div className="relative overflow-hidden rounded-xl p-4">
         <div className={cn("absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl opacity-20", accent)} />
         <div className="flex items-center gap-3 relative">
           <div className={cn("p-2.5 rounded-xl", accent)}>
@@ -114,7 +120,7 @@ function StatCard({
             <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
           </div>
         </div>
-      </Card>
+      </div>
     </motion.div>
   )
 }
@@ -349,10 +355,12 @@ export default function GradesOverviewPage() {
   const [error, setError] = useState(false)
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
-  const [refreshing, setRefreshing] = useState(false)
+  const [leaderboardPhaseIndex, setLeaderboardPhaseIndex] = useState(0)
+  const [teamPage, setTeamPage] = useState(1)
 
   const canView = currentUser?.role === "admin" || currentUser?.role === "doctor"
   const isDoctor = currentUser?.role === "doctor"
+  const leaderboardPhase = SDLC_PHASES[leaderboardPhaseIndex]
 
   // Bulk-approve state
   const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<Set<string>>(new Set())
@@ -380,19 +388,35 @@ export default function GradesOverviewPage() {
     fetchData().finally(() => setLoading(false))
   }, [canView, fetchData])
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchData()
-    setRefreshing(false)
-  }
+  useEffect(() => {
+    setTeamPage(1)
+  }, [search, stageFilter, isDoctor])
 
   const topTeams = useMemo(() => {
     if (!data) return []
-    return [...data.rows]
-      .filter((r) => r.weightedFinal !== null || r.averageGrade !== null)
-      .sort((a, b) => (b.weightedFinal ?? b.averageGrade ?? 0) - (a.weightedFinal ?? a.averageGrade ?? 0))
+
+    return data.rows
+      .map((row) => ({ row, score: row.phaseAverages[leaderboardPhase] }))
+      .filter((item): item is { row: GradesOverviewRow; score: number } => typeof item.score === "number")
+      .sort((a, b) => b.score - a.score)
       .slice(0, 3)
-  }, [data])
+  }, [data, leaderboardPhase])
+
+  const handleLeaderboardPhaseChange = (direction: -1 | 1) => {
+    setLeaderboardPhaseIndex((current) => (current + direction + SDLC_PHASES.length) % SDLC_PHASES.length)
+  }
+
+  const teamRows = data?.rows ?? []
+  const totalTeamPages = Math.max(1, Math.ceil(teamRows.length / TEAM_PAGE_SIZE))
+  const currentTeamPage = Math.min(teamPage, totalTeamPages)
+  const teamPageStartIndex = (currentTeamPage - 1) * TEAM_PAGE_SIZE
+  const paginatedTeamRows = teamRows.slice(teamPageStartIndex, teamPageStartIndex + TEAM_PAGE_SIZE)
+  const teamPageStart = teamRows.length === 0 ? 0 : teamPageStartIndex + 1
+  const teamPageEnd = Math.min(teamPageStartIndex + TEAM_PAGE_SIZE, teamRows.length)
+
+  useEffect(() => {
+    setTeamPage((current) => Math.min(current, totalTeamPages))
+  }, [totalTeamPages])
 
   if (!canView) {
     return (
@@ -410,15 +434,15 @@ export default function GradesOverviewPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
 
-      {/* Hero */}
-      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
+      {/* Hero + Stats */}
+      <Card className="relative overflow-hidden border-border/50 bg-card">
         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-transparent to-purple-500/5" />
         <motion.div
           className="absolute -right-20 -top-20 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"
           animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
           transition={{ duration: 20, repeat: Infinity }}
         />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 p-6">
           <div>
             <motion.h1
               className="text-3xl font-bold mb-1.5 flex items-center gap-3"
@@ -432,64 +456,106 @@ export default function GradesOverviewPage() {
               Official doctor grades with transparent SDLC weighting
             </motion.p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
-            Refresh
-          </Button>
         </div>
-      </div>
 
-      {/* Stats */}
-      {loading || !data ? (
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-5"><Skeleton className="h-14 w-full" /></Card>
-          ))}
+        <div className="relative z-10 border-t border-border/50 p-4">
+          {loading || !data ? (
+            <div className="grid gap-3 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-2 md:grid-cols-4 md:divide-x md:divide-border/50">
+              <StatCard label="Total Teams"        value={data.summary.totalTeams}        icon={Users}        accent="bg-blue-500"   delay={0} />
+              <StatCard label="Global Average"     value={`${data.summary.globalAverage}/100`} icon={TrendingUp} accent="bg-amber-500"  delay={0.05} />
+              <StatCard label="Submissions Graded" value={data.summary.totalApproved}     icon={CheckCircle2} accent="bg-green-500"  delay={0.1} />
+              <StatCard label="Awaiting Action"    value={data.summary.totalPendingReview + data.summary.totalUnderReview} icon={Clock} accent="bg-orange-500" delay={0.15} />
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard label="Total Teams"        value={data.summary.totalTeams}        icon={Users}        accent="bg-blue-500"   delay={0} />
-          <StatCard label="Global Average"     value={`${data.summary.globalAverage}/100`} icon={TrendingUp} accent="bg-amber-500"  delay={0.05} />
-          <StatCard label="Submissions Graded" value={data.summary.totalApproved}     icon={CheckCircle2} accent="bg-green-500"  delay={0.1} />
-          <StatCard label="Awaiting Action"    value={data.summary.totalPendingReview + data.summary.totalUnderReview} icon={Clock} accent="bg-orange-500" delay={0.15} />
-        </div>
-      )}
+      </Card>
 
       {/* Top 3 podium */}
-      {!loading && topTeams.length > 0 && (
+      {!loading && data && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card className="p-5 border-border/50">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Leaderboard</h2>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-amber-500" />
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Leaderboard</h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {STAGE_LABEL[leaderboardPhase]} phase top teams
+                </p>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Previous SDLC phase"
+                  onClick={() => handleLeaderboardPhaseChange(-1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Badge variant="outline" className={cn("h-8 px-3 text-xs", STAGE_COLOR[leaderboardPhase])}>
+                  {STAGE_LABEL[leaderboardPhase]}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Next SDLC phase"
+                  onClick={() => handleLeaderboardPhaseChange(1)}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            {topTeams.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-3">
-              {topTeams.map((t, i) => {
-                const grade = t.weightedFinal ?? t.averageGrade ?? 0
-                const medal = ["🥇", "🥈", "🥉"][i]
+              {topTeams.map(({ row, score }, i) => {
+                const rankTone = [
+                  "border-amber-500/40 bg-amber-500/5 text-amber-500",
+                  "border-gray-400/40 bg-gray-400/5 text-gray-500",
+                  "border-orange-700/40 bg-orange-700/5 text-orange-700",
+                ][i]
                 return (
                   <motion.div
-                    key={t.teamId}
+                    key={`${row.teamId}-${leaderboardPhase}`}
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.25 + i * 0.08, type: "spring", stiffness: 200 }}
-                    className={cn(
-                      "p-4 rounded-xl border-2 relative overflow-hidden",
-                      i === 0 && "border-amber-500/40 bg-amber-500/5",
-                      i === 1 && "border-gray-400/40 bg-gray-400/5",
-                      i === 2 && "border-orange-700/40 bg-orange-700/5",
-                    )}
+                    className={cn("p-4 rounded-xl border-2 relative overflow-hidden", rankTone)}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-2xl">{medal}</span>
-                      <Badge variant="outline" className="text-[10px]">{STAGE_LABEL[t.stage]}</Badge>
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/80 text-sm font-bold">
+                        {i + 1}
+                      </span>
+                      <Award className="h-5 w-5" />
                     </div>
-                    <p className="font-semibold truncate">{t.teamName}</p>
-                    <p className={cn("text-3xl font-bold mt-1 tabular-nums", gradeColor(grade))}>{grade}<span className="text-sm text-muted-foreground">/100</span></p>
+                    <p className="font-semibold truncate text-foreground">{row.teamName}</p>
+                    <div className="mt-2 flex items-end justify-between gap-2">
+                      <p className={cn("text-3xl font-bold tabular-nums", gradeColor(score))}>
+                        {score}<span className="text-sm text-muted-foreground">/100</span>
+                      </p>
+                      <Badge variant="outline" className={cn("text-[10px]", STAGE_COLOR[leaderboardPhase])}>
+                        {STAGE_LABEL[leaderboardPhase]}
+                      </Badge>
+                    </div>
                   </motion.div>
                 )
               })}
             </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                No graded teams yet for the {STAGE_LABEL[leaderboardPhase]} phase.
+              </div>
+            )}
           </Card>
         </motion.div>
       )}
@@ -619,11 +685,11 @@ export default function GradesOverviewPage() {
       ) : (
         <div className="space-y-3">
           <AnimatePresence mode="popLayout" initial={false}>
-            {data.rows.map((row, i) => (
+            {paginatedTeamRows.map((row, i) => (
               <TeamRow
                 key={row.teamId}
                 row={row}
-                index={i}
+                index={teamPageStartIndex + i}
                 isDoctorView={isDoctor}
                 selectedIds={selectedSubmissionIds}
                 onToggleSelect={(id) => {
@@ -636,6 +702,43 @@ export default function GradesOverviewPage() {
               />
             ))}
           </AnimatePresence>
+          {totalTeamPages > 1 && (
+            <Card className="border-border/50 p-3">
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                <p className="text-sm text-muted-foreground">
+                  Showing {teamPageStart}-{teamPageEnd} of {teamRows.length} teams
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="Previous teams page"
+                    disabled={currentTeamPage === 1}
+                    onClick={() => setTeamPage((current) => Math.max(1, current - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-20 text-center text-sm font-medium tabular-nums">
+                    {currentTeamPage} / {totalTeamPages}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="Next teams page"
+                    disabled={currentTeamPage === totalTeamPages}
+                    onClick={() => setTeamPage((current) => Math.min(totalTeamPages, current + 1))}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="hidden sm:block" aria-hidden="true" />
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </motion.div>

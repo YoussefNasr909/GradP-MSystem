@@ -14,7 +14,6 @@ import {
   Calendar,
   AlertTriangle,
   TrendingUp,
-  RefreshCw,
   Lock,
   AlertCircle,
   Award,
@@ -67,8 +66,9 @@ function MetricCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="min-w-0"
     >
-      <Card className="p-5 border-border/50 hover:border-border hover:shadow-md transition-all relative overflow-hidden group">
+      <div className="relative overflow-hidden rounded-xl p-4 group">
         <div className={cn("absolute -right-8 -top-8 w-24 h-24 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity", accent)} />
         <div className="relative flex items-start gap-3">
           <div className={cn("p-2.5 rounded-xl", accent)}>
@@ -93,7 +93,7 @@ function MetricCard({
             )}
           </div>
         </div>
-      </Card>
+      </div>
     </motion.div>
   )
 }
@@ -181,11 +181,11 @@ export default function AnalyticsPage() {
   const { currentUser } = useAuthStore()
   const role = currentUser?.role?.toLowerCase() ?? ""
   const canView = role === "admin" || role === "doctor"
+  const isDoctor = role === "doctor"
 
   const [data, setData] = useState<AnalyticsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
 
   const fetchData = useCallback(async () => {
     setError(false)
@@ -203,12 +203,6 @@ export default function AnalyticsPage() {
     fetchData().finally(() => setLoading(false))
   }, [canView, fetchData])
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchData()
-    setRefreshing(false)
-  }
-
   if (!canView) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
@@ -224,15 +218,15 @@ export default function AnalyticsPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">
-      {/* Hero */}
-      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
+      {/* Hero + Metrics */}
+      <Card className="relative overflow-hidden border-border/50 bg-card">
         <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 via-transparent to-purple-500/5" />
         <motion.div
           className="absolute -right-20 -top-20 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"
           animate={{ scale: [1, 1.15, 1], rotate: [0, 120, 0] }}
           transition={{ duration: 20, repeat: Infinity }}
         />
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative z-10 p-6">
           <div>
             <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
               initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
@@ -241,38 +235,43 @@ export default function AnalyticsPage() {
             </motion.h1>
             <motion.p className="text-muted-foreground"
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              System-wide performance metrics, live from your database
+              {isDoctor
+                ? "Performance metrics for teams under your supervision"
+                : "System-wide performance metrics, live from your database"}
             </motion.p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
-            <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
-            Refresh
-          </Button>
         </div>
-      </div>
 
-      {/* Top metrics row */}
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-5"><Skeleton className="h-16" /></Card>
-          ))}
+        <div className="relative z-10 border-t border-border/50 p-4">
+          {loading ? (
+            <div className="grid gap-3 md:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full rounded-xl" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-6 text-center sm:flex-row sm:justify-between sm:text-left">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-muted-foreground">Failed to load analytics</p>
+              </div>
+              <Button variant="outline" size="sm" className="mt-4 sm:mt-0" onClick={() => void fetchData()}>
+                Try again
+              </Button>
+            </div>
+          ) : data ? (
+            <div className="grid gap-2 md:grid-cols-4 md:divide-x md:divide-border/50">
+              <MetricCard label={isDoctor ? "Supervised Students" : "Total Users"} value={data.overview.totalUsers} icon={Users} accent="bg-blue-500" delay={0} />
+              <MetricCard label={isDoctor ? "Supervised Teams" : "Active Teams"} value={data.overview.totalTeams} icon={Users} accent="bg-purple-500" delay={0.05} />
+              <MetricCard label="Average Grade"    value={data.overview.averageGrade} suffix="/100" icon={Award}    accent="bg-amber-500"  delay={0.1} />
+              <MetricCard label="On-time Rate"     value={data.overview.onTimeRate}   suffix="%"    icon={Activity} accent="bg-green-500"  delay={0.15} />
+            </div>
+          ) : null}
         </div>
-      ) : error ? (
-        <Card className="p-12 text-center border-border/50">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-          <p className="text-muted-foreground mb-4">Failed to load analytics</p>
-          <Button variant="outline" onClick={() => void fetchData()}>Try again</Button>
-        </Card>
-      ) : data ? (
+      </Card>
+
+      {!loading && !error && data ? (
         <>
-          <div className="grid gap-4 md:grid-cols-4">
-            <MetricCard label="Total Users"      value={data.overview.totalUsers}   icon={Users}    accent="bg-blue-500"   delay={0} />
-            <MetricCard label="Active Teams"     value={data.overview.totalTeams}   icon={Users}    accent="bg-purple-500" delay={0.05} />
-            <MetricCard label="Average Grade"    value={data.overview.averageGrade} suffix="/100" icon={Award}    accent="bg-amber-500"  delay={0.1} />
-            <MetricCard label="On-time Rate"     value={data.overview.onTimeRate}   suffix="%"    icon={Activity} accent="bg-green-500"  delay={0.15} />
-          </div>
-
           {/* Trend sparklines */}
           <div className="grid gap-4 md:grid-cols-3">
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -396,8 +395,8 @@ export default function AnalyticsPage() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Monitoring</span><span className="font-semibold">{data.risks.byStatus.MONITORING}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Resolved</span><span className="font-semibold">{data.risks.byStatus.RESOLVED}</span></div>
                   <div className="flex justify-between pt-1.5 mt-1.5 border-t border-border/40">
-                    <span className="text-red-500 font-medium">Critical open</span>
-                    <span className="font-bold text-red-500">{data.risks.criticalOpen}</span>
+                    <span className="text-red-500 font-medium">Critical active</span>
+                    <span className="font-bold text-red-500">{data.risks.criticalActive ?? data.risks.criticalOpen}</span>
                   </div>
                 </div>
               </Card>
