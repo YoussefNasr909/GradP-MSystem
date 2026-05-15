@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { auth } from "../../middlewares/auth.middleware.js";
+import { allowRoles } from "../../middlewares/role.middleware.js";
+import { ROLES } from "../../common/constants/roles.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import {
   assignTaskToSprint,
@@ -32,17 +34,45 @@ const router = Router();
 
 router.use(auth);
 
-router.get("/assigned-teams", validate(listAssignedSprintTeamsSchema), listAssignedSprintTeams);
+// Assigned-teams list is doctor/TA/admin only — students don't have an "assigned-teams" concept.
+router.get(
+  "/assigned-teams",
+  allowRoles(ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN),
+  validate(listAssignedSprintTeamsSchema),
+  listAssignedSprintTeams,
+);
 router.get("/", validate(listSprintsSchema), listSprintsBoard);
-router.post("/", validate(createSprintSchema), createSprint);
-router.patch("/tasks/:taskId", validate(updateSprintTaskSchema), updateSprintTask);
-router.post("/backlog/tasks/:taskId", validate(backlogTaskSchema), moveTaskToBacklog);
-router.put("/:id/evaluations/me", validate(upsertSprintEvaluationSchema), upsertMySprintEvaluation);
-router.patch("/:id/evaluations/:evaluationId/review", validate(reviewSprintEvaluationSchema), reviewSprintEvaluation);
-router.patch("/:id", validate(updateSprintSchema), updateSprint);
-router.delete("/:id", validate(sprintActionSchema), deleteSprint);
-router.post("/:id/start", validate(sprintActionSchema), startSprint);
-router.post("/:id/complete", validate(sprintActionSchema), completeSprint);
-router.post("/:id/tasks/:taskId", validate(assignSprintTaskSchema), assignTaskToSprint);
+// Sprint CRUD is leader/admin only.
+router.post("/", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(createSprintSchema), createSprint);
+router.patch("/tasks/:taskId", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(updateSprintTaskSchema), updateSprintTask);
+router.post(
+  "/backlog/tasks/:taskId",
+  allowRoles(ROLES.LEADER, ROLES.ADMIN),
+  validate(backlogTaskSchema),
+  moveTaskToBacklog,
+);
+// Sprint evaluations: TA writes their own; admin reviews + finalises.
+router.put(
+  "/:id/evaluations/me",
+  allowRoles(ROLES.TA, ROLES.ADMIN),
+  validate(upsertSprintEvaluationSchema),
+  upsertMySprintEvaluation,
+);
+router.patch(
+  "/:id/evaluations/:evaluationId/review",
+  allowRoles(ROLES.ADMIN),
+  validate(reviewSprintEvaluationSchema),
+  reviewSprintEvaluation,
+);
+router.patch("/:id", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(updateSprintSchema), updateSprint);
+router.delete("/:id", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(sprintActionSchema), deleteSprint);
+router.post("/:id/start", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(sprintActionSchema), startSprint);
+router.post("/:id/complete", allowRoles(ROLES.LEADER, ROLES.ADMIN), validate(sprintActionSchema), completeSprint);
+router.post(
+  "/:id/tasks/:taskId",
+  allowRoles(ROLES.LEADER, ROLES.ADMIN),
+  validate(assignSprintTaskSchema),
+  assignTaskToSprint,
+);
 
 export default router;

@@ -694,7 +694,18 @@ function buildBoardMetrics(sprints, backlogTasks, context) {
   };
 }
 
-function getActorEvaluationRole(actor, team) {
+/**
+ * Returns the evaluator role label the actor can use to write a sprint
+ * evaluation on this team, or null if they can't write one.
+ *
+ * The only writers right now are the team's assigned TA. Admins do not write
+ * evaluations directly (they review + finalise TA evaluations via
+ * `assertCanReviewSprintEvaluation`). This function is defensively strict:
+ * both `actor.role === TA` AND `team.ta.id === actor.id` must match. A TA
+ * from a different team gets null — protecting against cross-team writes.
+ */
+export function getActorEvaluationRole(actor, team) {
+  if (!actor || !team) return null;
   if (actor.role === ROLES.TA && team.ta?.id === actor.id) return ROLES.TA;
   return null;
 }

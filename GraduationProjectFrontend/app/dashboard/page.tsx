@@ -61,6 +61,9 @@ import {
 // (proposals to review, submissions to grade, tasks awaiting PR review, etc.)
 // which fetches them via real API endpoints. Per-dashboard widgets that need
 // more detail wire their own hooks (e.g. useMyTeamState).
+// Placeholder mock arrays for legacy dashboard widgets that haven't been
+// re-typed yet. The consuming code reads ad-hoc fields, so `any[]` is the
+// pragmatic shape until each widget gets refactored onto real API types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const teams: any[] = []
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,11 +144,15 @@ function StudentMemberDashboard() {
     return () => clearInterval(timer)
   }, [])
 
+  // GamificationOverview API shape: { balance, badges, recentTransactions }.
+  // The balance object holds lifetime XP + level. We don't currently surface a
+  // "streak" or "gold" count from the backend; default to 0 here so the
+  // dashboard cards render even when those metrics arrive later.
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.lifetimeXp ?? 0
-  const level = gamification?.currentLevel ?? 1
-  const streak = gamification?.streakDays ?? 0
-  const gold = gamification?.goldBalance ?? 0
+  const xp = gamification?.balance.lifetimeXp ?? 0
+  const level = gamification?.balance.level ?? 1
+  const streak = 0
+  const gold = 0
 
   useEffect(() => {
     if (myTeamState?.team) return
@@ -835,8 +842,10 @@ function TeamLeaderDashboard() {
   }, [])
 
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.lifetimeXp ?? 0
-  const streak = gamification?.streakDays ?? 0
+  // See note above: GamificationOverview shape is `{ balance, badges, ... }`.
+  // `streak` is not on the backend response yet; default to 0.
+  const xp = gamification?.balance.lifetimeXp ?? 0
+  const streak = 0
 
   const liveTeam = myTeamState?.team ?? null
   const myTeam = liveTeam
