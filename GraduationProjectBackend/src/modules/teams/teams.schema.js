@@ -166,6 +166,16 @@ export const removeSupervisorAssignmentSchema = z.object({
   }),
 });
 
+export const transferLeadershipSchema = z.object({
+  body: z.object({
+    newLeaderId: z.string().min(1, "newLeaderId is required"),
+  }),
+  query: z.any().optional(),
+  params: z.object({
+    id: z.string().min(1, "team id is required"),
+  }),
+});
+
 export const leaveTeamSchema = z.object({
   body: z.any().optional(),
   query: z.any().optional(),

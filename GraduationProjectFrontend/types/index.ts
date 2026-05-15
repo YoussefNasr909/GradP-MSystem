@@ -221,6 +221,8 @@ export type Announcement = {
   content: string
   authorId: string
   pinned: boolean
+  targetTeams?: { id: string; name: string; stage?: string }[]
+  targetTeamCount?: number
   reactions?: { emoji: string; count: number }[]
   createdAt: string
 }

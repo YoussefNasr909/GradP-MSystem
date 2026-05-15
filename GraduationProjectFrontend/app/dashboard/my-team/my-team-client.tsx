@@ -4,24 +4,31 @@ import type { ReactNode } from "react"
 import { useState } from "react"
 import { motion, useReducedMotion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
+  ClipboardCheck,
   Copy,
   Crown,
+  FileText,
   Globe2,
   Hash,
+  Inbox,
   Layers3,
   Loader2,
   LockKeyhole,
   Mail,
+  Pencil,
   Plus,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Trash2,
+  UserCog,
   UserMinus,
   UserPlus,
   Users,
@@ -100,6 +107,7 @@ export default function MyTeamClient() {
   const isLeader = currentUser?.role === "leader"
   const isStudent = currentUser?.role === "member"
   const isSupervisor = currentUser?.role === "doctor" || currentUser?.role === "ta"
+  const reduceMotion = Boolean(useReducedMotion())
 
   const joinByCode = async () => {
     setJoinCodeError("")
@@ -203,138 +211,647 @@ export default function MyTeamClient() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6 xl:p-8">
-      <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
+      <motion.div {...getRevealMotion(reduceMotion)}>
+        <TeamHero team={team} isLeader={Boolean(isLeader)} onRefresh={refresh} />
+      </motion.div>
 
       {/* Project grade snapshot — pulls live submissions + proposal */}
-      <TeamGradeCard teamId={team.id} />
+      <motion.div {...getRevealMotion(reduceMotion, 0.04)}>
+        <TeamGradeCard teamId={team.id} />
+      </motion.div>
 
-      <Tabs defaultValue="overview" className="space-y-5">
-        <div className="overflow-x-auto pb-0.5">
-          <TabsList className="inline-flex h-12 min-w-max items-center gap-0.5 rounded-2xl border border-border/60 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm">
-            <TabsTrigger
-              value="overview"
-              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-            >
-              Overview
-            </TabsTrigger>
-            <TabsTrigger
-              value="members"
-              className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-            >
-              Members
-              <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px] font-bold">
-                {team.memberCount}
+      <LeaderTabsShell
+        team={team}
+        invitations={data.sentInvitations}
+        joinRequests={data.joinRequests}
+        supervisorRequestsSent={data.supervisorRequestsSent}
+        isLeader={Boolean(isLeader)}
+        pendingInvitesCount={pendingInvitesCount}
+        pendingRequestsCount={pendingRequestsCount}
+        reduceMotion={reduceMotion}
+        onRefresh={refresh}
+      />
+    </div>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// LeaderTabsShell — Overview / People / Supervisors / Settings
+//
+// Replaces the old 6-tab layout. The new Overview is an "At a glance"
+// action dashboard, not a duplicate of the hero. The "People" tab groups
+// Members + Invitations + Join Requests as sub-tabs so the top-level nav
+// stays at 4 entries. Tab content fades in via AnimatePresence.
+// ───────────────────────────────────────────────────────────────────────────
+function LeaderTabsShell({
+  team,
+  invitations,
+  joinRequests,
+  supervisorRequestsSent,
+  isLeader,
+  pendingInvitesCount,
+  pendingRequestsCount,
+  reduceMotion,
+  onRefresh,
+}: {
+  team: ApiTeamDetail
+  invitations: ApiTeamInvitation[]
+  joinRequests: ApiTeamJoinRequest[]
+  supervisorRequestsSent: import("@/lib/api/types").ApiSupervisorRequest[]
+  isLeader: boolean
+  pendingInvitesCount: number
+  pendingRequestsCount: number
+  reduceMotion: boolean
+  onRefresh: () => Promise<void>
+}) {
+  const [activeTab, setActiveTab] = useState<string>("overview")
+  const peoplePending = pendingInvitesCount + pendingRequestsCount
+
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+      <div className="overflow-x-auto pb-0.5">
+        <TabsList className="inline-flex h-12 min-w-max items-center gap-0.5 rounded-2xl border border-border/60 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm">
+          <TabsTrigger value="overview" className={leaderTabClass}>
+            <Inbox className="mr-1.5 h-3.5 w-3.5" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="people" className={leaderTabClass}>
+            <Users className="mr-1.5 h-3.5 w-3.5" />
+            People
+            <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full px-1.5 text-[10px] font-bold">
+              {team.memberCount}
+            </Badge>
+            {isLeader && peoplePending > 0 && (
+              <Badge
+                variant="secondary"
+                className="ml-1 h-5 min-w-[20px] rounded-full bg-amber-500/15 px-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400"
+              >
+                {peoplePending} pending
               </Badge>
+            )}
+          </TabsTrigger>
+          {isLeader && (
+            <TabsTrigger value="supervisors" className={leaderTabClass}>
+              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+              Supervisors
             </TabsTrigger>
-            {isLeader && (
-              <TabsTrigger
-                value="invitations"
-                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-              >
-                Invitations
-                {pendingInvitesCount > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-primary/15 px-1.5 text-[10px] font-bold text-primary">
-                    {pendingInvitesCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
+          )}
+          {isLeader && (
+            <TabsTrigger value="settings" className={leaderTabClass}>
+              <UserCog className="mr-1.5 h-3.5 w-3.5" />
+              Settings
+            </TabsTrigger>
+          )}
+        </TabsList>
+      </div>
+
+      {/* Tab content with animated transitions */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={activeTab}
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
+        >
+          <TabsContent value="overview" forceMount={activeTab === "overview" ? true : undefined} className="mt-0">
+            {activeTab === "overview" && (
+              <LeaderOverview
+                team={team}
+                invitations={invitations}
+                joinRequests={joinRequests}
+                supervisorRequestsSent={supervisorRequestsSent}
+                isLeader={isLeader}
+                pendingInvitesCount={pendingInvitesCount}
+                pendingRequestsCount={pendingRequestsCount}
+                reduceMotion={reduceMotion}
+                onNavigate={setActiveTab}
+              />
             )}
-            {isLeader && (
-              <TabsTrigger
-                value="supervisors"
-                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-              >
-                Supervisors
-              </TabsTrigger>
+          </TabsContent>
+
+          <TabsContent value="people" forceMount={activeTab === "people" ? true : undefined} className="mt-0">
+            {activeTab === "people" && (
+              <PeopleTab
+                team={team}
+                invitations={invitations}
+                joinRequests={joinRequests}
+                isLeader={isLeader}
+                pendingInvitesCount={pendingInvitesCount}
+                pendingRequestsCount={pendingRequestsCount}
+                onRefresh={onRefresh}
+              />
             )}
-            {isLeader && (
-              <TabsTrigger
-                value="requests"
-                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-              >
-                Join Requests
-                {pendingRequestsCount > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 min-w-[20px] rounded-full bg-amber-500/15 px-1.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                    {pendingRequestsCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            )}
-            {isLeader && (
-              <TabsTrigger
-                value="settings"
-                className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-              >
-                Settings
-              </TabsTrigger>
-            )}
-          </TabsList>
+          </TabsContent>
+
+          {isLeader && (
+            <TabsContent value="supervisors" forceMount={activeTab === "supervisors" ? true : undefined} className="mt-0">
+              {activeTab === "supervisors" && (
+                <LeaderSupervisorsTab team={team} requests={supervisorRequestsSent} onRefresh={onRefresh} />
+              )}
+            </TabsContent>
+          )}
+
+          {isLeader && (
+            <TabsContent value="settings" forceMount={activeTab === "settings" ? true : undefined} className="mt-0">
+              {activeTab === "settings" && <SettingsCard team={team} onRefresh={onRefresh} />}
+            </TabsContent>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </Tabs>
+  )
+}
+
+const leaderTabClass =
+  "h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
+
+// ───────────────────────────────────────────────────────────────────────────
+// LeaderOverview — "At a glance" action dashboard
+//
+// Three sections: an Action Inbox (what needs your attention NOW), a team
+// snapshot strip, and a Quick Actions row. Replaces the old Overview tab
+// which was a duplicate of the TeamHero.
+// ───────────────────────────────────────────────────────────────────────────
+function LeaderOverview({
+  team,
+  invitations,
+  joinRequests,
+  supervisorRequestsSent,
+  isLeader,
+  pendingInvitesCount,
+  pendingRequestsCount,
+  reduceMotion,
+  onNavigate,
+}: {
+  team: ApiTeamDetail
+  invitations: ApiTeamInvitation[]
+  joinRequests: ApiTeamJoinRequest[]
+  supervisorRequestsSent: import("@/lib/api/types").ApiSupervisorRequest[]
+  isLeader: boolean
+  pendingInvitesCount: number
+  pendingRequestsCount: number
+  reduceMotion: boolean
+  onNavigate: (tab: string) => void
+}) {
+  // Build the action inbox dynamically: only show cards that actually need action
+  type ActionCard = {
+    key: string
+    label: string
+    count: number | string
+    detail: string
+    accent: string
+    icon: React.ElementType
+    onClick: () => void
+    isAction: boolean
+  }
+  const doctorAssigned = Boolean(team.doctor)
+  const taAssigned = Boolean(team.ta)
+  const supervisorRequestsPending = supervisorRequestsSent.filter((r) => r.status === "PENDING").length
+
+  const actionCards: ActionCard[] = []
+  if (isLeader) {
+    if (pendingRequestsCount > 0) {
+      actionCards.push({
+        key: "join-requests",
+        label: "Join requests waiting",
+        count: pendingRequestsCount,
+        detail: pendingRequestsCount === 1 ? "Review and approve or reject." : "Review and respond to each.",
+        accent: "bg-amber-500",
+        icon: UserPlus,
+        onClick: () => onNavigate("people"),
+        isAction: true,
+      })
+    }
+    if (pendingInvitesCount > 0) {
+      actionCards.push({
+        key: "invitations",
+        label: "Invitations sent",
+        count: pendingInvitesCount,
+        detail: pendingInvitesCount === 1 ? "Awaiting member response." : "Awaiting member responses.",
+        accent: "bg-blue-500",
+        icon: Send,
+        onClick: () => onNavigate("people"),
+        isAction: false,
+      })
+    }
+    if (!doctorAssigned || !taAssigned) {
+      const missing: string[] = []
+      if (!doctorAssigned) missing.push("doctor")
+      if (!taAssigned) missing.push("TA")
+      actionCards.push({
+        key: "supervisors-missing",
+        label: `${missing.join(" + ")} not assigned`,
+        count: missing.length,
+        detail: supervisorRequestsPending > 0
+          ? `${supervisorRequestsPending} request${supervisorRequestsPending === 1 ? "" : "s"} pending response.`
+          : "Send a request from the Supervisors tab.",
+        accent: "bg-violet-500",
+        icon: ShieldCheck,
+        onClick: () => onNavigate("supervisors"),
+        isAction: true,
+      })
+    }
+    if (team.memberCount + 1 < team.maxMembers) {
+      const seats = team.maxMembers - team.memberCount - 1
+      actionCards.push({
+        key: "seats",
+        label: `${seats} seat${seats === 1 ? "" : "s"} open`,
+        count: seats,
+        detail: "Invite more members from the People tab.",
+        accent: "bg-cyan-500",
+        icon: UserPlus,
+        onClick: () => onNavigate("people"),
+        isAction: false,
+      })
+    }
+  }
+
+  const allClear = actionCards.length === 0 || actionCards.every((c) => !c.isAction)
+
+  return (
+    <div className="space-y-5">
+      {/* Action Inbox */}
+      <motion.section
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="space-y-3"
+      >
+        <div className="flex items-center gap-2">
+          <Inbox className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            {isLeader ? "Your action inbox" : "Team snapshot"}
+          </h2>
+          {allClear && isLeader && (
+            <Badge variant="outline" className="ml-1 gap-1 border-green-500/30 text-green-500 text-[10px]">
+              <CheckCircle2 className="h-3 w-3" /> All clear
+            </Badge>
+          )}
         </div>
 
-        <TabsContent value="overview" className="mt-0">
-          <div className="space-y-4">
-            <Card className="overflow-hidden border-border/70 shadow-sm">
-              <div className="bg-gradient-to-br from-primary/[0.07] via-background to-transparent px-6 py-6 sm:px-8 sm:py-7">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="border-primary/20 bg-primary/5 text-primary">
-                      {formatTeamStage(team.stage)}
-                    </Badge>
-                    <Badge variant="secondary">{formatTeamVisibility(team.visibility)}</Badge>
-                    <Badge variant="outline">{team.memberCount}/{team.maxMembers} members</Badge>
+        {actionCards.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {actionCards.map((card, i) => {
+              const Icon = card.icon
+              return (
+                <motion.button
+                  key={card.key}
+                  type="button"
+                  onClick={card.onClick}
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.04 * i, duration: 0.28 }}
+                  whileHover={reduceMotion ? undefined : { y: -2 }}
+                  whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+                  className={`group relative flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-4 text-left transition-shadow hover:shadow-md ${
+                    card.isAction ? "border-l-[3px] border-l-amber-500/60" : ""
+                  }`}
+                >
+                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white ${card.accent}`}>
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <h2 className="text-2xl font-bold tracking-tight">{team.name}</h2>
-                  <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{team.bio}</p>
-                </div>
-                {team.stack.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {team.stack.map((tech) => (
-                      <Badge key={tech} variant="secondary" className="rounded-full">
-                        {tech}
-                      </Badge>
-                    ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold tabular-nums">{card.count}</span>
+                      {card.isAction && (
+                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-700 dark:text-amber-400">
+                          action needed
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium">{card.label}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{card.detail}</p>
                   </div>
-                )}
-              </div>
-              <CardContent className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 sm:p-6">
-                <Stat label="Members" value={`${team.memberCount}/${team.maxMembers}`} />
-                <Stat label="Stage" value={formatTeamStage(team.stage)} />
-                <Stat label="Visibility" value={formatTeamVisibility(team.visibility)} />
-                <Stat label="Join Requests" value={team.allowJoinRequests ? "Enabled" : "Disabled"} />
-              </CardContent>
-            </Card>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </motion.button>
+              )
+            })}
           </div>
-        </TabsContent>
-
-        <TabsContent value="members" className="mt-0">
-          <MembersCard team={team} onRefresh={refresh} />
-        </TabsContent>
-
-        {isLeader && (
-          <TabsContent value="invitations" className="mt-0">
-            <InvitationsCard team={team} invitations={data.sentInvitations} onRefresh={refresh} />
-          </TabsContent>
+        ) : (
+          <Card className="border-dashed border-border/60 p-8 text-center">
+            <CheckCircle2 className="mx-auto mb-3 h-8 w-8 text-green-500" />
+            <p className="text-sm font-medium">No pending actions right now.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Your team is fully staffed and supervised. Keep an eye on submissions and tasks.
+            </p>
+          </Card>
         )}
+      </motion.section>
 
-        {isLeader && (
-          <TabsContent value="supervisors" className="mt-0">
-            <LeaderSupervisorsTab team={team} requests={data.supervisorRequestsSent} onRefresh={refresh} />
-          </TabsContent>
-        )}
+      {/* Team snapshot — quick stats different from the hero */}
+      <motion.section
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.3 }}
+        className="space-y-3"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Team snapshot</h2>
+        </div>
+        <Card className="p-5 border-border/50">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <SnapshotTile
+              icon={Crown}
+              label="Leader"
+              value={getFullName(team.leader)}
+              accent="text-amber-500 bg-amber-500/10"
+            />
+            <SnapshotTile
+              icon={ShieldCheck}
+              label="Doctor"
+              value={team.doctor ? getFullName(team.doctor) : "Not assigned"}
+              accent={team.doctor ? "text-blue-500 bg-blue-500/10" : "text-muted-foreground bg-muted/40"}
+            />
+            <SnapshotTile
+              icon={ClipboardCheck}
+              label="TA"
+              value={team.ta ? getFullName(team.ta) : "Not assigned"}
+              accent={team.ta ? "text-cyan-500 bg-cyan-500/10" : "text-muted-foreground bg-muted/40"}
+            />
+            <SnapshotTile
+              icon={Layers3}
+              label="SDLC stage"
+              value={formatTeamStage(team.stage)}
+              accent="text-violet-500 bg-violet-500/10"
+            />
+          </div>
+        </Card>
+      </motion.section>
 
-        {isLeader && (
-          <TabsContent value="requests" className="mt-0">
-            <JoinRequestsCard requests={data.joinRequests} onRefresh={refresh} />
-          </TabsContent>
-        )}
-
-        {isLeader && (
-          <TabsContent value="settings" className="mt-0">
-            <SettingsCard team={team} onRefresh={refresh} />
-          </TabsContent>
-        )}
-      </Tabs>
+      {/* Quick Actions */}
+      {isLeader && (
+        <motion.section
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.14, duration: 0.3 }}
+          className="space-y-3"
+        >
+          <div className="flex items-center gap-2">
+            <Plus className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Quick actions</h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <QuickActionButton icon={UserPlus} label="Invite member"   onClick={() => onNavigate("people")} />
+            <QuickActionButton icon={ShieldCheck} label="Request supervisor" onClick={() => onNavigate("supervisors")} />
+            <QuickActionButton icon={Pencil} label="Edit team"         onClick={() => onNavigate("settings")} />
+            <QuickActionButton icon={FileText} label="Project proposal" href="/dashboard/proposals" />
+          </div>
+        </motion.section>
+      )}
     </div>
+  )
+}
+
+function SnapshotTile({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  accent: string
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-sm font-semibold truncate">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function QuickActionButton({
+  icon: Icon,
+  label,
+  onClick,
+  href,
+}: {
+  icon: React.ElementType
+  label: string
+  onClick?: () => void
+  href?: string
+}) {
+  const inner = (
+    <div className="group flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary/5">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <span className="text-sm font-medium">{label}</span>
+      <ArrowRight className="ml-auto h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </div>
+  )
+  if (href) {
+    return <Link href={href}>{inner}</Link>
+  }
+  return (
+    <button type="button" onClick={onClick} className="text-left">
+      {inner}
+    </button>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// PeopleTab — groups Members + Invitations + Join Requests under sub-tabs.
+// Reduces top-level navigation noise while keeping the same powerful panels.
+// ───────────────────────────────────────────────────────────────────────────
+function PeopleTab({
+  team,
+  invitations,
+  joinRequests,
+  isLeader,
+  pendingInvitesCount,
+  pendingRequestsCount,
+  onRefresh,
+}: {
+  team: ApiTeamDetail
+  invitations: ApiTeamInvitation[]
+  joinRequests: ApiTeamJoinRequest[]
+  isLeader: boolean
+  pendingInvitesCount: number
+  pendingRequestsCount: number
+  onRefresh: () => Promise<void>
+}) {
+  return (
+    <Tabs defaultValue="members" className="space-y-4">
+      <TabsList className="inline-flex h-10 items-center gap-0.5 rounded-xl border border-border/60 bg-muted/30 p-1">
+        <TabsTrigger value="members" className="h-8 rounded-lg px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+          Members
+          <Badge variant="secondary" className="ml-1.5 h-4 min-w-[18px] rounded-full px-1 text-[9px] font-bold">
+            {team.memberCount}
+          </Badge>
+        </TabsTrigger>
+        {isLeader && (
+          <TabsTrigger value="invitations" className="h-8 rounded-lg px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Invitations
+            {pendingInvitesCount > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-4 min-w-[18px] rounded-full bg-primary/15 px-1 text-[9px] font-bold text-primary">
+                {pendingInvitesCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        )}
+        {isLeader && (
+          <TabsTrigger value="requests" className="h-8 rounded-lg px-3 text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            Join requests
+            {pendingRequestsCount > 0 && (
+              <Badge variant="secondary" className="ml-1.5 h-4 min-w-[18px] rounded-full bg-amber-500/15 px-1 text-[9px] font-bold text-amber-700 dark:text-amber-400">
+                {pendingRequestsCount}
+              </Badge>
+            )}
+          </TabsTrigger>
+        )}
+      </TabsList>
+
+      <TabsContent value="members" className="mt-0">
+        <MembersCard team={team} onRefresh={onRefresh} />
+      </TabsContent>
+      {isLeader && (
+        <TabsContent value="invitations" className="mt-0">
+          <InvitationsCard team={team} invitations={invitations} onRefresh={onRefresh} />
+        </TabsContent>
+      )}
+      {isLeader && (
+        <TabsContent value="requests" className="mt-0">
+          <JoinRequestsCard requests={joinRequests} onRefresh={onRefresh} />
+        </TabsContent>
+      )}
+    </Tabs>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// TransferLeadershipCard — leader hands the role to a current member.
+// Lives in the Settings tab right above the Danger Zone.
+// ───────────────────────────────────────────────────────────────────────────
+function TransferLeadershipCard({
+  team,
+  onRefresh,
+}: {
+  team: ApiTeamDetail
+  onRefresh: () => Promise<void>
+}) {
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("")
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const router = useRouter()
+  const { currentUser, setCurrentUser } = useAuthStore()
+
+  const candidates = team.members
+    .map((m) => m.user)
+    .filter((u) => u.id !== team.leader.id)
+
+  const selected = candidates.find((c) => c.id === selectedMemberId) ?? null
+
+  async function handleTransfer() {
+    if (!selected) return
+    setSubmitting(true)
+    try {
+      await teamsApi.transferLeadership(team.id, selected.id)
+      toast.success(`Leadership transferred to ${getFullName(selected)}.`)
+      // Locally demote the current user so the UI re-renders correctly
+      if (currentUser?.id === team.leader.id) {
+        setCurrentUser({ ...currentUser, role: "member" })
+      }
+      setConfirmOpen(false)
+      setSelectedMemberId("")
+      await onRefresh()
+      router.refresh()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Couldn't transfer leadership.")
+      throw e
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Card className="border-amber-500/25 shadow-sm">
+      <CardHeader className="border-b border-amber-500/15 bg-amber-500/[0.04] px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-500">
+            <Crown className="h-5 w-5" />
+          </div>
+          <div>
+            <CardTitle className="text-lg font-bold">Transfer Leadership</CardTitle>
+            <CardDescription>Hand the leader role to a current team member.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4 p-6">
+        <div className="rounded-2xl border border-amber-500/15 bg-amber-500/[0.03] p-4">
+          <p className="text-sm font-medium">What happens when you transfer</p>
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+            <li>• The selected member becomes the new team leader.</li>
+            <li>• You stay on the team as a regular member.</li>
+            <li>• You can no longer manage members, invitations, supervisors, or settings.</li>
+            <li>• Both of you get a notification.</li>
+          </ul>
+        </div>
+
+        {candidates.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border/60 p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              Invite at least one member to your team before you can hand off leadership.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <Label>Pick a new leader</Label>
+              <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Choose a team member…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {candidates.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      <span className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5">
+                          <AvatarImage src={u.avatarUrl || "/placeholder.svg"} />
+                          <AvatarFallback className="text-[9px]">{getAvatarInitial(u)}</AvatarFallback>
+                        </Avatar>
+                        {getFullName(u)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              className="w-full rounded-xl bg-amber-600 hover:bg-amber-700"
+              disabled={!selected || submitting}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="h-4 w-4" />}
+              <span className="ml-2">Transfer leadership</span>
+            </Button>
+          </>
+        )}
+      </CardContent>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        variant="warning"
+        title={selected ? `Hand leadership to ${getFullName(selected)}?` : "Transfer leadership"}
+        description={
+          selected
+            ? `${getFullName(selected)} will become the team leader and gain full management rights. You'll stay on the team as a regular member — you can't undo this yourself, but the new leader can transfer it back.`
+            : "Pick a member first."
+        }
+        confirmLabel="Hand off leadership"
+        onConfirm={handleTransfer}
+      />
+    </Card>
   )
 }
 
@@ -798,7 +1315,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
   }
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm">
+    <Card className="overflow-hidden rounded-[28px] border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
       <div className="bg-gradient-to-br from-primary/[0.09] via-background to-transparent">
         <div className="flex flex-col gap-5 p-5 sm:p-6 md:p-7 lg:flex-row lg:items-start lg:justify-between">
           {/* Left: team info */}
@@ -1799,6 +2316,9 @@ function SettingsCard({ team, onRefresh }: { team: ApiTeamDetail; onRefresh: () 
           </div>
         </CardContent>
       </Card>
+
+      {/* Transfer leadership */}
+      <TransferLeadershipCard team={team} onRefresh={onRefresh} />
 
       {/* Danger zone */}
       <Card className="border-destructive/25 shadow-sm">

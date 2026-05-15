@@ -56,7 +56,7 @@ export const risksApi = {
       method: "PATCH",
       body: payload,
     }),
-  approve: (id: string, payload: { severity: ApiRiskSeverity; approvalNote?: string }) =>
+  approve: (id: string, payload: { severity?: ApiRiskSeverity; approvalNote?: string }) =>
     apiRequest<ApiRisk>(`/risks/${id}/approve`, {
       method: "POST",
       body: payload,

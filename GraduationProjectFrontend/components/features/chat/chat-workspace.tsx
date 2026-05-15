@@ -47,6 +47,7 @@ import type {
   ApiTeamGroupChatSeenResult,
   ApiTeamGroupChatSendResult,
   ApiTeamDetail,
+  ApiTeamUser,
   Role,
 } from "@/lib/api/types"
 import { useChat } from "@/components/features/chat/chat-provider"
@@ -95,6 +96,14 @@ type ChatListItem = {
   pinLocked: boolean
 }
 
+type TeamDialogParticipant = {
+  key: string
+  user: ApiTeamUser
+  badge: string | null
+  subtitle: string
+  sortOrder: number
+}
+
 type SocketAckSuccess<T> = {
   ok: true
   data: T
@@ -126,6 +135,8 @@ function humanizeRelation(relation: ApiChatRelation | null) {
       return "Teaching assistant"
     case "SUPERVISED_TEAM_LEADER":
       return "Supervised leader"
+    case "ADMIN_DIRECT":
+      return "Admin"
     case "STUDENT_PEER":
       return "Student"
     case "STAFF_PEER":
@@ -154,8 +165,22 @@ function roleToLabel(role: Role | undefined): string {
   }
 }
 
+function relationLabelForUser(relation: ApiChatRelation | null, user: Pick<ApiChatUser, "role"> | null | undefined) {
+  if (relation === "ADMIN_DIRECT") return roleToLabel(user?.role)
+  return humanizeRelation(relation)
+}
+
+function isStudentChatRole(role: Role | string | undefined) {
+  return role === "STUDENT" || role === "LEADER" || role === "leader" || role === "member"
+}
+
+function canSendDirectMessage(currentRole: Role | string | undefined, targetRole: Role | undefined) {
+  if (targetRole === "ADMIN" && isStudentChatRole(currentRole)) return false
+  return true
+}
+
 function getRoleSearchTerms(role: Role | undefined, relation: ApiChatRelation | null) {
-  const terms = [humanizeRelation(relation), roleToLabel(role)]
+  const terms = [relationLabelForUser(relation, role ? { role } : null), roleToLabel(role)]
 
   switch (role) {
     case "DOCTOR":
@@ -169,6 +194,9 @@ function getRoleSearchTerms(role: Role | undefined, relation: ApiChatRelation | 
       break
     case "STUDENT":
       terms.push("student", "member", "team member")
+      break
+    case "ADMIN":
+      terms.push("admin", "administrator")
       break
     default:
       break
@@ -192,6 +220,10 @@ function toDirectMessagePreview(message: ApiChatMessage | null, currentUserId: s
 function toGroupMessagePreview(message: ApiTeamGroupChatMessage | null, currentUserId: string | undefined) {
   if (!message) return "Start the team conversation"
   const senderLabel = message.senderId === currentUserId ? "You" : message.sender.fullName
+  if (message.fileUrl) {
+    const isImage = message.fileType?.startsWith("image/")
+    return `${senderLabel}: ${isImage ? "sent an image" : "sent a file"}`
+  }
   return `${senderLabel}: ${message.content}`
 }
 
@@ -421,7 +453,7 @@ function buildDirectItem(
   },
   currentUserId: string | undefined,
 ): ChatListItem {
-  const subtitle = [humanizeRelation(relation), team?.name].filter(Boolean).join(" - ")
+  const subtitle = [relationLabelForUser(relation, user), team?.name].filter(Boolean).join(" - ")
 
   return {
     key,
@@ -485,6 +517,7 @@ export function ChatWorkspace({
   const { socket, connected, refreshUnreadCount, setUnreadCount } = useChat()
   const [bootstrapLoading, setBootstrapLoading] = useState(true)
   const [bootstrapError, setBootstrapError] = useState("")
+  const [teamChatError, setTeamChatError] = useState("")
   const [messageLoading, setMessageLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [clearingConversationId, setClearingConversationId] = useState<string | null>(null)
@@ -518,6 +551,40 @@ export function ChatWorkspace({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const pageSelectedKey = variant === "page" ? searchParams.get("key") : null
+  const membersDialogParticipants = useMemo<TeamDialogParticipant[]>(() => {
+    if (!membersDialogTeam) return []
+
+    const seen = new Set<string>()
+    const participants: TeamDialogParticipant[] = []
+    const addParticipant = (
+      user: ApiTeamUser | null | undefined,
+      badge: string | null,
+      subtitle: string,
+      sortOrder: number
+    ) => {
+      if (!user || seen.has(user.id)) return
+      seen.add(user.id)
+      participants.push({
+        key: user.id,
+        user,
+        badge,
+        subtitle,
+        sortOrder,
+      })
+    }
+
+    addParticipant(membersDialogTeam.leader, "Leader", "Team leader", 0)
+
+    for (const member of membersDialogTeam.members) {
+      const isLeader = member.teamRole === "LEADER"
+      addParticipant(member.user, isLeader ? "Leader" : null, isLeader ? "Team leader" : roleToLabel(member.user.role), isLeader ? 0 : 1)
+    }
+
+    return participants.sort((first, second) => {
+      if (first.sortOrder !== second.sortOrder) return first.sortOrder - second.sortOrder
+      return first.user.fullName.localeCompare(second.user.fullName)
+    })
+  }, [membersDialogTeam])
 
   useEffect(() => {
     if (!currentUser?.id) {
@@ -543,6 +610,7 @@ export function ChatWorkspace({
   const loadBootstrap = useCallback(async () => {
     setBootstrapLoading(true)
     setBootstrapError("")
+    setTeamChatError("")
 
     try {
       const [directResult, groupResult] = await Promise.allSettled([chatApi.bootstrap(), teamChatApi.bootstrap()])
@@ -552,6 +620,12 @@ export function ChatWorkspace({
       }
 
       const directData = directResult.value
+      const groupLoadError =
+        groupResult.status === "rejected"
+          ? groupResult.reason instanceof Error
+            ? groupResult.reason.message
+            : "Couldn't load team chats right now."
+          : ""
       const groupConversations =
         groupResult.status === "fulfilled" ? sortGroupConversations(groupResult.value.conversations) : []
       const groupUnreadCount = groupConversations.reduce((total, conversation) => total + conversation.unreadCount, 0)
@@ -559,6 +633,7 @@ export function ChatWorkspace({
       setConversations(sortConversations(directData.conversations))
       setGroupConversations(groupConversations)
       setContacts(directData.contacts)
+      setTeamChatError(groupLoadError)
       setUnreadCount(directData.unreadCount + groupUnreadCount)
 
       const availableKeys = new Set<string>([
@@ -727,6 +802,11 @@ export function ChatWorkspace({
     return allItems.find((item) => item.key === selectedItemKey) ?? null
   }, [allItems, selectedItemKey, selectedItemOverride])
 
+  const membersDialogParticipantCount = membersDialogTeam
+    ? membersDialogParticipants.length
+    : selectedItem?.kind === "group"
+      ? selectedItem.participantCount
+      : null
   const selectedConversationId = selectedItem?.conversationId ?? null
   const selectedDirectMessages =
     selectedItem?.kind === "direct" && selectedConversationId ? messagesByConversation[selectedConversationId] ?? [] : []
@@ -734,8 +814,21 @@ export function ChatWorkspace({
     selectedItem?.kind === "group" && selectedConversationId
       ? groupMessagesByConversation[selectedConversationId] ?? []
       : []
+  const selectedDirectSendBlocked =
+    selectedItem?.kind !== "group" && !canSendDirectMessage(currentUser?.role, selectedItem?.user?.role)
   const usesSinglePaneLayout = isMobile || variant === "launcher"
   const showConversationPanel = !usesSinglePaneLayout || !showListOnMobile
+
+  useEffect(() => {
+    if (!selectedDirectSendBlocked) return
+
+    setDraft("")
+    setEditingMessage(null)
+    setFileAttachment(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }, [selectedDirectSendBlocked])
 
   const searchedItems = useMemo<ChatListItem[]>(() => {
     return searchedContacts.map((contact) => {
@@ -1210,6 +1303,11 @@ export function ChatWorkspace({
       return
     }
 
+    if (selectedDirectSendBlocked) {
+      toast.error("Students can read admin messages but cannot reply.")
+      return
+    }
+
     const trimmedDraft = draft.trim()
     if ((!trimmedDraft && !fileAttachment) || !selectedItem) return
 
@@ -1219,14 +1317,9 @@ export function ChatWorkspace({
       if (selectedItem.kind === "group") {
         if (!selectedConversationId) return
 
-        if (fileAttachment) {
-          toast.error("File attachments are only available in direct messages right now.")
-          return
-        }
-
         const result: ApiTeamGroupChatSendResult = await teamChatApi.send(selectedConversationId, {
           content: trimmedDraft,
-        })
+        }, fileAttachment ?? undefined)
 
         setGroupConversations((current) => upsertGroupConversation(current, result.conversation))
         setGroupMessagesByConversation((current) => ({
@@ -1234,6 +1327,10 @@ export function ChatWorkspace({
           [selectedConversationId]: mergeGroupMessages(current[selectedConversationId] ?? [], result.message),
         }))
         setDraft("")
+        setFileAttachment(null)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
         return
       }
 
@@ -1275,6 +1372,11 @@ export function ChatWorkspace({
   }
 
   const handleStartEditMessage = (message: ApiChatMessage) => {
+    if (selectedDirectSendBlocked) {
+      toast.error("Students can read admin messages but cannot reply.")
+      return
+    }
+
     setEditingMessage(message)
     setDraft(message.content)
     setFileAttachment(null)
@@ -1515,6 +1617,12 @@ export function ChatWorkspace({
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-4 px-3 py-3">
+              {!bootstrapLoading && teamChatError ? (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                  Team chat could not load: {teamChatError}
+                </div>
+              ) : null}
+
               {bootstrapLoading ? (
                 <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1837,9 +1945,52 @@ export function ChatWorkspace({
                                       <p className="text-[11px] opacity-70">{roleToLabel(message.sender.role)}</p>
                                     </div>
                                   ) : null}
-                                  <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere] [word-break:break-word]">
-                                    {message.content}
-                                  </p>
+                                  <div className="flex min-w-0 max-w-full flex-col gap-2">
+                                    {message.fileUrl ? (
+                                      <div className="mt-1 min-w-0 max-w-full">
+                                        {message.fileType?.startsWith("image/") ? (
+                                          <a
+                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="block max-w-full overflow-hidden rounded-xl"
+                                          >
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                              src={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                              alt={message.fileName || "Image"}
+                                              className="h-auto max-h-64 max-w-full rounded-xl bg-background/50 object-contain"
+                                            />
+                                          </a>
+                                        ) : (
+                                          <a
+                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className={cn(
+                                              "flex min-w-0 max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors",
+                                              isOwn
+                                                ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
+                                                : "border-border/60 bg-background/50 text-foreground hover:bg-background/80",
+                                            )}
+                                          >
+                                            <FileIcon className="h-4 w-4 shrink-0" />
+                                            <span className="min-w-0 flex-1 truncate font-medium">{message.fileName}</span>
+                                            {message.fileSize ? (
+                                              <span className="shrink-0 text-xs opacity-70">
+                                                {Math.round(message.fileSize / 1024)}KB
+                                              </span>
+                                            ) : null}
+                                          </a>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                    {message.content ? (
+                                      <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere] [word-break:break-word]">
+                                        {message.content}
+                                      </p>
+                                    ) : null}
+                                  </div>
                                 </div>
 
                                 <div
@@ -1952,7 +2103,7 @@ export function ChatWorkspace({
                                     ) : null}
                                   </div>
 
-                                  {isOwn && !message.isDeleted ? (
+                                  {isOwn && !message.isDeleted && !selectedDirectSendBlocked ? (
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button
@@ -2020,27 +2171,27 @@ export function ChatWorkspace({
                   </div>
                 ) : null}
 
-                {selectedItem.kind !== "group" ? (
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      if (!file) return
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={(event) => {
+                    if (selectedDirectSendBlocked) return
 
-                      if (file.size > 10 * 1024 * 1024) {
-                        toast.error("File is too large. Maximum size is 10MB.")
-                        return
-                      }
+                    const file = event.target.files?.[0]
+                    if (!file) return
 
-                      setFileAttachment(file)
-                    }}
-                    accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt"
-                  />
-                ) : null}
+                    if (file.size > 10 * 1024 * 1024) {
+                      toast.error("File is too large. Maximum size is 10MB.")
+                      return
+                    }
 
-                {fileAttachment && selectedItem.kind !== "group" ? (
+                    setFileAttachment(file)
+                  }}
+                  accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.txt"
+                />
+
+                {fileAttachment ? (
                   <div className="mb-2.5 flex w-full max-w-full items-center gap-2 rounded-xl border border-border/60 bg-muted/50 px-3 py-2 sm:w-fit dark:border-zinc-700/50 dark:bg-zinc-800/60">
                     {fileAttachment.type.startsWith("image/") ? (
                       <ImageIcon className="h-4 w-4 shrink-0 text-muted-foreground dark:text-zinc-400" />
@@ -2084,14 +2235,20 @@ export function ChatWorkspace({
                   </div>
                 ) : null}
 
+                {selectedDirectSendBlocked ? (
+                  <div className="mb-2.5 rounded-xl border border-border/60 bg-muted/50 px-3 py-2 text-xs text-muted-foreground dark:border-zinc-700/50 dark:bg-zinc-800/60 dark:text-zinc-400">
+                    Students can read admin messages but replies are limited to supervisors and TAs.
+                  </div>
+                ) : null}
+
                 <div className="flex items-end gap-2">
-                  {selectedItem.kind !== "group" && !editingMessage ? (
+                  {!editingMessage ? (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-10 w-10 shrink-0 rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
                       onClick={() => fileInputRef.current?.click()}
-                      disabled={sending}
+                      disabled={sending || selectedDirectSendBlocked}
                     >
                       <Paperclip className="h-4 w-4" />
                     </Button>
@@ -2108,12 +2265,15 @@ export function ChatWorkspace({
                       }
                     }}
                     placeholder={
-                      editingMessage
+                      selectedDirectSendBlocked
+                        ? "Replies to admins are limited to supervisors and TAs."
+                        : editingMessage
                         ? "Edit message..."
                         : selectedItem.kind === "group"
                         ? `Message ${selectedItem.team?.name ?? "your team"}...`
                         : `Message ${selectedItem.title}...`
                     }
+                    disabled={selectedDirectSendBlocked}
                     className="max-h-32 min-h-[42px] resize-none overflow-y-auto rounded-2xl border-border/60 bg-muted/40 px-4 py-2.5 text-sm placeholder:text-muted-foreground focus-visible:border-primary/40 focus-visible:ring-primary/40 dark:border-zinc-700/50 dark:bg-zinc-800/60 dark:text-zinc-200 dark:placeholder:text-zinc-600"
                     rows={1}
                   />
@@ -2121,6 +2281,7 @@ export function ChatWorkspace({
                     onClick={() => void handleSend()}
                     disabled={
                       sending ||
+                      selectedDirectSendBlocked ||
                       (editingMessage
                         ? !draft.trim() || draft.trim() === editingMessage.content
                         : !draft.trim() && !fileAttachment)
@@ -2150,14 +2311,14 @@ export function ChatWorkspace({
       </div>
 
       <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
-        <DialogContent className="max-w-lg rounded-3xl border-border/70 p-0 dark:border-zinc-800 dark:bg-zinc-950">
+        <DialogContent className="z-[120] max-w-lg rounded-2xl border-border/70 p-0 dark:border-zinc-800 dark:bg-zinc-950">
           <DialogHeader className="border-b border-border/70 px-5 py-4 text-left dark:border-zinc-800">
             <DialogTitle className="text-base">
               {membersDialogTeam?.name ?? selectedItem?.team?.name ?? "Team chat"} members
             </DialogTitle>
             <DialogDescription>
-              {membersDialogTeam
-                ? `${membersDialogTeam.memberCount} member${membersDialogTeam.memberCount === 1 ? "" : "s"} in this chat`
+              {membersDialogParticipantCount !== null
+                ? `${membersDialogParticipantCount} ${membersDialogParticipantCount === 1 ? "person" : "people"} in this chat`
                 : "People who can participate in this team chat."}
             </DialogDescription>
           </DialogHeader>
@@ -2174,39 +2335,35 @@ export function ChatWorkspace({
               </div>
             ) : membersDialogTeam ? (
               <div className="space-y-2">
-                {membersDialogTeam.members.map((member) => {
-                  const isLeader = member.teamRole === "LEADER"
+                {membersDialogParticipants.map((participant) => (
+                  <Link
+                    key={participant.key}
+                    href={`/dashboard/users/${participant.user.id}`}
+                    className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/60 px-3 py-3 transition-colors hover:border-primary/25 hover:bg-primary/[0.04] dark:border-zinc-800 dark:hover:border-primary/30 dark:hover:bg-zinc-900"
+                    onClick={() => setMembersDialogOpen(false)}
+                  >
+                    <Avatar className="h-10 w-10 shrink-0 ring-1 ring-border/60 dark:ring-zinc-700/60">
+                      <AvatarImage src={participant.user.avatarUrl || "/placeholder-user.jpg"} />
+                      <AvatarFallback>{getUserInitial(participant.user)}</AvatarFallback>
+                    </Avatar>
 
-                  return (
-                    <Link
-                      key={member.id}
-                      href={`/dashboard/users/${member.user.id}`}
-                      className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/60 px-3 py-3 transition-colors hover:border-primary/25 hover:bg-primary/[0.04] dark:border-zinc-800 dark:hover:border-primary/30 dark:hover:bg-zinc-900"
-                      onClick={() => setMembersDialogOpen(false)}
-                    >
-                      <Avatar className="h-10 w-10 shrink-0 ring-1 ring-border/60 dark:ring-zinc-700/60">
-                        <AvatarImage src={member.user.avatarUrl || "/placeholder-user.jpg"} />
-                        <AvatarFallback>{getUserInitial(member.user)}</AvatarFallback>
-                      </Avatar>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-foreground dark:text-zinc-100">
-                            {member.user.fullName}
-                          </p>
-                          {isLeader ? (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                              Leader
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-zinc-500">
-                          {isLeader ? "Team leader" : roleToLabel(member.user.role)}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-foreground dark:text-zinc-100">
+                          {participant.user.fullName}
                         </p>
+                        {participant.badge ? (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                            {participant.badge}
+                          </span>
+                        ) : null}
                       </div>
-                    </Link>
-                  )
-                })}
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground dark:text-zinc-500">
+                        {participant.subtitle}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
               </div>
             ) : (
               <p className="py-8 text-center text-sm text-muted-foreground">No members to show yet.</p>

@@ -38,9 +38,47 @@ const STATUS_META: Record<
   REJECTED:           { label: "Rejected",           icon: XCircle,     chip: "border-red-500/30 text-red-500",     bg: "bg-red-500/5" },
 }
 
+const WORKFLOW_STEPS: Array<{ status: ApiProposalStatus; label: string; description: string }> = [
+  { status: "DRAFT", label: "Draft", description: "Team prepares the idea and scope." },
+  { status: "SUBMITTED", label: "Submitted", description: "Leader sends it to the doctor." },
+  { status: "UNDER_REVIEW", label: "Review", description: "Doctor evaluates the proposal." },
+  { status: "APPROVED", label: "Approved", description: "Formal SDLC work is unlocked." },
+]
+
+const UNLOCKS_AFTER_APPROVAL = [
+  "Official SDLC deliverable submissions",
+  "SDLC phase advancement",
+  "Formal risk approval and monitoring",
+  "Graded project workflow",
+]
+
 function initials(n?: string | null) {
   if (!n) return "?"
   return n.split(" ").map(x => x[0]).join("").toUpperCase().slice(0, 2)
+}
+
+function getProposalChecklist(proposal: ApiProposal) {
+  return [
+    { label: "Problem statement is substantive", done: proposal.problemStatement.trim().length >= 50 },
+    { label: "Objectives are listed", done: proposal.objectives.length > 0 },
+    { label: "Scope is clear", done: proposal.scope.trim().length >= 20 },
+    { label: "Methodology and SDLC approach are defined", done: proposal.methodology.trim().length >= 20 },
+    { label: "Technology stack is listed", done: proposal.technologies.length > 0 },
+    { label: "Expected deliverables are listed", done: proposal.deliverables.length > 0 },
+  ]
+}
+
+function getWorkflowState(step: ApiProposalStatus, proposalStatus: ApiProposalStatus) {
+  if (proposalStatus === "REJECTED") return step === "DRAFT" ? "complete" : "waiting"
+  if (proposalStatus === "REVISION_REQUESTED") {
+    return step === "DRAFT" || step === "SUBMITTED" || step === "UNDER_REVIEW" ? "complete" : "waiting"
+  }
+
+  const stepIndex = WORKFLOW_STEPS.findIndex((item) => item.status === step)
+  const currentIndex = WORKFLOW_STEPS.findIndex((item) => item.status === proposalStatus)
+  if (stepIndex < currentIndex) return "complete"
+  if (stepIndex === currentIndex) return proposalStatus === "APPROVED" ? "complete" : "current"
+  return "waiting"
 }
 
 // ─── Section ────────────────────────────────────────────────────────────────
@@ -73,6 +111,94 @@ function Section({
 }
 
 // ─── Detail Page ────────────────────────────────────────────────────────────
+
+function ProposalWorkflow({ status }: { status: ApiProposalStatus }) {
+  return (
+    <Card className="p-5 border-border/50">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock className="h-4 w-4 text-primary" />
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Approval Workflow</h2>
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        {WORKFLOW_STEPS.map((step, index) => {
+          const state = getWorkflowState(step.status, status)
+          const isComplete = state === "complete"
+          const isCurrent = state === "current"
+          return (
+            <div key={step.status} className="relative rounded-lg border border-border/60 p-3">
+              {index < WORKFLOW_STEPS.length - 1 && (
+                <div className="hidden md:block absolute left-[calc(100%-0.5rem)] top-6 h-px w-4 bg-border" />
+              )}
+              <div className="flex items-center gap-2 mb-2">
+                <span className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold",
+                  isComplete && "border-green-500/30 bg-green-500/10 text-green-600",
+                  isCurrent && "border-blue-500/30 bg-blue-500/10 text-blue-600",
+                  !isComplete && !isCurrent && "border-border bg-muted text-muted-foreground",
+                )}>
+                  {isComplete ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
+                </span>
+                <span className="text-sm font-medium">{step.label}</span>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">{step.description}</p>
+            </div>
+          )
+        })}
+      </div>
+      {(status === "REVISION_REQUESTED" || status === "REJECTED") && (
+        <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-300">
+          The team should update the proposal and submit a new version before SDLC work can be unlocked.
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ProposalReadiness({ proposal }: { proposal: ApiProposal }) {
+  const checklist = getProposalChecklist(proposal)
+  const completed = checklist.filter((item) => item.done).length
+
+  return (
+    <Card className="p-5 border-border/50">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Readiness Checklist</h2>
+        </div>
+        <Badge variant={completed === checklist.length ? "default" : "secondary"}>{completed}/{checklist.length}</Badge>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {checklist.map((item) => (
+          <div key={item.label} className="flex items-start gap-2 rounded-lg border border-border/50 p-3 text-sm">
+            <CheckCircle2 className={cn("mt-0.5 h-4 w-4 shrink-0", item.done ? "text-green-500" : "text-muted-foreground/40")} />
+            <span className={cn(!item.done && "text-muted-foreground")}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function ApprovalUnlocks({ approved }: { approved: boolean }) {
+  return (
+    <Card className={cn("p-5 border-border/50", approved ? "bg-green-500/5" : "bg-muted/30")}>
+      <div className="flex items-center gap-2 mb-4">
+        {approved ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Award className="h-4 w-4 text-primary" />}
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          {approved ? "Unlocked" : "Unlocked After Approval"}
+        </h2>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {UNLOCKS_AFTER_APPROVAL.map((item) => (
+          <div key={item} className="flex items-start gap-2 text-sm">
+            <CheckCircle2 className={cn("mt-0.5 h-4 w-4 shrink-0", approved ? "text-green-500" : "text-muted-foreground/40")} />
+            <span className={cn(!approved && "text-muted-foreground")}>{item}</span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
 
 export default function ProposalDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -305,6 +431,13 @@ export default function ProposalDetailPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ProposalWorkflow status={proposal.status} />
+
+      <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <ProposalReadiness proposal={proposal} />
+        <ApprovalUnlocks approved={proposal.status === "APPROVED"} />
+      </div>
 
       {/* Content sections */}
       <Section icon={BookOpen} title="Abstract" delay={0.05}>

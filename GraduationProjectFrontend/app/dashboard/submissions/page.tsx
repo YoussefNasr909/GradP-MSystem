@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Upload,
   CheckCircle2,
@@ -50,12 +51,18 @@ import {
   Unlock,
   Calendar,
   Send,
+  BookOpen,
+  ExternalLink,
+  LockKeyhole,
+  Info,
+  ChevronDown,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { motion } from "framer-motion"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
 import { RubricEditor, getDefaultRubric } from "@/components/dashboard/rubric-editor"
+import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import {
   submissionsApi,
   type ApiSubmission,
@@ -63,6 +70,7 @@ import {
   type ApiSubmissionStatus,
   type RubricItem,
 } from "@/lib/api/submissions"
+import { proposalsApi, type ApiProposal } from "@/lib/api/proposals"
 import {
   submissionCommentsApi,
   rubricTemplatesApi,
@@ -77,42 +85,56 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const DELIVERABLE_META: Record<
   ApiDeliverableType,
-  { label: string; phase: ApiTeamStage; description: string }
+  { label: string; phase: ApiTeamStage; description: string; required: boolean; fileHint: string }
 > = {
   SRS: {
     label: "SRS Document",
     phase: "REQUIREMENTS",
     description: "Software Requirements Specification with functional and non-functional requirements",
+    required: true,
+    fileHint: "PDF or DOCX document",
   },
   UML: {
     label: "UML Diagrams",
     phase: "DESIGN",
     description: "Class, sequence, and activity diagrams covering the system design",
+    required: true,
+    fileHint: "PDF, image set, or design document",
   },
   PROTOTYPE: {
     label: "Prototype",
     phase: "IMPLEMENTATION",
     description: "Working prototype demonstrating core system functionality",
+    required: false,
+    fileHint: "Demo link document, build archive, screenshots, or recorded demo",
   },
   CODE: {
     label: "Source Code",
     phase: "IMPLEMENTATION",
     description: "Complete source code repository or archive",
+    required: true,
+    fileHint: "Repository link document, ZIP archive, or GitHub release",
   },
   TEST_PLAN: {
     label: "Test Plan",
     phase: "TESTING",
     description: "Test plan, test cases, and QA results",
+    required: true,
+    fileHint: "PDF, DOCX, XLSX, or testing evidence archive",
   },
   FINAL_REPORT: {
     label: "Final Report",
     phase: "DEPLOYMENT",
     description: "Comprehensive final project report",
+    required: true,
+    fileHint: "PDF or DOCX report",
   },
   PRESENTATION: {
     label: "Presentation",
     phase: "DEPLOYMENT",
     description: "Final project presentation slides",
+    required: true,
+    fileHint: "PPTX or PDF slides",
   },
 }
 
@@ -123,6 +145,269 @@ const PHASE_META: Record<ApiTeamStage, { label: string; color: string }> = {
   TESTING: { label: "Testing", color: "bg-yellow-500/10 text-yellow-600 border-yellow-200" },
   DEPLOYMENT: { label: "Deployment", color: "bg-green-500/10 text-green-600 border-green-200" },
   MAINTENANCE: { label: "Maintenance", color: "bg-slate-500/10 text-slate-600 border-slate-200" },
+}
+
+const PHASE_HEADER_META: Record<ApiTeamStage, { title: string; subtitle: string }> = {
+  REQUIREMENTS: {
+    title: "Requirements Analysis",
+    subtitle: "Define scope, users, requirements, and acceptance expectations.",
+  },
+  DESIGN: {
+    title: "System Design",
+    subtitle: "Turn approved requirements into diagrams, architecture, and data design.",
+  },
+  IMPLEMENTATION: {
+    title: "Implementation & Development",
+    subtitle: "Submit working code, prototypes, releases, and supporting build evidence.",
+  },
+  TESTING: {
+    title: "Testing & Quality Assurance",
+    subtitle: "Document test cases, QA evidence, defects, and verification results.",
+  },
+  DEPLOYMENT: {
+    title: "Deployment & Final Review",
+    subtitle: "Package the final report, presentation, demo, and release evidence.",
+  },
+  MAINTENANCE: {
+    title: "Maintenance & Revisions",
+    subtitle: "Track post-review fixes, updates, and requested changes.",
+  },
+}
+
+const PHASE_ORDER: ApiTeamStage[] = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT"]
+
+type OptionalEvidence = {
+  id: string
+  label: string
+  description: string
+  fileHint: string
+}
+
+const PHASE_GUIDE: Record<
+  ApiTeamStage,
+  {
+    meaning: string
+    howToUnderstand: string
+    optionalEvidence: OptionalEvidence[]
+    reference: { label: string; href: string }
+  }
+> = {
+  REQUIREMENTS: {
+    meaning:
+      "Define what problem the project solves, who will use it, and what the system must and must not do.",
+    howToUnderstand:
+      "Think of this phase as the contract for the project. If a feature is important, it should be written clearly enough that the team and supervisor can agree whether it was completed.",
+    optionalEvidence: [
+      {
+        id: "user-interviews",
+        label: "User interview notes",
+        description: "Notes or summaries from conversations with expected users or stakeholders.",
+        fileHint: "PDF, DOCX, TXT, or ZIP",
+      },
+      {
+        id: "survey-results",
+        label: "Survey results",
+        description: "Survey questions, response summary, and insights used to shape requirements.",
+        fileHint: "PDF, DOCX, XLSX, or CSV",
+      },
+      {
+        id: "competitor-analysis",
+        label: "Competitor or similar-system analysis",
+        description: "Short comparison of existing systems and what your project will improve.",
+        fileHint: "PDF or DOCX",
+      },
+      {
+        id: "screen-sketches",
+        label: "Early screen sketches",
+        description: "Low-fidelity sketches that clarify the expected user flows.",
+        fileHint: "PDF, PNG, JPG, or ZIP",
+      },
+    ],
+    reference: {
+      label: "IBM: SDLC overview",
+      href: "https://www.ibm.com/think/topics/sdlc",
+    },
+  },
+  DESIGN: {
+    meaning:
+      "Transform the approved requirements into a technical plan for screens, data, modules, and interactions.",
+    howToUnderstand:
+      "This is where the team explains how the solution will be built before committing to code. Diagrams should connect back to the SRS and use consistent names.",
+    optionalEvidence: [
+      {
+        id: "wireframes",
+        label: "Wireframes",
+        description: "Screen layouts showing the main pages and interactions before implementation.",
+        fileHint: "PDF, PNG, JPG, Figma export, or ZIP",
+      },
+      {
+        id: "database-schema-notes",
+        label: "Database schema notes",
+        description: "Tables, fields, relationships, and important data constraints.",
+        fileHint: "PDF, DOCX, SQL, or diagram image",
+      },
+      {
+        id: "architecture-decisions",
+        label: "Architecture decision notes",
+        description: "Brief notes explaining major technology, architecture, or integration choices.",
+        fileHint: "PDF, DOCX, or TXT",
+      },
+      {
+        id: "api-contract",
+        label: "API contract draft",
+        description: "Endpoint list, request and response examples, or service interface notes.",
+        fileHint: "PDF, DOCX, JSON, TXT, or ZIP",
+      },
+    ],
+    reference: {
+      label: "Visual Paradigm: UML guide",
+      href: "https://www.visual-paradigm.com/guide/uml-unified-modeling-language/uml-practical-guide/",
+    },
+  },
+  IMPLEMENTATION: {
+    meaning:
+      "Build the working system according to the approved requirements and design.",
+    howToUnderstand:
+      "This phase should prove that the core flows actually run. The supervisor should be able to inspect the source code and try the main prototype behavior.",
+    optionalEvidence: [
+      {
+        id: "setup-video",
+        label: "Setup video",
+        description: "Short walkthrough showing how to run or use the prototype.",
+        fileHint: "MP4 link document, PDF, or TXT",
+      },
+      {
+        id: "readme",
+        label: "README file",
+        description: "Installation, environment variables, seed data, and run commands.",
+        fileHint: "MD, TXT, PDF, or repository archive",
+      },
+      {
+        id: "release-notes",
+        label: "Release notes",
+        description: "Implemented features, known gaps, and changes since the previous submission.",
+        fileHint: "PDF, DOCX, MD, or TXT",
+      },
+      {
+        id: "feature-screenshots",
+        label: "Feature screenshots",
+        description: "Screenshots proving the main implemented user flows.",
+        fileHint: "PDF, PNG, JPG, or ZIP",
+      },
+    ],
+    reference: {
+      label: "Atlassian: SDLC guide",
+      href: "https://www.atlassian.com/en/agile/software-development/sdlc",
+    },
+  },
+  TESTING: {
+    meaning:
+      "Check that the system works as expected and document defects, fixes, and evidence.",
+    howToUnderstand:
+      "Every important requirement should have a matching test case. Failed tests are useful when they explain the issue and whether it was fixed.",
+    optionalEvidence: [
+      {
+        id: "automated-test-report",
+        label: "Automated test report",
+        description: "Output from automated unit, integration, or end-to-end tests.",
+        fileHint: "PDF, HTML, TXT, JSON, or ZIP",
+      },
+      {
+        id: "bug-list",
+        label: "Bug list",
+        description: "Defects found, severity, owner, and fix status.",
+        fileHint: "PDF, DOCX, XLSX, or CSV",
+      },
+      {
+        id: "uat-notes",
+        label: "User acceptance testing notes",
+        description: "Feedback and sign-off notes from sample users or stakeholders.",
+        fileHint: "PDF or DOCX",
+      },
+      {
+        id: "performance-security-checks",
+        label: "Performance or security check notes",
+        description: "Evidence of basic load, performance, vulnerability, or access checks.",
+        fileHint: "PDF, DOCX, TXT, or ZIP",
+      },
+    ],
+    reference: {
+      label: "Atlassian: test plan guide",
+      href: "https://www.atlassian.com/software/confluence/resources/guides/how-to/test-plan",
+    },
+  },
+  DEPLOYMENT: {
+    meaning:
+      "Package the final version, report, and presentation so the project can be evaluated and demonstrated.",
+    howToUnderstand:
+      "This is the final review package. The report, slides, demo, and source code should tell the same story and reflect the latest approved version.",
+    optionalEvidence: [
+      {
+        id: "demo-video",
+        label: "Demo video",
+        description: "Final recorded walkthrough of the deployed or runnable project.",
+        fileHint: "MP4 link document, PDF, or TXT",
+      },
+      {
+        id: "deployment-link",
+        label: "Deployment link",
+        description: "Hosted URL, credentials if needed, and basic access instructions.",
+        fileHint: "PDF, DOCX, or TXT",
+      },
+      {
+        id: "installation-guide",
+        label: "Installation guide",
+        description: "Clean-machine setup steps for reviewers who run the project locally.",
+        fileHint: "PDF, DOCX, MD, or TXT",
+      },
+      {
+        id: "known-issues-future-work",
+        label: "Known issues and future work notes",
+        description: "Honest list of limitations, unresolved issues, and possible improvements.",
+        fileHint: "PDF or DOCX",
+      },
+    ],
+    reference: {
+      label: "Atlassian: software deployment",
+      href: "https://www.atlassian.com/agile/software-development/software-deployment",
+    },
+  },
+  MAINTENANCE: {
+    meaning:
+      "Handle fixes, improvements, and documentation updates after review or release.",
+    howToUnderstand:
+      "Maintenance is usually driven by supervisor feedback or discovered bugs. Submit revision evidence only when requested.",
+    optionalEvidence: [
+      {
+        id: "bug-fix-notes",
+        label: "Bug-fix notes",
+        description: "Defects fixed after review and how each fix was verified.",
+        fileHint: "PDF, DOCX, or TXT",
+      },
+      {
+        id: "updated-source-archive",
+        label: "Updated source archive",
+        description: "Updated code package or release after requested fixes.",
+        fileHint: "ZIP or repository link document",
+      },
+      {
+        id: "revision-report",
+        label: "Revision report",
+        description: "Summary of supervisor feedback and the changes made in response.",
+        fileHint: "PDF or DOCX",
+      },
+      {
+        id: "change-log",
+        label: "Change log",
+        description: "Versioned list of updates after deployment or final review.",
+        fileHint: "PDF, DOCX, MD, or TXT",
+      },
+    ],
+    reference: {
+      label: "NIST: SDLC reference",
+      href: "https://www.nist.gov/publications/system-development-life-cycle-sdlc",
+    },
+  },
 }
 
 const STATUS_META: Record<ApiSubmissionStatus, { label: string; icon: React.ComponentType<{ className?: string }>; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -260,6 +545,32 @@ function SubmissionCommentsThread({ submissionId }: { submissionId: string }) {
       <p className="text-[10px] text-muted-foreground mt-1">⌘/Ctrl + Enter to post</p>
     </div>
   )
+}
+
+function isOptionalEvidenceSubmission(submission?: Pick<ApiSubmission, "title"> | null) {
+  return submission?.title?.trim().toLowerCase().startsWith("optional:") ?? false
+}
+
+function cloneRubric(rubric?: RubricItem[] | null): RubricItem[] {
+  return rubric ? rubric.map((item) => ({ ...item })) : []
+}
+
+function getTaRubricForSubmission(submission: ApiSubmission) {
+  const taHistoryRubric = submission.gradeHistory
+    ?.slice()
+    .reverse()
+    .find((entry) => entry.event === "ta_reviewed" && entry.rubric && entry.rubric.length > 0)
+    ?.rubric
+
+  if (taHistoryRubric?.length) return cloneRubric(taHistoryRubric)
+  if (submission.taReviewedAt && submission.rubric?.length) return cloneRubric(submission.rubric)
+  return []
+}
+
+function getRubricScaledTotal(rubric: RubricItem[]) {
+  const total = rubric.reduce((sum, item) => sum + (Number(item.score) || 0), 0)
+  const possible = rubric.reduce((sum, item) => sum + (Number(item.maxScore) || 0), 0)
+  return possible > 0 ? Math.round((total / possible) * 100) : null
 }
 
 // ─── Submission Detail Dialog ────────────────────────────────────────────────
@@ -547,6 +858,37 @@ function SubmissionDetailDialog({
     }
   }
 
+  async function initializeDoctorGradeDialog() {
+    const taRubric = getTaRubricForSubmission(submission)
+    const existingDoctorRubric = submission.grade !== null ? cloneRubric(submission.rubric) : []
+    const initialRubric =
+      taRubric.length > 0
+        ? taRubric
+        : existingDoctorRubric.length > 0
+          ? existingDoctorRubric
+          : await resolveInitialRubric(submission)
+    const initialRubricScore = getRubricScaledTotal(initialRubric)
+
+    setDoctorRubric(initialRubric)
+    setDoctorRubricScore(initialRubricScore)
+    setGrade(
+      String(
+        submission.grade ??
+          submission.taRecommendedGrade ??
+          initialRubricScore ??
+          "",
+      ),
+    )
+    setGradeFeedback(submission.feedback || submission.taFeedback || "")
+    setOverrideReason("")
+  }
+
+  async function prepareDoctorGradeDialog() {
+    await initializeDoctorGradeDialog()
+    setOpen(false)
+    setGradeDialogOpen(true)
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -692,7 +1034,7 @@ function SubmissionDetailDialog({
                   <div>
                     <h4 className="text-base font-semibold mb-3">Submission Notes</h4>
                     <p className="text-sm text-foreground bg-muted/30 p-4 rounded-xl italic leading-relaxed border">
-                      &ldquo;{submission.notes}&rdquo;
+                      &quot;{submission.notes}&quot;
                     </p>
                   </div>
                )}
@@ -964,7 +1306,7 @@ function SubmissionDetailDialog({
                       <Button
                         size="lg"
                         className="flex-1 shadow-sm font-semibold bg-amber-600 hover:bg-amber-700"
-                        onClick={openDoctorGradeDialog}
+                        onClick={() => void prepareDoctorGradeDialog()}
                       >
                         <Award className="h-5 w-5 mr-2" />
                         Finalize Grade
@@ -974,7 +1316,7 @@ function SubmissionDetailDialog({
                       size="lg"
                       variant="outline"
                       className="flex-1 font-semibold border-destructive/20 text-destructive hover:text-destructive hover:bg-destructive/10 hover:border-destructive/30"
-                      onClick={() => { setOpen(false); setRevisionDialogOpen(true) }}
+                      onClick={() => setRevisionDialogOpen(true)}
                     >
                       <RotateCcw className="h-5 w-5 mr-2" />
                       Request Revision
@@ -993,13 +1335,7 @@ function SubmissionDetailDialog({
         onOpenChange={(open) => {
           setGradeDialogOpen(open)
           if (open) {
-            // Async load: saved rubric → team custom template → global default
-            void resolveInitialRubric(submission).then(setDoctorRubric)
-            doctorGradeManuallyEditedRef.current = false
-            doctorRubricScoreRef.current = null
-            setDoctorRubricScore(null)
-            setDoctorRubricTouched(false)
-            setOverrideReason("")
+            void initializeDoctorGradeDialog()
           }
         }}
       >
@@ -1022,6 +1358,11 @@ function SubmissionDetailDialog({
                     <span className="text-muted-foreground"> · {submission.taReviewedBy.fullName}</span>
                   )}
                 </p>
+                {getTaRubricForSubmission(submission).length > 0 && (
+                  <p className="mt-1 text-xs text-cyan-800/80 dark:text-cyan-300/80">
+                    The editable rubric below starts with the TA&apos;s criteria and point values.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1306,7 +1647,35 @@ function SubmissionDetailDialog({
 }
 
 // ─── New Submission Dialog ───────────────────────────────────────────────────
-function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => void }) {
+function NewSubmissionDialog({
+  onCreated,
+  currentStage,
+  targetPhase,
+  stageLoading,
+  initialDeliverableType,
+  initialTitle = "",
+  initialNotes = "",
+  triggerLabel = "New Submission",
+  triggerVariant = "default",
+  triggerSize = "default",
+  triggerClassName = "",
+  disabled = false,
+  disabledReason,
+}: {
+  onCreated: (s: ApiSubmission) => void
+  currentStage: ApiTeamStage
+  targetPhase?: ApiTeamStage
+  stageLoading?: boolean
+  initialDeliverableType?: ApiDeliverableType
+  initialTitle?: string
+  initialNotes?: string
+  triggerLabel?: string
+  triggerVariant?: "default" | "secondary" | "outline" | "ghost" | "link" | "destructive"
+  triggerSize?: "default" | "sm" | "lg" | "icon" | "icon-sm" | "icon-lg"
+  triggerClassName?: string
+  disabled?: boolean
+  disabledReason?: string
+}) {
   const [open, setOpen] = useState(false)
   const [deliverableType, setDeliverableType] = useState<ApiDeliverableType | "">("")
   const [title, setTitle] = useState("")
@@ -1315,10 +1684,18 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
   const [loading, setLoading] = useState(false)
   const [formErrors, setFormErrors] = useState<{ type?: string; file?: string }>({})
   const fileRef = useRef<HTMLInputElement>(null)
+  const submissionPhase = targetPhase ?? currentStage
 
   const selectedPhase = deliverableType
     ? DELIVERABLE_META[deliverableType as ApiDeliverableType].phase
     : null
+  const availableDeliverables = Object.entries(DELIVERABLE_META).filter(
+    ([, meta]) => meta.phase === submissionPhase,
+  ) as Array<[ApiDeliverableType, (typeof DELIVERABLE_META)[ApiDeliverableType]]>
+  const submissionPhaseMeta = PHASE_META[submissionPhase]
+  const canSubmitInCurrentStage = !stageLoading && !disabled && availableDeliverables.length > 0
+  const initialTypeIsAvailable =
+    initialDeliverableType && DELIVERABLE_META[initialDeliverableType].phase === submissionPhase
 
   function resetForm() {
     setDeliverableType("")
@@ -1329,11 +1706,23 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
     if (fileRef.current) fileRef.current.value = ""
   }
 
+  function prepareForm() {
+    setDeliverableType(initialTypeIsAvailable ? initialDeliverableType : "")
+    setTitle(initialTitle)
+    setNotes(initialNotes)
+    setFile(null)
+    setFormErrors({})
+    if (fileRef.current) fileRef.current.value = ""
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     
     const errors: { type?: string; file?: string } = {}
     if (!deliverableType) errors.type = "Please select a deliverable type."
+    if (deliverableType && DELIVERABLE_META[deliverableType].phase !== submissionPhase) {
+      errors.type = `Only ${submissionPhaseMeta.label} deliverables can be submitted from this row.`
+    }
     if (!file) errors.file = "Please upload a file."
     
     if (Object.keys(errors).length > 0 || !deliverableType || !file) {
@@ -1348,7 +1737,7 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
       const created = await submissionsApi.create(
         {
           deliverableType: selectedDeliverableType,
-          sdlcPhase: DELIVERABLE_META[selectedDeliverableType].phase,
+          sdlcPhase: submissionPhase,
           title: title || undefined,
           notes: notes || undefined,
         },
@@ -1366,55 +1755,102 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v)
+        if (v) prepareForm()
+        if (!v) resetForm()
+      }}
+    >
       <DialogTrigger asChild>
-        <Button>
+        <Button
+          disabled={!canSubmitInCurrentStage}
+          variant={triggerVariant}
+          size={triggerSize}
+          className={`shadow-sm ${triggerClassName}`}
+          title={disabledReason}
+        >
           <Upload className="h-4 w-4 mr-2" />
-          New Submission
+          {stageLoading ? "Loading Phase..." : triggerLabel}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Submit Deliverable</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          <div>
-            <Label className={formErrors.type ? "text-destructive" : ""}>Deliverable Type *</Label>
-            <Select
-              value={deliverableType}
-              onValueChange={(v) => {
-                setDeliverableType(v as ApiDeliverableType)
-                if (formErrors.type) setFormErrors((prev) => ({ ...prev, type: undefined }))
-              }}
-            >
-              <SelectTrigger className={`mt-1.5 ${formErrors.type ? "border-destructive focus:ring-destructive" : ""}`}>
-                <SelectValue placeholder="Select deliverable..." />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(DELIVERABLE_META).map(([key, meta]) => (
-                  <SelectItem key={key} value={key}>
-                    <span>{meta.label}</span>
-                    <span className="text-xs text-muted-foreground ml-2">({meta.phase})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedPhase && (
-              <p className="text-xs text-muted-foreground mt-1">
-                SDLC phase: <strong>{PHASE_META[selectedPhase].label}</strong>
-              </p>
-            )}
-            {formErrors.type && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.type}</p>}
+      <DialogContent className="flex max-h-[92vh] max-w-xl flex-col overflow-hidden p-0">
+        <DialogHeader className="shrink-0">
+          <div className="border-b bg-muted/30 px-6 py-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2.5">
+                <Upload className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle>Submit Deliverable</DialogTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Submission phase: <span className="font-medium text-foreground">{stageLoading ? "Loading..." : submissionPhaseMeta.label}</span>
+                </p>
+              </div>
+            </div>
           </div>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <div className="flex gap-2">
+                <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-sm leading-5 text-muted-foreground">
+                  Unlocked phases stay open for new versions. Future phases remain locked until earlier required items are approved.
+                </p>
+              </div>
+            </div>
 
-          <div>
-            <Label>Title (optional)</Label>
-            <Input
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label className={formErrors.type ? "text-destructive" : ""}>Deliverable Type *</Label>
+                <Select
+                  value={deliverableType}
+                  disabled={!canSubmitInCurrentStage}
+                  onValueChange={(v) => {
+                    setDeliverableType(v as ApiDeliverableType)
+                    if (formErrors.type) setFormErrors((prev) => ({ ...prev, type: undefined }))
+                  }}
+                >
+                  <SelectTrigger className={`mt-1.5 h-10 ${formErrors.type ? "border-destructive focus:ring-destructive" : ""}`}>
+                    <SelectValue placeholder="Select deliverable..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableDeliverables.map(([key, meta]) => (
+                      <SelectItem key={key} value={key}>
+                        <span className="flex items-center gap-2">
+                          <span>{meta.label}</span>
+                          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                            {meta.required ? "Required" : "Optional"}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedPhase && deliverableType && (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Expected file: <strong>{DELIVERABLE_META[deliverableType].fileHint}</strong>
+                  </p>
+                )}
+                {!canSubmitInCurrentStage && (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    There are no configured submissions for the {submissionPhaseMeta.label} phase.
+                  </p>
+                )}
+                {formErrors.type && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.type}</p>}
+              </div>
+
+              <div>
+                <Label>Title (optional)</Label>
+                <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. SRS v2 – Final"
-              className="mt-1.5"
-            />
+                  className="mt-1.5 h-10"
+                />
+              </div>
           </div>
 
           <div>
@@ -1423,14 +1859,14 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes for your supervisor..."
-              rows={3}
-              className="mt-1.5 resize-none"
+              rows={2}
+              className="mt-1.5 min-h-20 resize-none"
             />
           </div>
           <div>
             <Label className={formErrors.file ? "text-destructive" : ""}>File *</Label>
             <div
-              className={`mt-1.5 border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+              className={`mt-1.5 border-2 border-dashed rounded-xl p-5 text-center transition-colors cursor-pointer ${
                 formErrors.file ? "border-destructive bg-destructive/5 hover:border-destructive" : "border-border hover:border-primary"
               }`}
               onClick={() => fileRef.current?.click()}
@@ -1466,17 +1902,20 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
             {formErrors.file && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.file}</p>}
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Submitting..." : "Submit"}
-            </Button>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 border-t bg-background px-6 py-4 sm:flex-row">
             <Button
               type="button"
               variant="outline"
               onClick={() => { resetForm(); setOpen(false) }}
               disabled={loading}
+              className="sm:w-28"
             >
               Cancel
+            </Button>
+            <Button type="submit" disabled={loading || !canSubmitInCurrentStage} className="flex-1">
+              {loading ? "Submitting..." : "Submit"}
             </Button>
           </div>
         </form>
@@ -1485,11 +1924,81 @@ function NewSubmissionDialog({ onCreated }: { onCreated: (s: ApiSubmission) => v
   )
 }
 
+function PhaseGuideCard({
+  phase,
+  deliverables,
+  approvedCount,
+}: {
+  phase: ApiTeamStage
+  deliverables: ApiDeliverableType[]
+  approvedCount: number
+}) {
+  const guide = PHASE_GUIDE[phase]
+  const meta = PHASE_META[phase]
+  const requiredDeliverables = deliverables.filter((dt) => DELIVERABLE_META[dt].required)
+  const optionalDeliverables = deliverables.filter((dt) => !DELIVERABLE_META[dt].required)
+  const requiredApproved = approvedCount >= requiredDeliverables.length
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">What this phase means</h3>
+          </div>
+          <p className="text-sm leading-6 text-muted-foreground">{guide.meaning}</p>
+          <div className="rounded-lg border bg-background p-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">How to understand it</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{guide.howToUnderstand}</p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <LockKeyhole className="h-4 w-4 text-amber-500" />
+            <h3 className="text-sm font-semibold">Phase gate</h3>
+          </div>
+          <div className="rounded-lg border bg-background p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={`${meta.color} border`}>{approvedCount}/{requiredDeliverables.length} approved</Badge>
+              <Badge variant={requiredApproved ? "default" : "secondary"}>
+                {requiredApproved ? "Ready for next phase" : "Next phase locked"}
+              </Badge>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              You can move to the next phase only after every required submission in this phase is reviewed and approved by the doctor or supervisor.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="w-full justify-between bg-transparent">
+            <a href={guide.reference.href} target="_blank" rel="noopener noreferrer">
+              <span className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4" />
+                {guide.reference.label}
+              </span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        </div>
+      </div>
+
+      {(optionalDeliverables.length > 0 || guide.optionalEvidence.length > 0) && (
+        <div className="rounded-lg border bg-background p-3">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Optional evidence appears below the required submission rows</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Deliverable Row ─────────────────────────────────────────────────────────
 function DeliverableRow({
   deliverableType,
   submissions,
   canSubmit,
+  canSubmitInPhase,
+  submitDisabledReason,
+  currentStage,
   canGrade,
   userRole,
   onCreated,
@@ -1499,6 +2008,9 @@ function DeliverableRow({
   deliverableType: ApiDeliverableType
   submissions: ApiSubmission[]
   canSubmit: boolean
+  canSubmitInPhase: boolean
+  submitDisabledReason: string
+  currentStage: ApiTeamStage
   canGrade: boolean
   userRole?: string
   onCreated: (s: ApiSubmission) => void
@@ -1510,6 +2022,8 @@ function DeliverableRow({
   const hasSubmission = !!latest
   const isApproved = latest?.status === "APPROVED"
   const needsRevision = latest?.status === "REVISION_REQUIRED"
+  const isPendingReview = latest?.status === "PENDING" || latest?.status === "UNDER_REVIEW"
+  const submitLabel = !latest ? "Submit" : needsRevision ? "Resubmit" : isApproved ? "New Version" : "Submit"
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -1540,10 +2054,13 @@ function DeliverableRow({
       whileHover={{ scale: 1.005 }}
       transition={{ type: "spring", stiffness: 300 }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h3 className="font-medium">{meta.label}</h3>
+            <Badge variant={meta.required ? "default" : "outline"} className="text-xs">
+              {meta.required ? "Required" : "Optional"}
+            </Badge>
             <Badge variant="outline" className={`text-xs ${PHASE_META[meta.phase].color}`}>
               {PHASE_META[meta.phase].label}
             </Badge>
@@ -1562,6 +2079,7 @@ function DeliverableRow({
             {latest?.late && <Badge variant="destructive" className="text-xs">Late</Badge>}
           </div>
           <p className="text-xs text-muted-foreground">{meta.description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Expected file: {meta.fileHint}</p>
           {latest && (
             <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
               <span>v{latest.version}</span>
@@ -1588,7 +2106,22 @@ function DeliverableRow({
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {canSubmit && (
+            <NewSubmissionDialog
+              onCreated={onCreated}
+              currentStage={currentStage}
+              targetPhase={meta.phase}
+              initialDeliverableType={deliverableType}
+              initialTitle={latest ? `${meta.label} v${latest.version + 1}` : meta.label}
+              triggerLabel={submitLabel}
+              triggerVariant={needsRevision ? "default" : "outline"}
+              triggerSize="sm"
+              disabled={!canSubmitInPhase || isPendingReview}
+              disabledReason={isPendingReview ? "This item is waiting for supervisor review." : submitDisabledReason}
+              triggerClassName={!canSubmitInPhase ? "opacity-45 blur-[1px]" : ""}
+            />
+          )}
           {latest && (
             <SubmissionDetailDialog
               submissions={submissions}
@@ -1659,21 +2192,143 @@ function DeliverableRow({
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
+function OptionalSubmissionRow({
+  label,
+  description,
+  fileHint,
+  phase,
+  submitAsDeliverable,
+  latest,
+  canSubmit,
+  canSubmitInPhase,
+  submitDisabledReason,
+  currentStage,
+  canGrade,
+  onCreated,
+  onUpdated,
+}: {
+  label: string
+  description: string
+  fileHint: string
+  phase: ApiTeamStage
+  submitAsDeliverable: ApiDeliverableType
+  latest: ApiSubmission | null
+  canSubmit: boolean
+  canSubmitInPhase: boolean
+  submitDisabledReason: string
+  currentStage: ApiTeamStage
+  canGrade: boolean
+  onCreated: (s: ApiSubmission) => void
+  onUpdated: (s: ApiSubmission) => void
+}) {
+  const isPendingReview = latest?.status === "PENDING" || latest?.status === "UNDER_REVIEW"
+  const isApproved = latest?.status === "APPROVED"
+  const needsRevision = latest?.status === "REVISION_REQUIRED"
+  const submitLabel = !latest ? "Submit" : needsRevision ? "Resubmit" : isApproved ? "New Version" : "Submit"
+  const statusInfo = latest ? STATUS_META[latest.status] : null
+  const StatusIcon = statusInfo?.icon
+
+  return (
+    <div
+      className={`rounded-lg border border-dashed p-4 transition-colors ${
+        isApproved
+          ? "border-green-200 bg-green-50/20 dark:bg-green-950/10"
+          : needsRevision
+            ? "border-red-200 bg-red-50/20 dark:bg-red-950/10"
+            : "border-border bg-muted/10"
+      }`}
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h4 className="font-medium">{label}</h4>
+            <Badge variant="outline" className="text-xs">Optional</Badge>
+            <Badge variant="outline" className={`text-xs ${PHASE_META[phase].color}`}>
+              {PHASE_META[phase].label}
+            </Badge>
+            {statusInfo && StatusIcon && (
+              <Badge variant={statusInfo.variant} className="gap-1 text-xs">
+                <StatusIcon className="h-3 w-3" />
+                {statusInfo.label}
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Expected file: {fileHint}</p>
+          {latest && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+              <span>v{latest.version}</span>
+              <span>{new Date(latest.submittedAt).toLocaleDateString()}</span>
+              {latest.grade !== null && (
+                <span className="flex items-center gap-0.5 font-medium text-foreground">
+                  <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                  {latest.grade}%
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {canSubmit && (
+            <NewSubmissionDialog
+              onCreated={onCreated}
+              currentStage={currentStage}
+              targetPhase={phase}
+              initialDeliverableType={submitAsDeliverable}
+              initialTitle={`Optional: ${label}`}
+              initialNotes={`Optional supporting evidence: ${label}\n\n${description}`}
+              triggerLabel={submitLabel}
+              triggerVariant={needsRevision ? "default" : "outline"}
+              triggerSize="sm"
+              disabled={!canSubmitInPhase || isPendingReview}
+              disabledReason={isPendingReview ? "This optional evidence is waiting for supervisor review." : submitDisabledReason}
+              triggerClassName={!canSubmitInPhase ? "opacity-45 blur-[1px]" : ""}
+            />
+          )}
+          {latest && (
+            <SubmissionDetailDialog
+              submissions={[latest]}
+              canGrade={canGrade}
+              canSubmit={canSubmit}
+              onGraded={onUpdated}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SubmissionsPage() {
   const { currentUser } = useAuthStore()
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string>("")
+  const [myProposal, setMyProposal] = useState<ApiProposal | null>(null)
+  const [proposalLoading, setProposalLoading] = useState(false)
 
   const userRole = currentUser?.role?.toUpperCase() || ""
   const isLeader = userRole === "LEADER"
+  const isMember = userRole === "MEMBER"
   const isSupervisor = userRole === "DOCTOR" || userRole === "TA"
   const isAdmin = userRole === "ADMIN"
+  const isReviewInboxOnly = isSupervisor && !isAdmin
+  const { data: myTeamState, isLoading: myTeamLoading } = useMyTeamState(isLeader || isMember)
 
   useEffect(() => {
     loadSubmissions()
   }, [])
+
+  useEffect(() => {
+    if (!isLeader && !isMember) return
+    setProposalLoading(true)
+    proposalsApi.getMine()
+      .then(setMyProposal)
+      .catch(() => setMyProposal(null))
+      .finally(() => setProposalLoading(false))
+  }, [isLeader, isMember])
 
   async function loadSubmissions() {
     setLoading(true)
@@ -1718,17 +2373,44 @@ export default function SubmissionsPage() {
     ? submissions.filter(s => s.teamId === selectedTeamId)
     : submissions
 
-  // Group by deliverable type (keep latest first within each type)
+  const officialSubmissions = displaySubmissions.filter((s) => !isOptionalEvidenceSubmission(s))
+  const hasApprovedRequiredSubmission = (phase: ApiTeamStage, deliverableType: ApiDeliverableType) =>
+    officialSubmissions.some(
+      (s) =>
+        s.sdlcPhase === phase &&
+        s.deliverableType === deliverableType &&
+        s.status === "APPROVED",
+    )
+
+  // Group by official deliverable type (keep latest first within each type)
   const byDeliverable = Object.keys(DELIVERABLE_META).reduce(
     (acc, key) => {
       const dt = key as ApiDeliverableType
-      acc[dt] = displaySubmissions
+      acc[dt] = officialSubmissions
         .filter((s) => s.deliverableType === dt)
         .sort((a, b) => b.version - a.version)
       return acc
     },
     {} as Record<ApiDeliverableType, ApiSubmission[]>,
   )
+  const savedTeamStage = myTeamState?.team?.stage ?? displaySubmissions[0]?.team?.stage ?? "REQUIREMENTS"
+  const effectiveCurrentStage =
+    PHASE_ORDER.find((phase) => {
+      const required = Object.entries(DELIVERABLE_META)
+        .filter(([, meta]) => meta.phase === phase && meta.required)
+        .map(([key]) => key as ApiDeliverableType)
+
+      return required.some((dt) => !hasApprovedRequiredSubmission(phase, dt))
+    }) ?? savedTeamStage
+  const currentStage = effectiveCurrentStage
+  const proposalApproved = myProposal?.status === "APPROVED"
+  const proposalGateApplies = isLeader || isMember
+  const proposalLockReason = proposalLoading
+    ? "Checking proposal approval..."
+    : myProposal
+      ? `Your proposal is ${myProposal.status.replace("_", " ").toLowerCase()}. SDLC submissions unlock after doctor approval.`
+      : "Create and submit a project proposal before starting official SDLC submissions."
+  const canLeaderSubmitSdlc = isLeader && (!proposalGateApplies || proposalApproved)
 
   const totalCount = submissions.length
   const gradedCount = submissions.filter((s) => s.grade !== null).length
@@ -1776,12 +2458,65 @@ export default function SubmissionsPage() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-green-600 bg-clip-text text-transparent">
               Submissions
             </h1>
-            <p className="text-muted-foreground mt-1">Track project deliverables across SDLC phases</p>
+            <p className="text-muted-foreground mt-1">
+              {isReviewInboxOnly
+                ? "Review deliverable requests from your assigned teams"
+                : "Understand each SDLC phase and submit the required project files for supervisor approval"}
+            </p>
           </div>
-          {isLeader && <NewSubmissionDialog onCreated={handleCreated} />}
+          {isLeader && (
+            <NewSubmissionDialog
+              onCreated={handleCreated}
+              currentStage={currentStage}
+              stageLoading={myTeamLoading && !myTeamState?.team}
+              disabled={proposalGateApplies && !proposalApproved}
+              disabledReason={proposalLockReason}
+            />
+          )}
         </motion.div>
 
+        {proposalGateApplies && !proposalApproved && (
+          <Card className="border-amber-500/25 bg-amber-500/5 p-5">
+            <div className="flex gap-3">
+              <div className="mt-0.5 rounded-lg bg-amber-500/10 p-2">
+                <LockKeyhole className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-semibold">SDLC submissions are locked</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">{proposalLockReason}</p>
+                <Link href={myProposal ? `/dashboard/proposals/${myProposal.id}` : "/dashboard/proposals/new"}>
+                  <Button variant="outline" size="sm" className="mt-3">
+                    {myProposal ? "Open Proposal" : "Create Proposal"}
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {!isReviewInboxOnly && (
+        <Card className="border-primary/25 bg-primary/5 p-5">
+          <div className="flex gap-3">
+            <div className="mt-0.5 rounded-lg bg-primary/10 p-2">
+              <LockKeyhole className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="font-semibold">How phase advancement works</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Each phase has required submissions. Your team cannot move to the next SDLC phase until every required item in the current phase is submitted, reviewed, and approved by the doctor or supervisor. Optional evidence can support your work, but it does not unlock the next phase by itself.
+            </p>
+            {savedTeamStage !== currentStage && (
+              <p className="mt-2 text-sm font-medium text-amber-600">
+                The saved team stage is {PHASE_META[savedTeamStage].label}, but submissions are locked to {PHASE_META[currentStage].label} because an earlier required approval is still missing.
+              </p>
+            )}
+          </div>
+        </div>
+      </Card>
+        )}
+
         {/* Stats */}
+        {!isReviewInboxOnly && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="p-5 border-l-4 border-l-primary">
             <div className="flex items-center gap-3 mb-1">
@@ -1812,6 +2547,7 @@ export default function SubmissionsPage() {
             <p className="text-3xl font-bold">{lateCount}</p>
           </Card>
         </div>
+        )}
 
         {/* Error / Loading */}
         {error && (
@@ -1824,6 +2560,14 @@ export default function SubmissionsPage() {
               </Button>
             </div>
           </Card>
+        )}
+
+        {isReviewInboxOnly && loading && (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-24 rounded-lg bg-muted animate-pulse" />
+            ))}
+          </div>
         )}
 
         {/* Pending reviews — role-aware: TA sees PENDING, Doctor sees UNDER_REVIEW */}
@@ -1866,15 +2610,29 @@ export default function SubmissionsPage() {
           </Card>
         )}
 
+        {isReviewInboxOnly && !loading && pendingReviews.length === 0 && !error && (
+          <Card className="p-8 text-center border-dashed">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+              <Clock className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <h2 className="font-semibold">No review requests</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              New submissions from your assigned teams will appear here when they need your review.
+            </p>
+          </Card>
+        )}
+
         {/* Deliverables by phase */}
+        {!isReviewInboxOnly && (
+          <>
         <div className="flex items-center justify-between mt-8 mb-4 border-t pt-8">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
               <FileUp className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Team SDLC Progress</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Track deliverables phase by phase</p>
+              <h2 className="text-xl font-bold">SDLC Phase Submissions</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">What each phase means and what your team must submit</p>
             </div>
           </div>
           {(isSupervisor || isAdmin) && uniqueTeams.length > 0 && (
@@ -1902,42 +2660,199 @@ export default function SubmissionsPage() {
           </div>
         ) : (
           <>
-            {(["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT"] as ApiTeamStage[]).map(
+            {PHASE_ORDER.map(
               (phase) => {
                 const phaseDeliverables = Object.entries(DELIVERABLE_META)
                   .filter(([, m]) => m.phase === phase)
                   .map(([key]) => key as ApiDeliverableType)
+                  .sort((a, b) => Number(DELIVERABLE_META[b].required) - Number(DELIVERABLE_META[a].required))
+                const requiredDeliverables = phaseDeliverables.filter((dt) => DELIVERABLE_META[dt].required)
+                const optionalDeliverables = phaseDeliverables.filter((dt) => !DELIVERABLE_META[dt].required)
+                const approvedRequiredCount = requiredDeliverables.filter((dt) => hasApprovedRequiredSubmission(phase, dt)).length
+                const phaseIndex = PHASE_ORDER.indexOf(phase)
+                const currentIndex = PHASE_ORDER.indexOf(currentStage)
+                const isCurrentPhase = phase === currentStage
+                const isFuturePhase = currentIndex >= 0 && phaseIndex > currentIndex
+                const isPreviousPhase = currentIndex >= 0 && phaseIndex < currentIndex
+                const isUnlockedPhase = currentIndex >= 0 && phaseIndex <= currentIndex
+                const phaseHeader = PHASE_HEADER_META[phase]
+                const phaseSubmissions = displaySubmissions
+                  .filter((s) => s.sdlcPhase === phase)
+                  .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+                const requiredPhaseSubmissions = phaseSubmissions.filter(
+                  (s) => requiredDeliverables.includes(s.deliverableType) && !isOptionalEvidenceSubmission(s),
+                )
+                const latestPhaseSubmission = requiredPhaseSubmissions[0] ?? null
+                const phaseReviewPending =
+                  latestPhaseSubmission?.status === "PENDING" || latestPhaseSubmission?.status === "UNDER_REVIEW"
+                const phaseRevisionRequired = latestPhaseSubmission?.status === "REVISION_REQUIRED"
+                const submitAsEvidenceType = requiredDeliverables[0] ?? optionalDeliverables[0]
+                const baseDisabledReason = isFuturePhase
+                  ? "This phase is locked until earlier required submissions are approved and the project stage advances."
+                  : phaseReviewPending
+                    ? "A required submission in this phase is waiting for supervisor review."
+                    : "This phase is unlocked."
+                const canSubmitRequiredDeliverable = (dt: ApiDeliverableType) =>
+                  isUnlockedPhase &&
+                  !phaseReviewPending &&
+                  (!phaseRevisionRequired || latestPhaseSubmission?.deliverableType === dt)
+                const canSubmitOptionalItem = isUnlockedPhase
+                const optionalDisabledReason =
+                  isFuturePhase ? baseDisabledReason : "This phase is unlocked."
+                const submitDisabledReason = !proposalApproved && proposalGateApplies ? proposalLockReason : baseDisabledReason
+                const optionalSubmitDisabledReason = !proposalApproved && proposalGateApplies ? proposalLockReason : optionalDisabledReason
+                const phaseProgress =
+                  requiredDeliverables.length > 0
+                    ? Math.round((approvedRequiredCount / requiredDeliverables.length) * 100)
+                    : 100
+                const latestOptionalEvidence = (label: string, submitAs: ApiDeliverableType) =>
+                  phaseSubmissions.find(
+                    (s) => s.deliverableType === submitAs && s.title === `Optional: ${label}`,
+                  ) ?? null
 
                 return (
-                  <Card key={phase} className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Badge className={`${PHASE_META[phase].color} border`}>
-                        {PHASE_META[phase].label}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {phaseDeliverables.filter((dt) => byDeliverable[dt]?.[0]?.status === "APPROVED").length}
-                        /{phaseDeliverables.length} approved
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {phaseDeliverables.map((dt) => (
-                        <DeliverableRow
-                          key={dt}
-                          deliverableType={dt}
-                          submissions={byDeliverable[dt]}
-                          canSubmit={isLeader}
-                          canGrade={isSupervisor || isAdmin}
-                          userRole={userRole}
-                          onCreated={handleCreated}
-                          onUpdated={handleUpdated}
-                          onDeleted={handleDeleted}
-                        />
-                      ))}
-                    </div>
-                  </Card>
+                  <Collapsible key={phase} defaultOpen={isCurrentPhase}>
+                    <Card
+                      className={`overflow-hidden border-l-4 p-0 ${
+                        isCurrentPhase
+                          ? "border-l-primary shadow-sm ring-1 ring-primary/20"
+                          : isFuturePhase
+                            ? "border-l-muted-foreground/30 bg-muted/10 opacity-80"
+                            : "border-l-green-500"
+                      }`}
+                    >
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="group flex w-full flex-col gap-4 bg-muted/20 p-5 text-left transition-colors hover:bg-muted/35 lg:flex-row lg:items-center lg:justify-between"
+                        >
+                          <div className="flex min-w-0 gap-4">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-background text-sm font-semibold text-muted-foreground">
+                              {phaseIndex + 1}
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge className={`${PHASE_META[phase].color} border`}>
+                                  {PHASE_META[phase].label}
+                                </Badge>
+                                {isCurrentPhase && <Badge variant="default">Current phase</Badge>}
+                                {isFuturePhase && (
+                                  <Badge variant="secondary" className="gap-1">
+                                    <LockKeyhole className="h-3 w-3" />
+                                    Locked
+                                  </Badge>
+                                )}
+                                {isPreviousPhase && <Badge variant="outline">Unlocked previous phase</Badge>}
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                                  {phaseHeader.title}
+                                </h3>
+                                <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                                  {phaseHeader.subtitle}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex w-full shrink-0 flex-col gap-3 lg:w-[260px]">
+                            <div className="flex items-center justify-between gap-3">
+                              <Badge variant={approvedRequiredCount === requiredDeliverables.length ? "default" : "secondary"}>
+                                {approvedRequiredCount}/{requiredDeliverables.length} required approved
+                              </Badge>
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Progress value={phaseProgress} className="h-1.5" />
+                              <div className="flex justify-between text-[11px] text-muted-foreground">
+                                <span>{phaseSubmissions.length} submission{phaseSubmissions.length === 1 ? "" : "s"}</span>
+                                <span>{phaseProgress}% complete</span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <div className="space-y-4 border-t p-5">
+                          <PhaseGuideCard
+                            phase={phase}
+                            deliverables={phaseDeliverables}
+                            approvedCount={approvedRequiredCount}
+                          />
+
+                          <div className="space-y-3">
+                            {requiredDeliverables.map((dt) => (
+                              <DeliverableRow
+                                key={dt}
+                                deliverableType={dt}
+                                submissions={byDeliverable[dt]}
+                                canSubmit={canLeaderSubmitSdlc}
+                                canSubmitInPhase={canSubmitRequiredDeliverable(dt)}
+                                submitDisabledReason={submitDisabledReason}
+                                currentStage={currentStage}
+                                canGrade={isSupervisor || isAdmin}
+                                userRole={userRole}
+                                onCreated={handleCreated}
+                                onUpdated={handleUpdated}
+                                onDeleted={handleDeleted}
+                              />
+                            ))}
+                            {(optionalDeliverables.length > 0 || PHASE_GUIDE[phase].optionalEvidence.length > 0) && (
+                              <div className="space-y-2 rounded-lg border bg-muted/10 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h3 className="text-sm font-semibold">Optional supporting evidence</h3>
+                                  <Badge variant="outline">Does not unlock phase</Badge>
+                                </div>
+                                <div className="space-y-2">
+                                  {optionalDeliverables.map((dt) => (
+                                    <OptionalSubmissionRow
+                                      key={dt}
+                                      label={DELIVERABLE_META[dt].label}
+                                      description={DELIVERABLE_META[dt].description}
+                                      fileHint={DELIVERABLE_META[dt].fileHint}
+                                      phase={phase}
+                                      submitAsDeliverable={dt}
+                                      latest={byDeliverable[dt]?.[0] ?? null}
+                                      canSubmit={canLeaderSubmitSdlc}
+                                      canSubmitInPhase={canSubmitOptionalItem}
+                                      submitDisabledReason={optionalSubmitDisabledReason}
+                                      currentStage={currentStage}
+                                      canGrade={isSupervisor || isAdmin}
+                                      onCreated={handleCreated}
+                                      onUpdated={handleUpdated}
+                                    />
+                                  ))}
+                                  {submitAsEvidenceType &&
+                                    PHASE_GUIDE[phase].optionalEvidence.map((evidence) => (
+                                      <OptionalSubmissionRow
+                                        key={evidence.id}
+                                        label={evidence.label}
+                                        description={evidence.description}
+                                        fileHint={evidence.fileHint}
+                                        phase={phase}
+                                        submitAsDeliverable={submitAsEvidenceType}
+                                        latest={latestOptionalEvidence(evidence.label, submitAsEvidenceType)}
+                                        canSubmit={canLeaderSubmitSdlc}
+                                        canSubmitInPhase={canSubmitOptionalItem}
+                                        submitDisabledReason={optionalSubmitDisabledReason}
+                                        currentStage={currentStage}
+                                        canGrade={isSupervisor || isAdmin}
+                                        onCreated={handleCreated}
+                                        onUpdated={handleUpdated}
+                                      />
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
                 )
               },
             )}
+          </>
+        )}
           </>
         )}
       </div>

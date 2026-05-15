@@ -23,6 +23,7 @@ import {
   rejectJoinRequest,
   removeSupervisorAssignment,
   removeTeamMember,
+  transferLeadership,
   updateTeam,
 } from "./teams.controller.js";
 import {
@@ -38,6 +39,7 @@ import {
   listTeamsSchema,
   removeSupervisorAssignmentSchema,
   removeTeamMemberSchema,
+  transferLeadershipSchema,
   respondInvitationSchema,
   reviewJoinRequestSchema,
   reviewSupervisorRequestSchema,
@@ -107,6 +109,12 @@ router.post(
   createSupervisorRequest,
 );
 router.post("/:id/leave", allowRoles(ROLES.STUDENT), validate(leaveTeamSchema), leaveTeam);
+router.post(
+  "/:id/transfer-leadership",
+  allowRoles(ROLES.LEADER, ROLES.ADMIN),
+  validate(transferLeadershipSchema),
+  transferLeadership,
+);
 router.delete(
   "/:id/members/:userId",
   allowRoles(ROLES.LEADER, ROLES.ADMIN),

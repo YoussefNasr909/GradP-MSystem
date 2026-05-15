@@ -7,6 +7,7 @@ const riskTeamSelect = {
   leader: { select: teamUserSelect },
   doctor: { select: teamUserSelect },
   ta: { select: teamUserSelect },
+  proposal: { select: { status: true } },
   members: {
     orderBy: { joinedAt: "asc" },
     select: {

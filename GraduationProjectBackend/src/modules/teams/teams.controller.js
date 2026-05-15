@@ -18,6 +18,7 @@
   rejectJoinRequestService,
   removeSupervisorAssignmentService,
   removeTeamMemberService,
+  transferLeadershipService,
   updateTeamService,
 } from "./teams.service.js";
 
@@ -120,6 +121,15 @@ export const removeTeamMember = asyncHandler(async (req, res) => {
     req.user,
     req.validated.params.id,
     req.validated.params.userId,
+  );
+  res.json({ ok: true, data: result });
+});
+
+export const transferLeadership = asyncHandler(async (req, res) => {
+  const result = await transferLeadershipService(
+    req.user,
+    req.validated.params.id,
+    req.validated.body,
   );
   res.json({ ok: true, data: result });
 });

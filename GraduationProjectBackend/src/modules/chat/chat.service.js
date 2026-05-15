@@ -1,4 +1,5 @@
 import { AppError } from "../../common/errors/AppError.js";
+import { ACCOUNT_STATUSES } from "../../common/constants/accountStatuses.js";
 import { prisma } from "../../loaders/dbLoader.js";
 import { ROLES } from "../../common/constants/roles.js";
 import {
@@ -24,7 +25,25 @@ const CHAT_RELATIONS = Object.freeze({
   TEAM_DOCTOR: "TEAM_DOCTOR",
   TEAM_TA: "TEAM_TA",
   SUPERVISED_TEAM_LEADER: "SUPERVISED_TEAM_LEADER",
+  ADMIN_DIRECT: "ADMIN_DIRECT",
 });
+
+const PROFILE_VISIBILITIES = Object.freeze({
+  PUBLIC: "PUBLIC",
+  TEAM_ONLY: "TEAM_ONLY",
+  PRIVATE: "PRIVATE",
+});
+
+const chatSearchUserSelect = {
+  ...chatUserSelect,
+  accountStatus: true,
+  isEmailVerified: true,
+  settings: {
+    select: {
+      profileVisibility: true,
+    },
+  },
+};
 
 function normalizeText(value) {
   return String(value ?? "").trim();
@@ -286,12 +305,40 @@ function toContactResponse(contactMeta, conversationId = null) {
   };
 }
 
-function getPeerRelation(actorRole, peerRole) {
+function canDiscoverChatUser(actor, user, contactMap) {
+  if (!user || actor.id === user.id) return false;
+  if (actor.role === ROLES.ADMIN) return true;
+  if (user.accountStatus !== ACCOUNT_STATUSES.ACTIVE || user.isEmailVerified !== true) return false;
+
+  const visibility = user.settings?.profileVisibility ?? PROFILE_VISIBILITIES.PUBLIC;
+  if (visibility === PROFILE_VISIBILITIES.PRIVATE) return false;
+  if (visibility === PROFILE_VISIBILITIES.TEAM_ONLY) return contactMap.has(user.id);
+  return true;
+}
+
+function isStudentChatRole(role) {
+  return role === ROLES.STUDENT || role === ROLES.LEADER;
+}
+
+function isSupervisorChatRole(role) {
+  return role === ROLES.DOCTOR || role === ROLES.TA;
+}
+
+function getRoleChatRelation(actorRole, peerRole) {
+  if (actorRole === ROLES.ADMIN || peerRole === ROLES.ADMIN) return CHAT_RELATIONS.ADMIN_DIRECT;
+
   const isStudentGroup = r => r === ROLES.STUDENT || r === ROLES.LEADER;
   const isStaffGroup = r => r === ROLES.DOCTOR || r === ROLES.TA;
   if (isStudentGroup(actorRole) && isStudentGroup(peerRole)) return "STUDENT_PEER";
   if (isStaffGroup(actorRole) && isStaffGroup(peerRole)) return "STAFF_PEER";
   return null;
+}
+
+function canSendDirectMessageByRole(actorRole, recipientRole) {
+  if (actorRole === ROLES.ADMIN) return true;
+  if (recipientRole === ROLES.ADMIN) return isSupervisorChatRole(actorRole);
+  if (isStudentChatRole(actorRole) && recipientRole === ROLES.ADMIN) return false;
+  return Boolean(getRoleChatRelation(actorRole, recipientRole));
 }
 
 async function resolveAuthorizedConversation(actor, conversationId, contactMap = null) {
@@ -303,7 +350,7 @@ async function resolveAuthorizedConversation(actor, conversationId, contactMap =
   let contactMeta = peer ? contacts.get(peer.id) ?? null : null;
 
   if (!contactMeta && peer) {
-    const peerRelation = getPeerRelation(actor.role, peer.role);
+    const peerRelation = getRoleChatRelation(actor.role, peer.role);
     if (peerRelation) {
       contactMeta = {
         user: toChatUser(peer),
@@ -338,7 +385,7 @@ async function getTotalUnreadCount(actor, contactMap = null) {
   for (const conversation of conversations) {
     const peer = getConversationPeer(conversation, actor.id);
     if (!peer) continue;
-    if (!allowedUserIds.has(peer.id) && !getPeerRelation(actor.role, peer.role)) continue;
+    if (!allowedUserIds.has(peer.id) && !getRoleChatRelation(actor.role, peer.role)) continue;
     unreadCount += await countUnreadMessagesByConversation(
       conversation.id,
       actor.id,
@@ -373,7 +420,7 @@ export async function getChatBootstrapService(actor) {
   const visibleConversations = conversations.filter((conversation) => {
     const peer = getConversationPeer(conversation, actor.id);
     if (!peer) return false;
-    return allowedUserIds.has(peer.id) || getPeerRelation(actor.role, peer.role);
+    return allowedUserIds.has(peer.id) || getRoleChatRelation(actor.role, peer.role);
   });
 
   const conversationSummaries = await Promise.all(
@@ -381,7 +428,7 @@ export async function getChatBootstrapService(actor) {
       const peer = getConversationPeer(conversation, actor.id);
       let meta = peer ? contactMap.get(peer.id) ?? null : null;
       if (!meta && peer) {
-        const peerRelation = getPeerRelation(actor.role, peer.role);
+        const peerRelation = getRoleChatRelation(actor.role, peer.role);
         if (peerRelation) {
           meta = { relation: peerRelation, team: null };
         }
@@ -453,8 +500,8 @@ export async function sendChatMessageService(actor, payload, file = null) {
       select: chatUserSelect,
     });
     if (recipientUser) {
-      const peerRelation = getPeerRelation(actor.role, recipientUser.role);
-      if (peerRelation) {
+      const peerRelation = getRoleChatRelation(actor.role, recipientUser.role);
+      if (peerRelation && canSendDirectMessageByRole(actor.role, recipientUser.role)) {
         recipientMetaForSender = {
           user: toChatUser(recipientUser),
           relation: peerRelation,
@@ -525,7 +572,7 @@ export async function sendChatMessageService(actor, payload, file = null) {
       select: chatUserSelect,
     });
     if (senderUser) {
-      const peerRelation = getPeerRelation(recipientRole, senderUser.role);
+      const peerRelation = getRoleChatRelation(recipientRole, senderUser.role);
       if (peerRelation) {
         senderMetaForRecipient = {
           user: toChatUser(senderUser),
@@ -751,6 +798,8 @@ export async function searchChatUsersService(actor, query) {
     doctor: ROLES.DOCTOR,
     professor: ROLES.DOCTOR,
     supervisor: ROLES.DOCTOR,
+    admin: ROLES.ADMIN,
+    administrator: ROLES.ADMIN,
     ta: ROLES.TA,
     teaching: ROLES.TA,
     assistant: ROLES.TA,
@@ -767,8 +816,8 @@ export async function searchChatUsersService(actor, query) {
     // Students/Leaders can message teammates, team doctor, and team TA
     targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA];
   } else if (actor.role === ROLES.DOCTOR || actor.role === ROLES.TA) {
-    // Doctors/TAs can message team leaders and other staff
-    targetRoles = [ROLES.DOCTOR, ROLES.TA, ROLES.LEADER, ROLES.STUDENT];
+    // Doctors/TAs can message team leaders, other staff, and admins
+    targetRoles = [ROLES.DOCTOR, ROLES.TA, ROLES.LEADER, ROLES.STUDENT, ROLES.ADMIN];
   } else if (actor.role === ROLES.ADMIN) {
     targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN];
   } else {
@@ -788,6 +837,8 @@ export async function searchChatUsersService(actor, query) {
   const whereConditions = [
     { id: { not: actor.id } },
     { role: { in: effectiveRoles } },
+    { accountStatus: ACCOUNT_STATUSES.ACTIVE },
+    { isEmailVerified: true },
     ...(textWords.length > 0
       ? textWords.map((word) => ({
           OR: [
@@ -802,7 +853,7 @@ export async function searchChatUsersService(actor, query) {
 
   const users = await prisma.user.findMany({
     where: { AND: whereConditions },
-    select: chatUserSelect,
+    select: chatSearchUserSelect,
     take: 30,
   });
 
@@ -817,12 +868,14 @@ export async function searchChatUsersService(actor, query) {
 
   return users
     .map((user) => {
+      if (!canDiscoverChatUser(actor, user, contactMap)) return null;
+
       const contactMeta = contactMap.get(user.id);
       if (contactMeta) {
         return toContactResponse(contactMeta, conversationIdByUserId.get(user.id) ?? null);
       }
 
-      const peerRelation = getPeerRelation(actor.role, user.role);
+      const peerRelation = getRoleChatRelation(actor.role, user.role);
       if (!allowedIds.has(user.id) && !peerRelation) return null;
 
       return {

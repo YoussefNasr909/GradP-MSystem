@@ -3,21 +3,32 @@
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   Clock,
   GraduationCap,
   Loader2,
   Mail,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   Trash2,
+  TriangleAlert,
   UserCheck,
   Users,
   XCircle,
 } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import { usersApi } from "@/lib/api/users"
 import { teamsApi } from "@/lib/api/teams"
@@ -42,9 +53,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
 
 type LeaderSupervisorsTabProps = {
   team: ApiTeamDetail
@@ -65,7 +87,40 @@ type RequestDraft = {
   projectDescription: string
 }
 
+type SupervisorRemovalTarget = {
+  role: ApiSupervisorRole
+  supervisor: ApiTeamUser
+}
+
+const EASE_OUT_QUINT = [0.22, 1, 0.36, 1] as const
+
+function getSupervisorRevealMotion(reduceMotion: boolean, delay = 0) {
+  if (reduceMotion) return {}
+
+  return {
+    initial: { opacity: 0, y: 14 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.38, delay, ease: EASE_OUT_QUINT },
+  }
+}
+
+function getSupervisorHoverMotion(reduceMotion: boolean) {
+  if (reduceMotion) return {}
+
+  return {
+    whileHover: {
+      y: -4,
+      transition: { duration: 0.2, ease: EASE_OUT_QUINT },
+    },
+    whileTap: {
+      scale: 0.992,
+      transition: { duration: 0.14, ease: EASE_OUT_QUINT },
+    },
+  }
+}
+
 export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSupervisorsTabProps) {
+  const reduceMotion = Boolean(useReducedMotion())
   const [doctors, setDoctors] = useState<ApiDirectoryUser[]>([])
   const [tas, setTas] = useState<ApiDirectoryUser[]>([])
   const [doctorSearch, setDoctorSearch] = useState("")
@@ -79,6 +134,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
   const [doctorError, setDoctorError] = useState("")
   const [taError, setTaError] = useState("")
   const [removingRole, setRemovingRole] = useState<"" | ApiSupervisorRole>("")
+  const [supervisorToRemove, setSupervisorToRemove] = useState<SupervisorRemovalTarget | null>(null)
   const [selectedSupervisor, setSelectedSupervisor] = useState<ApiDirectoryUser | null>(null)
   const [sendingRequest, setSendingRequest] = useState(false)
   const [draft, setDraft] = useState<RequestDraft>({
@@ -188,6 +244,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
     try {
       await teamsApi.removeSupervisor(team.id, role)
       toast.success(`${role === "DOCTOR" ? "Doctor" : "TA"} assignment removed.`)
+      setSupervisorToRemove(null)
       await onRefresh()
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Couldn't remove that supervisor assignment.")
@@ -202,46 +259,84 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
   const pendingTaRequest = requests.find((item) => item.supervisorRole === "TA" && item.status === "PENDING") ?? null
 
   return (
-    <div className="space-y-8">
-      {/* How It Works Guide */}
-      <div className="rounded-[24px] border border-border/60 bg-muted/20 p-5 sm:p-6">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">How It Works</p>
-        <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-6">
+      <motion.section
+        {...getSupervisorRevealMotion(reduceMotion)}
+        className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-sm"
+      >
+        <div className="grid gap-5 bg-gradient-to-br from-primary/[0.08] via-background to-background p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <div className="min-w-0 space-y-4">
+            <Badge variant="outline" className="w-fit border-primary/20 bg-background/80 text-primary">
+              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
+              Supervisor setup
+            </Badge>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight">Choose the right academic support</h2>
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Keep your Doctor and TA assignments clear, searchable, and easy to update from one focused workspace.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <SupervisorStatusPill
+              label="Doctor"
+              user={team.doctor}
+              pendingRequest={pendingDoctorRequest}
+              emptyText="No doctor assigned"
+            />
+            <SupervisorStatusPill
+              label="TA"
+              user={team.ta}
+              pendingRequest={pendingTaRequest}
+              emptyText="No TA assigned"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-border/60 p-5 sm:p-6">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Flow</p>
+          <div className="grid gap-3 sm:grid-cols-3">
           {[
             {
               step: "01",
-              title: "Check your current status",
-              desc: "See if a doctor or TA is already assigned or has a pending request below.",
+              title: "Review status",
+              desc: "See assigned and pending supervisors before sending another request.",
             },
             {
               step: "02",
-              title: "Browse available supervisors",
-              desc: "Search the list, read their profile, and find the right fit for your project.",
+              title: "Browse profiles",
+              desc: "Search by name, email, department, and read short profile notes.",
             },
             {
               step: "03",
-              title: "Send a supervision request",
-              desc: "Click Request, fill in your project details, and wait for their response.",
+              title: "Send request",
+              desc: "Share the project snapshot and wait for their response.",
             },
           ].map(({ step, title, desc }) => (
-            <div key={step} className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 font-mono text-sm font-bold text-primary">
+            <motion.div
+              key={step}
+              {...getSupervisorRevealMotion(reduceMotion, Number(step) * 0.03)}
+              className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 transition-[border-color,background-color,transform] duration-200 hover:border-primary/20 hover:bg-muted/30 motion-safe:hover:-translate-y-0.5"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
                 {step}
               </div>
               <div>
                 <p className="text-sm font-semibold leading-5">{title}</p>
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">{desc}</p>
               </div>
-            </div>
+            </motion.div>
           ))}
+          </div>
         </div>
-      </div>
+      </motion.section>
 
       {/* Step 1 — Current Status */}
-      <div className="space-y-4">
+      <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.05)} className="space-y-4">
         <div className="flex items-center gap-3">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
-          <h2 className="text-base font-semibold tracking-tight">Your Supervisor Status</h2>
+          <h2 className="text-base font-semibold tracking-tight">Current assignments</h2>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <AssignmentCard
@@ -249,7 +344,8 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             assignedSupervisor={team.doctor}
             pendingRequest={pendingDoctorRequest}
             helper="Supervises your project direction and milestone reviews."
-            onRemove={() => void removeSupervisorAssignment("DOCTOR")}
+            reduceMotion={reduceMotion}
+            onRemove={team.doctor ? () => setSupervisorToRemove({ role: "DOCTOR", supervisor: team.doctor as ApiTeamUser }) : undefined}
             isRemoving={removingRole === "DOCTOR"}
           />
           <AssignmentCard
@@ -257,14 +353,16 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             assignedSupervisor={team.ta}
             pendingRequest={pendingTaRequest}
             helper="Supports technical follow-up and provides ongoing feedback."
-            onRemove={() => void removeSupervisorAssignment("TA")}
+            reduceMotion={reduceMotion}
+            onRemove={team.ta ? () => setSupervisorToRemove({ role: "TA", supervisor: team.ta as ApiTeamUser }) : undefined}
             isRemoving={removingRole === "TA"}
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* Request History */}
       {requests.length > 0 && (
+        <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.08)}>
         <Card className="border-border/70 shadow-sm">
           <CardHeader className="space-y-1 pb-4">
             <CardTitle className="text-base">Request History</CardTitle>
@@ -272,14 +370,15 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
           </CardHeader>
           <CardContent className="grid gap-3 xl:grid-cols-2">
             {requests.map((request) => (
-              <SupervisorRequestHistoryCard key={request.id} request={request} />
+              <SupervisorRequestHistoryCard key={request.id} request={request} reduceMotion={reduceMotion} />
             ))}
           </CardContent>
         </Card>
+        </motion.div>
       )}
 
       {/* Step 2 — Browse & Request */}
-      <div className="space-y-4">
+      <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.1)} className="space-y-4">
         <div className="flex items-center gap-3">
           <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
           <h2 className="text-base font-semibold tracking-tight">Browse &amp; Request Supervisors</h2>
@@ -299,6 +398,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             canLoadMore={doctorPage < doctorTotalPages}
             onLoadMore={() => setDoctorPage((p) => p + 1)}
             onSelect={openRequestDialog}
+            reduceMotion={reduceMotion}
           />
           <SupervisorCandidatesSection
             title="Available Teaching Assistants"
@@ -314,9 +414,10 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             canLoadMore={taPage < taTotalPages}
             onLoadMore={() => setTaPage((p) => p + 1)}
             onSelect={openRequestDialog}
+            reduceMotion={reduceMotion}
           />
         </div>
-      </div>
+      </motion.div>
 
       {/* Send Request Dialog */}
       <Dialog
@@ -403,6 +504,18 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RemoveSupervisorDialog
+        open={Boolean(supervisorToRemove)}
+        onOpenChange={(open) => {
+          if (!open && !removingRole) setSupervisorToRemove(null)
+        }}
+        target={supervisorToRemove}
+        isSubmitting={Boolean(removingRole)}
+        onConfirm={() => {
+          if (supervisorToRemove) void removeSupervisorAssignment(supervisorToRemove.role)
+        }}
+      />
     </div>
   )
 }
@@ -655,11 +768,49 @@ export function SupervisorRequestInbox({ currentRole, requests, supervisedTeams,
   )
 }
 
+function SupervisorStatusPill({
+  label,
+  user,
+  pendingRequest,
+  emptyText,
+}: {
+  label: "Doctor" | "TA"
+  user: ApiTeamUser | null
+  pendingRequest: ApiSupervisorRequest | null
+  emptyText: string
+}) {
+  const Icon = label === "Doctor" ? GraduationCap : Users
+  const stateLabel = user ? "Assigned" : pendingRequest ? "Pending" : "Open"
+  const stateClass = user
+    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+    : pendingRequest
+      ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+      : "border-border/70 bg-background/70 text-muted-foreground"
+
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+        <p className="mt-0.5 truncate text-sm font-semibold">
+          {user ? getFullName(user) : pendingRequest ? getFullName(pendingRequest.supervisor) : emptyText}
+        </p>
+      </div>
+      <Badge variant="outline" className={cn("shrink-0 rounded-full", stateClass)}>
+        {stateLabel}
+      </Badge>
+    </div>
+  )
+}
+
 function AssignmentCard({
   role,
   assignedSupervisor,
   pendingRequest,
   helper,
+  reduceMotion,
   onRemove,
   isRemoving,
 }: {
@@ -667,6 +818,7 @@ function AssignmentCard({
   assignedSupervisor: ApiTeamUser | null
   pendingRequest: ApiSupervisorRequest | null
   helper: string
+  reduceMotion: boolean
   onRemove?: () => void
   isRemoving?: boolean
 }) {
@@ -674,7 +826,10 @@ function AssignmentCard({
   const RoleIcon = role === "DOCTOR" ? GraduationCap : Users
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-border/70 bg-background shadow-sm">
+    <motion.div
+      {...getSupervisorHoverMotion(reduceMotion)}
+      className="overflow-hidden rounded-[24px] border border-border/70 bg-background shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-md"
+    >
       {/* Top accent */}
       <div className={`h-1 w-full ${assignedSupervisor ? "bg-gradient-to-r from-emerald-400 to-emerald-500" : pendingRequest ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-border/40"}`} />
 
@@ -709,7 +864,13 @@ function AssignmentCard({
                 Assigned
               </Badge>
               {onRemove && (
-                <Button variant="outline" size="sm" className="h-7 rounded-lg px-2.5 text-xs" onClick={onRemove} disabled={isRemoving}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-lg border-destructive/25 bg-background/70 px-2.5 text-xs text-destructive transition-[background-color,border-color,transform] hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive motion-safe:hover:-translate-y-0.5"
+                  onClick={onRemove}
+                  disabled={isRemoving}
+                >
                   {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                   <span className="ml-1">Remove</span>
                 </Button>
@@ -742,7 +903,86 @@ function AssignmentCard({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
+  )
+}
+
+function RemoveSupervisorDialog({
+  open,
+  onOpenChange,
+  target,
+  isSubmitting,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  target: SupervisorRemovalTarget | null
+  isSubmitting: boolean
+  onConfirm: () => void
+}) {
+  const roleLabel = target?.role === "DOCTOR" ? "Doctor" : "TA"
+  const supervisorName = target ? getFullName(target.supervisor) : "this supervisor"
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-destructive/20 p-0 shadow-2xl">
+        <div className="p-6">
+          <AlertDialogHeader className="space-y-4 text-left">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
+              <TriangleAlert className="h-5 w-5" />
+            </div>
+            <div>
+              <AlertDialogTitle className="text-2xl tracking-tight">Remove {roleLabel}?</AlertDialogTitle>
+              <AlertDialogDescription className="mt-2 leading-6">
+                This removes the assignment from your team. It will not delete the user account or any project data.
+              </AlertDialogDescription>
+            </div>
+          </AlertDialogHeader>
+
+          {target ? (
+            <div className="mt-5 rounded-2xl border border-border/70 bg-muted/20 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-11 w-11 border border-border/60">
+                  <AvatarImage src={target.supervisor.avatarUrl || "/placeholder.svg"} />
+                  <AvatarFallback>{getAvatarInitial(target.supervisor)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{supervisorName}</p>
+                  <p className="truncate text-sm text-muted-foreground">{target.supervisor.email}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-xl bg-background/80 px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Role</span>
+                  <span className="font-semibold">{roleLabel}</span>
+                </div>
+                <div className="rounded-xl bg-background/80 px-3 py-2">
+                  <span className="block text-xs text-muted-foreground">Team</span>
+                  <span className="font-semibold">Unassigned</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <AlertDialogFooter className="mt-6 gap-3 sm:gap-3">
+            <AlertDialogCancel className="h-11 rounded-xl" disabled={isSubmitting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isSubmitting}
+              onClick={(event) => {
+                event.preventDefault()
+                onConfirm()
+              }}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              <span className="ml-2">Remove Assignment</span>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
@@ -760,6 +1000,7 @@ function SupervisorCandidatesSection({
   canLoadMore,
   onLoadMore,
   onSelect,
+  reduceMotion,
 }: {
   title: string
   description: string
@@ -774,38 +1015,92 @@ function SupervisorCandidatesSection({
   canLoadMore: boolean
   onLoadMore: () => void
   onSelect: (candidate: ApiDirectoryUser) => void
+  reduceMotion: boolean
 }) {
   const roleLabel = role === "DOCTOR" ? "Doctor" : "TA"
   const RoleIcon = role === "DOCTOR" ? GraduationCap : Users
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  // Derive a department filter dropdown from the visible candidates
+  const departments = Array.from(
+    new Set(
+      candidates
+        .map((c) => c.department)
+        .filter((d): d is NonNullable<ApiDirectoryUser["department"]> => Boolean(d)),
+    ),
+  ).sort()
+  const [departmentFilter, setDepartmentFilter] = useState<string>("ALL")
+
+  const filteredCandidates =
+    departmentFilter === "ALL"
+      ? candidates
+      : candidates.filter((c) => c.department === departmentFilter)
+
+  // Auto-pin the assigned supervisor + pending-requested supervisor to the top
+  const sortedCandidates = [...filteredCandidates].sort((a, b) => {
+    const aPriority = assignedSupervisor?.id === a.id ? 0 : pendingRequest?.supervisor.id === a.id ? 1 : 2
+    const bPriority = assignedSupervisor?.id === b.id ? 0 : pendingRequest?.supervisor.id === b.id ? 1 : 2
+    return aPriority - bPriority
+  })
 
   return (
-    <Card className="border-border/70 shadow-sm">
-      <CardHeader className="space-y-1 pb-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+    <Card className="overflow-hidden border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
+      <CardHeader className="space-y-2 border-b border-border/60 bg-muted/15 pb-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <RoleIcon className="h-4 w-4" />
           </div>
-          <CardTitle className="text-base">{title}</CardTitle>
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base">{title}</CardTitle>
+            <CardDescription className="mt-1">{description}</CardDescription>
+          </div>
+          <Badge variant="outline" className="rounded-full text-xs">
+            {filteredCandidates.length}
+            {departmentFilter !== "ALL" && candidates.length !== filteredCandidates.length && (
+              <span className="ml-1 text-muted-foreground">/ {candidates.length}</span>
+            )}
+          </Badge>
         </div>
-        <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={`Search by name, email, or department`}
-            className="h-10 rounded-xl pl-9"
-          />
+      <CardContent className="space-y-3 p-4 sm:p-5">
+        {/* Search + department filter row */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder={`Search ${roleLabel.toLowerCase()}s by name, email, department…`}
+              className="h-10 rounded-xl border-border/70 bg-background pl-9 text-sm"
+            />
+          </div>
+          {departments.length > 1 && (
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="h-10 w-full rounded-xl text-sm sm:w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All departments</SelectItem>
+                {departments.map((d) => (
+                  <SelectItem key={d} value={d}>{d.replaceAll("_", " ")}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* States */}
         {isLoading && (
-          <div className="rounded-2xl border p-6 text-center">
-            <Loader2 className="mx-auto h-5 w-5 animate-spin text-primary" />
-            <p className="mt-2 text-sm text-muted-foreground">Loading {roleLabel.toLowerCase()}s...</p>
+          <div className="space-y-1.5 py-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-xl border border-border/40 bg-muted/10 px-3 py-2.5">
+                <div className="h-9 w-9 shrink-0 rounded-full bg-muted/40 animate-pulse" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="h-3 w-32 rounded bg-muted/40 animate-pulse" />
+                  <div className="h-2.5 w-48 rounded bg-muted/30 animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -815,86 +1110,174 @@ function SupervisorCandidatesSection({
           </div>
         )}
 
-        {!isLoading && !error && candidates.length === 0 && (
-          <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
-            No {roleLabel.toLowerCase()} accounts available right now.
+        {!isLoading && !error && filteredCandidates.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border/70 bg-muted/15 p-8 text-center">
+            <RoleIcon className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              {searchValue || departmentFilter !== "ALL"
+                ? "No matches. Try a different search or clear the filter."
+                : `No ${roleLabel.toLowerCase()} accounts available right now.`}
+            </p>
           </div>
         )}
 
-        {/* Candidate list */}
-        {!isLoading && !error && candidates.map((candidate) => {
-          const isAssigned = assignedSupervisor?.id === candidate.id
-          const hasAssignedOther = Boolean(assignedSupervisor) && assignedSupervisor?.id !== candidate.id
-          const isPendingSameCandidate = pendingRequest?.supervisor.id === candidate.id
-          const hasPendingOtherCandidate = Boolean(pendingRequest) && pendingRequest?.supervisor.id !== candidate.id
-          const actionDisabled = isAssigned || hasAssignedOther || isPendingSameCandidate || hasPendingOtherCandidate
+        {/* Compact candidate rows — click to expand */}
+        {!isLoading && !error && filteredCandidates.length > 0 && (
+          <div className="space-y-1.5">
+            <AnimatePresence initial={false}>
+              {sortedCandidates.map((candidate, index) => {
+                const isAssigned = assignedSupervisor?.id === candidate.id
+                const hasAssignedOther = Boolean(assignedSupervisor) && assignedSupervisor?.id !== candidate.id
+                const isPendingSameCandidate = pendingRequest?.supervisor.id === candidate.id
+                const hasPendingOtherCandidate = Boolean(pendingRequest) && pendingRequest?.supervisor.id !== candidate.id
+                const actionDisabled = isAssigned || hasAssignedOther || isPendingSameCandidate || hasPendingOtherCandidate
+                const isExpanded = expandedId === candidate.id
 
-          let actionLabel = `Request ${roleLabel}`
-          if (isAssigned) actionLabel = "Assigned"
-          else if (hasAssignedOther) actionLabel = `${roleLabel} Assigned`
-          else if (isPendingSameCandidate) actionLabel = "Request Sent"
-          else if (hasPendingOtherCandidate) actionLabel = "Another Pending"
+                let actionLabel = `Request ${roleLabel}`
+                if (isAssigned) actionLabel = "Currently your supervisor"
+                else if (hasAssignedOther) actionLabel = `Your team already has a ${roleLabel.toLowerCase()}`
+                else if (isPendingSameCandidate) actionLabel = "Request already sent"
+                else if (hasPendingOtherCandidate) actionLabel = `Pending request to another ${roleLabel.toLowerCase()}`
 
-          return (
-            <div
-              key={candidate.id}
-              className={`rounded-[20px] border p-4 transition-[border-color] duration-150 ${
-                isAssigned
-                  ? "border-emerald-500/30 bg-emerald-500/[0.04]"
-                  : isPendingSameCandidate
-                    ? "border-amber-500/30 bg-amber-500/[0.04]"
-                    : "border-border/60 bg-background hover:border-primary/20"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <Avatar className="h-11 w-11 border border-border/60">
-                  <AvatarImage src={candidate.avatarUrl || "/placeholder.svg"} />
-                  <AvatarFallback>{getAvatarInitial(candidate)}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold leading-5">{getFullName(candidate)}</p>
-                    {isAssigned && (
-                      <Badge className="gap-1 bg-emerald-600 text-white text-xs">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Assigned
-                      </Badge>
+                return (
+                  <motion.div
+                    key={candidate.id}
+                    layout
+                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                    transition={{ delay: Math.min(index * 0.015, 0.2), duration: 0.2 }}
+                    className={cn(
+                      "overflow-hidden rounded-xl border transition-colors",
+                      isAssigned
+                        ? "border-emerald-500/35 bg-emerald-500/[0.04]"
+                        : isPendingSameCandidate
+                          ? "border-amber-500/35 bg-amber-500/[0.04]"
+                          : "border-border/50 bg-background hover:border-primary/25",
                     )}
-                    {isPendingSameCandidate && (
-                      <Badge variant="secondary" className="gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs">
-                        <Clock className="h-3 w-3" />
-                        Pending
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {candidate.email ?? "Hidden by privacy settings"}
-                  </p>
-                  {candidate.department && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">{candidate.department.replaceAll("_", " ")}</p>
-                  )}
-                  {candidate.bio?.trim() && (
-                    <p className="mt-2 text-xs leading-5 text-muted-foreground line-clamp-2">{candidate.bio}</p>
-                  )}
-                </div>
-              </div>
+                  >
+                    {/* Compact row — always visible */}
+                    <button
+                      type="button"
+                      onClick={() => setExpandedId(isExpanded ? null : candidate.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                    >
+                      <Avatar className="h-9 w-9 shrink-0 border border-border/40">
+                        <AvatarImage src={candidate.avatarUrl || "/placeholder.svg"} />
+                        <AvatarFallback className="text-xs font-medium">{getAvatarInitial(candidate)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-sm font-semibold leading-5">{getFullName(candidate)}</p>
+                          {isAssigned && (
+                            <Badge className="h-4 gap-1 bg-emerald-600 px-1.5 text-[9px] text-white">
+                              <CheckCircle2 className="h-2.5 w-2.5" />
+                              Yours
+                            </Badge>
+                          )}
+                          {isPendingSameCandidate && (
+                            <Badge variant="secondary" className="h-4 gap-1 bg-amber-500/15 px-1.5 text-[9px] text-amber-700 dark:text-amber-400">
+                              <Clock className="h-2.5 w-2.5" />
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          {candidate.department && (
+                            <>
+                              <span className="truncate">{candidate.department.replaceAll("_", " ")}</span>
+                              {candidate.email && <span>·</span>}
+                            </>
+                          )}
+                          {candidate.email && <span className="truncate">{candidate.email}</span>}
+                        </div>
+                      </div>
 
-              <Button
-                variant={actionDisabled ? "outline" : "default"}
-                size="sm"
-                className="mt-3 w-full rounded-xl"
-                disabled={actionDisabled}
-                onClick={() => onSelect(candidate)}
-              >
-                <RoleIcon className="h-3.5 w-3.5" />
-                <span className="ml-1.5">{actionLabel}</span>
-              </Button>
-            </div>
-          )
-        })}
+                      {/* Quick request button on row — collapsed state */}
+                      {!isExpanded && !actionDisabled && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="h-8 shrink-0 rounded-lg px-3 text-xs"
+                          onClick={(e) => { e.stopPropagation(); onSelect(candidate) }}
+                        >
+                          <Send className="h-3 w-3" />
+                          <span className="ml-1">Request</span>
+                        </Button>
+                      )}
+                      <motion.div
+                        animate={{ rotate: isExpanded ? 90 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="shrink-0 text-muted-foreground"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </motion.div>
+                    </button>
+
+                    {/* Expanded panel — bio + send button */}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          key="expanded"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
+                          className="overflow-hidden border-t border-border/40 bg-muted/15"
+                        >
+                          <div className="space-y-3 p-3 sm:p-4">
+                            {candidate.bio?.trim() ? (
+                              <p className="text-xs leading-5 text-muted-foreground">{candidate.bio}</p>
+                            ) : (
+                              <p className="text-xs italic text-muted-foreground/70">
+                                No bio provided.
+                              </p>
+                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {candidate.preferredTrack && (
+                                <Badge variant="outline" className="rounded-full text-[10px]">
+                                  Track: {candidate.preferredTrack.replaceAll("_", " ")}
+                                </Badge>
+                              )}
+                              {candidate.academicYear && (
+                                <Badge variant="outline" className="rounded-full text-[10px]">
+                                  {candidate.academicYear.replaceAll("_", " ")}
+                                </Badge>
+                              )}
+                            </div>
+                            <Button
+                              variant={actionDisabled ? "outline" : "default"}
+                              size="sm"
+                              className="h-9 w-full rounded-lg"
+                              disabled={actionDisabled}
+                              onClick={(e) => { e.stopPropagation(); onSelect(candidate) }}
+                            >
+                              {actionDisabled ? (
+                                <span>{actionLabel}</span>
+                              ) : (
+                                <>
+                                  <Send className="h-3.5 w-3.5" />
+                                  <span className="ml-1.5">Request as {roleLabel}</span>
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </div>
+        )}
 
         {!isLoading && !error && canLoadMore && (
-          <Button variant="outline" className="w-full rounded-xl" onClick={onLoadMore}>
+          <Button
+            variant="outline"
+            className="h-10 w-full rounded-xl text-sm transition-transform motion-safe:hover:-translate-y-0.5"
+            onClick={onLoadMore}
+          >
             Load more {roleLabel.toLowerCase()}s
           </Button>
         )}
@@ -903,9 +1286,12 @@ function SupervisorCandidatesSection({
   )
 }
 
-function SupervisorRequestHistoryCard({ request }: { request: ApiSupervisorRequest }) {
+function SupervisorRequestHistoryCard({ request, reduceMotion = false }: { request: ApiSupervisorRequest; reduceMotion?: boolean }) {
   return (
-    <div className="rounded-[20px] border border-border/60 p-4">
+    <motion.div
+      {...getSupervisorHoverMotion(reduceMotion)}
+      className="rounded-[20px] border border-border/60 bg-background p-4 transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-sm leading-5">{request.projectName}</p>
@@ -931,7 +1317,7 @@ function SupervisorRequestHistoryCard({ request }: { request: ApiSupervisorReque
         Sent {new Date(request.createdAt).toLocaleDateString()}
         {request.respondedAt && ` · Responded ${new Date(request.respondedAt).toLocaleDateString()}`}
       </p>
-    </div>
+    </motion.div>
   )
 }
 

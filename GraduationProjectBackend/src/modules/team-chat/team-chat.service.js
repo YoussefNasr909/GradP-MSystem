@@ -39,6 +39,10 @@ function toTeamGroupMessage(message) {
     id: message.id,
     conversationId: message.conversationId,
     content: message.content,
+    fileUrl: message.fileUrl ?? null,
+    fileName: message.fileName ?? null,
+    fileSize: message.fileSize ?? null,
+    fileType: message.fileType ?? null,
     senderId: message.senderId,
     sender: toTeamChatUser(message.sender),
     createdAt: message.createdAt,
@@ -276,9 +280,9 @@ export async function getTeamGroupConversationMessagesService(actor, conversatio
   };
 }
 
-export async function sendTeamGroupMessageService(actor, conversationId, payload) {
+export async function sendTeamGroupMessageService(actor, conversationId, payload, file = null) {
   const content = normalizeText(payload.content);
-  if (!content) {
+  if (!content && !file) {
     throw new AppError("Message content cannot be empty.", 422, "TEAM_CHAT_MESSAGE_EMPTY");
   }
 
@@ -290,12 +294,20 @@ export async function sendTeamGroupMessageService(actor, conversationId, payload
         conversationId,
         senderId: actor.id,
         content,
+        fileUrl: file ? `/uploads/team-chat/${file.filename}` : null,
+        fileName: file ? file.originalname : null,
+        fileSize: file ? file.size : null,
+        fileType: file ? file.mimetype : null,
       },
       select: {
         id: true,
         conversationId: true,
         senderId: true,
         content: true,
+        fileUrl: true,
+        fileName: true,
+        fileSize: true,
+        fileType: true,
         createdAt: true,
         updatedAt: true,
         sender: { select: teamChatUserSelect },

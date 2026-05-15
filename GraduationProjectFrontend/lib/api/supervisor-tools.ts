@@ -99,6 +99,8 @@ export interface Announcement {
   updatedAt: string
   author: SupervisorNoteUser | null
   team:   { id: string; name: string } | null
+  targetTeams: { id: string; name: string; stage?: string }[]
+  targetTeamCount: number
 }
 
 export const announcementsApi = {

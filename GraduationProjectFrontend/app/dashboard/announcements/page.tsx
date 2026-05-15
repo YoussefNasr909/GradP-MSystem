@@ -81,12 +81,16 @@ export default function AnnouncementsPage() {
   const [targetTeam, setTargetTeam] = useState<string>("ALL")
   const [pinned, setPinned] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Smart audience targeting
   const [audience, setAudience] = useState<AnnouncementAudience>("all")
   const [audienceParam, setAudienceParam] = useState<string>("REQUIREMENTS")
   const [audiencePreview, setAudiencePreview] = useState<AudiencePreviewTeam[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
+  const isTitleInvalid = submitAttempted && title.trim().length < 3
+  const isContentInvalid = submitAttempted && content.trim().length < 5
 
   const load = useCallback(async () => {
     setError(false)
@@ -125,7 +129,12 @@ export default function AnnouncementsPage() {
   }, [dialogOpen, targetTeam, audience, audienceParam, canPost])
 
   async function handleCreate() {
-    if (title.trim().length < 3 || content.trim().length < 5) {
+    setSubmitAttempted(true)
+    setSubmitError(null)
+    const titleInvalid = title.trim().length < 3
+    const contentInvalid = content.trim().length < 5
+
+    if (titleInvalid || contentInvalid) {
       toast.error("Title (≥3 chars) and content (≥5 chars) are required")
       return
     }
@@ -139,17 +148,24 @@ export default function AnnouncementsPage() {
         audience: targetTeam === "ALL" ? audience : undefined,
         audienceParam: targetTeam === "ALL" && audience === "byStage" ? audienceParam : undefined,
       })
+      const sentCount = created.targetTeamCount ?? created.targetTeams?.length ?? (created.teamId ? 1 : 0)
       setItems((prev) => [created, ...prev])
-      toast.success(targetTeam === "ALL"
-        ? `Announcement sent to ${audiencePreview.length} team${audiencePreview.length === 1 ? "" : "s"}`
-        : "Announcement sent to team")
+      if (sentCount > 0) {
+        toast.success(`Announcement sent to ${sentCount} team${sentCount === 1 ? "" : "s"}`)
+      } else {
+        toast.warning("Announcement posted, but no teams matched this audience")
+      }
       setDialogOpen(false)
       setTitle("")
       setContent("")
       setTargetTeam("ALL")
       setPinned(false)
+      setSubmitAttempted(false)
+      setSubmitError(null)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to post")
+      const message = e?.message ?? "Failed to post announcement"
+      setSubmitError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -252,6 +268,7 @@ export default function AnnouncementsPage() {
           <AnimatePresence>
             {items.map((a, i) => {
               const isMine = a.authorUserId === currentUser?.id
+              const reachedTeamCount = a.targetTeamCount ?? a.targetTeams?.length ?? (a.team ? 1 : 0)
               return (
                 <motion.div
                   key={a.id}
@@ -283,6 +300,11 @@ export default function AnnouncementsPage() {
                           ) : (
                             <Badge variant="outline" className="text-[10px] gap-1 border-purple-500/30 text-purple-500">
                               <Globe className="h-3 w-3" /> All supervised teams
+                            </Badge>
+                          )}
+                          {canPost && (
+                            <Badge variant="outline" className="text-[10px] gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                              <Users className="h-3 w-3" /> Reached {reachedTeamCount} team{reachedTeamCount === 1 ? "" : "s"}
                             </Badge>
                           )}
                           {a.pinned && (
@@ -346,8 +368,17 @@ export default function AnnouncementsPage() {
       />
 
       {/* Create dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) {
+            setSubmitAttempted(false)
+            setSubmitError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Megaphone className="h-5 w-5 text-pink-500" />
@@ -361,9 +392,21 @@ export default function AnnouncementsPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Submission deadline moved to Friday"
-                className="mt-1.5"
+                className={cn(
+                  "mt-1.5",
+                  isTitleInvalid && "border-destructive focus-visible:ring-destructive/30",
+                )}
+                aria-invalid={isTitleInvalid}
+                aria-describedby="announcement-title-error"
                 maxLength={200}
               />
+              <p
+                id="announcement-title-error"
+                className="mt-1 min-h-4 text-xs leading-4 text-destructive"
+                aria-live="polite"
+              >
+                {isTitleInvalid ? "Title is required and must be at least 3 characters." : null}
+              </p>
             </div>
             <div>
               <Label>Message</Label>
@@ -371,11 +414,27 @@ export default function AnnouncementsPage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Write your announcement..."
-                className="mt-1.5 resize-none"
+                className={cn(
+                  "mt-1.5 resize-none",
+                  isContentInvalid && "border-destructive focus-visible:ring-destructive/30",
+                )}
+                aria-invalid={isContentInvalid}
+                aria-describedby="announcement-message-error announcement-message-count"
                 rows={5}
                 maxLength={5000}
               />
-              <p className="text-[10px] text-muted-foreground mt-1">{content.length}/5000</p>
+              <div className="mt-1 flex min-h-4 items-start justify-between gap-3">
+                <p
+                  id="announcement-message-error"
+                  className="text-xs leading-4 text-destructive"
+                  aria-live="polite"
+                >
+                  {isContentInvalid ? "Message is required and must be at least 5 characters." : null}
+                </p>
+                <p id="announcement-message-count" className="shrink-0 text-[10px] leading-4 text-muted-foreground">
+                  {content.length}/5000
+                </p>
+              </div>
             </div>
             <div>
               <Label>Send to</Label>
@@ -452,12 +511,17 @@ export default function AnnouncementsPage() {
               </div>
               <Switch checked={pinned} onCheckedChange={setPinned} />
             </div>
+            {submitError && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {submitError}
+              </p>
+            )}
             <div className="flex gap-2 pt-2">
-              <Button onClick={handleCreate} disabled={saving} className="flex-1">
+              <Button type="button" onClick={() => void handleCreate()} disabled={saving} className="flex-1">
                 <Send className="h-4 w-4 mr-2" />
                 {saving ? "Posting…" : "Post Announcement"}
               </Button>
-              <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
                 Cancel
               </Button>
             </div>

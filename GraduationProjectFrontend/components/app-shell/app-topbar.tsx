@@ -13,7 +13,6 @@ import {
   Settings,
   Sparkles,
   Sun,
-  User,
   Users,
   X,
 } from "lucide-react"
@@ -569,10 +568,6 @@ export function AppTopbar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="rounded-lg py-2.5 text-sm" onClick={() => router.push("/dashboard/profile")}>
-                <User className="mr-2 h-4 w-4" />
-                Profile
-              </DropdownMenuItem>
               <DropdownMenuItem className="rounded-lg py-2.5 text-sm" onClick={() => router.push("/dashboard/settings")}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
