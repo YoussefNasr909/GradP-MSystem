@@ -152,6 +152,19 @@ enum SprintStatus {
   COMPLETED
 }
 
+enum SprintEvaluationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  NEEDS_CHANGES
+}
+
+enum SprintEvaluationEvaluatorRole {
+  TA
+  DOCTOR
+}
+
 enum DeliverableType {
   SRS
   UML
@@ -349,24 +362,24 @@ enum PreferredTrack {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  firstName    String
-  lastName     String
-  email        String   @unique
-  phone        String?
+  firstName String
+  lastName  String
+  email     String  @unique
+  phone     String?
 
-  academicId     String        @unique
-  department      Department?
-  academicYear    AcademicYear?
-  preferredTrack  PreferredTrack?
+  academicId     String          @unique
+  department     Department?
+  academicYear   AcademicYear?
+  preferredTrack PreferredTrack?
 
   // OAuth
-  googleId   String? @unique
-  githubId   String? @unique
-  avatarUrl  String?
-  bio        String?
-  linkedinUrl String?
+  googleId       String? @unique
+  githubId       String? @unique
+  avatarUrl      String?
+  bio            String?
+  linkedinUrl    String?
   githubUsername String?
 
   // Auth (local)
@@ -376,66 +389,68 @@ model User {
   accountStatus AccountStatus @default(ACTIVE)
 
   // Email verification
-  isEmailVerified              Boolean   @default(false)
-  emailVerificationCodeHash   String?
-  emailVerificationExpiresAt  DateTime?
+  isEmailVerified            Boolean   @default(false)
+  emailVerificationCodeHash  String?
+  emailVerificationExpiresAt DateTime?
 
-   // Password reset
-  passwordResetCodeHash        String?
-  passwordResetExpiresAt       DateTime?
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  // Password reset
+  passwordResetCodeHash  String?
+  passwordResetExpiresAt DateTime?
 
-  ledTeam                 Team?              @relation("TeamLeader")
-  doctorTeams             Team[]             @relation("TeamDoctor")
-  taTeams                 Team[]             @relation("TeamTA")
-  teamMembership          TeamMember?        @relation("TeamMemberUser")
-  sentTeamInvitations     TeamInvitation[]   @relation("TeamInvitationSender")
-  receivedTeamInvitations TeamInvitation[]   @relation("TeamInvitationRecipient")
-  teamJoinRequests        TeamJoinRequest[]  @relation("TeamJoinRequestUser")
-  sentSupervisorRequests  TeamSupervisorRequest[] @relation("TeamSupervisorRequestSender")
-  receivedSupervisorRequests TeamSupervisorRequest[] @relation("TeamSupervisorRequestRecipient")
-  githubConnection        GitHubUserConnection?
-  assignedTasks           Task[]             @relation("TaskAssignee")
-  createdTasks            Task[]             @relation("TaskCreator")
-  reviewedTasks           Task[]             @relation("TaskReviewer")
-  authoredTaskReviews     TaskReview[]       @relation("TaskReviewAuthor")
-  uploadedTaskEvidence    TaskSubmissionEvidence[] @relation("TaskEvidenceUploader")
-  createdSprints          Sprint[]           @relation("SprintCreator")
-  submittedWeeklyReports  WeeklyReport[]     @relation("WeeklyReportSubmitter")
-  submittedSubmissions    Submission[]       @relation("SubmissionSubmitter")
-  reviewedSubmissions     Submission[]       @relation("SubmissionReviewer")
-  taReviewedSubmissions   Submission[]       @relation("SubmissionTAReviewer")
-  authoredProposals       Proposal[]         @relation("ProposalAuthor")
-  reviewedProposals       Proposal[]         @relation("ProposalReviewer")
-  authoredSupervisorNotes TeamSupervisorNote[] @relation("SupervisorNoteAuthor")
-  setDeliverableDeadlines TeamDeliverableDeadline[] @relation("DeadlineSetter")
-  authoredAnnouncements   Announcement[]      @relation("AnnouncementAuthor")
-  authoredSubmissionComments SubmissionComment[] @relation("SubmissionCommentAuthor")
-  createdRubricTemplates  TeamRubricTemplate[] @relation("RubricTemplateCreator")
-  uploadedDocuments       TeamDocument[]     @relation("DocumentUploader")
-  createdResources        TeamResource[]     @relation("ResourceCreator")
-  createdRisks            Risk[]             @relation("RiskCreator")
-  monitoredRisks          Risk[]             @relation("RiskMonitor")
-  approvedRisks           Risk[]             @relation("RiskApprover")
-  notifications           Notification[]     @relation("UserNotifications")
-  settings                UserSettings?
-  organizedMeetings       Meeting[]             @relation("MeetingOrganizer")
-  meetingParticipants     MeetingParticipant[]  @relation("MeetingParticipantUser")
-  meetingApprovals        MeetingApproval[]     @relation("MeetingApprovalUser")
-  calendarIntegrations    CalendarIntegration[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ledTeam                    Team?                              @relation("TeamLeader")
+  doctorTeams                Team[]                             @relation("TeamDoctor")
+  taTeams                    Team[]                             @relation("TeamTA")
+  teamMembership             TeamMember?                        @relation("TeamMemberUser")
+  sentTeamInvitations        TeamInvitation[]                   @relation("TeamInvitationSender")
+  receivedTeamInvitations    TeamInvitation[]                   @relation("TeamInvitationRecipient")
+  teamJoinRequests           TeamJoinRequest[]                  @relation("TeamJoinRequestUser")
+  sentSupervisorRequests     TeamSupervisorRequest[]            @relation("TeamSupervisorRequestSender")
+  receivedSupervisorRequests TeamSupervisorRequest[]            @relation("TeamSupervisorRequestRecipient")
+  githubConnection           GitHubUserConnection?
+  assignedTasks              Task[]                             @relation("TaskAssignee")
+  createdTasks               Task[]                             @relation("TaskCreator")
+  reviewedTasks              Task[]                             @relation("TaskReviewer")
+  authoredTaskReviews        TaskReview[]                       @relation("TaskReviewAuthor")
+  uploadedTaskEvidence       TaskSubmissionEvidence[]           @relation("TaskEvidenceUploader")
+  createdSprints             Sprint[]                           @relation("SprintCreator")
+  authoredSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationEvaluator")
+  reviewedSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationReviewer")
+  submittedWeeklyReports     WeeklyReport[]                     @relation("WeeklyReportSubmitter")
+  submittedSubmissions       Submission[]                       @relation("SubmissionSubmitter")
+  reviewedSubmissions        Submission[]                       @relation("SubmissionReviewer")
+  taReviewedSubmissions      Submission[]                       @relation("SubmissionTAReviewer")
+  authoredProposals          Proposal[]                         @relation("ProposalAuthor")
+  reviewedProposals          Proposal[]                         @relation("ProposalReviewer")
+  authoredSupervisorNotes    TeamSupervisorNote[]               @relation("SupervisorNoteAuthor")
+  setDeliverableDeadlines    TeamDeliverableDeadline[]          @relation("DeadlineSetter")
+  authoredAnnouncements      Announcement[]                     @relation("AnnouncementAuthor")
+  authoredSubmissionComments SubmissionComment[]                @relation("SubmissionCommentAuthor")
+  createdRubricTemplates     TeamRubricTemplate[]               @relation("RubricTemplateCreator")
+  uploadedDocuments          TeamDocument[]                     @relation("DocumentUploader")
+  createdResources           TeamResource[]                     @relation("ResourceCreator")
+  createdRisks               Risk[]                             @relation("RiskCreator")
+  monitoredRisks             Risk[]                             @relation("RiskMonitor")
+  approvedRisks              Risk[]                             @relation("RiskApprover")
+  notifications              Notification[]                     @relation("UserNotifications")
+  settings                   UserSettings?
+  organizedMeetings          Meeting[]                          @relation("MeetingOrganizer")
+  meetingParticipants        MeetingParticipant[]               @relation("MeetingParticipantUser")
+  meetingApprovals           MeetingApproval[]                  @relation("MeetingApprovalUser")
+  calendarIntegrations       CalendarIntegration[]
   teamGroupChatParticipants  TeamGroupConversationParticipant[]
-  sentTeamGroupMessages      TeamGroupMessage[]       @relation("TeamGroupMessageSender")
-  directChatConversationsOne DirectChatConversation[] @relation("DirectChatConversationUserOne")
-  directChatConversationsTwo DirectChatConversation[] @relation("DirectChatConversationUserTwo")
-  sentDirectChatMessages     DirectChatMessage[]      @relation("DirectChatMessageSender")
-  receivedDirectChatMessages DirectChatMessage[]      @relation("DirectChatMessageRecipient")
-  deletedDirectChatMessages  DirectChatMessage[]      @relation("DirectChatMessageDeletedBy")
-  discussionPosts         Discussion[]          @relation("DiscussionAuthor")
-  discussionComments      DiscussionComment[]   @relation("DiscussionCommentAuthor")
-  discussionLikes         DiscussionLike[]      @relation("DiscussionLikeUser")
-  discussionViews         DiscussionView[]      @relation("DiscussionViewUser")
+  sentTeamGroupMessages      TeamGroupMessage[]                 @relation("TeamGroupMessageSender")
+  directChatConversationsOne DirectChatConversation[]           @relation("DirectChatConversationUserOne")
+  directChatConversationsTwo DirectChatConversation[]           @relation("DirectChatConversationUserTwo")
+  sentDirectChatMessages     DirectChatMessage[]                @relation("DirectChatMessageSender")
+  receivedDirectChatMessages DirectChatMessage[]                @relation("DirectChatMessageRecipient")
+  deletedDirectChatMessages  DirectChatMessage[]                @relation("DirectChatMessageDeletedBy")
+  discussionPosts            Discussion[]                       @relation("DiscussionAuthor")
+  discussionComments         DiscussionComment[]                @relation("DiscussionCommentAuthor")
+  discussionLikes            DiscussionLike[]                   @relation("DiscussionLikeUser")
+  discussionViews            DiscussionView[]                   @relation("DiscussionViewUser")
   // Gamification relations
   createdGamificationRules       GamificationRule[]         @relation("GamificationRuleCreator")
   gamificationEventsAsActor      GamificationEvent[]        @relation("GamificationEventActor")
@@ -514,29 +529,29 @@ model Team {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  leader       User                @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
-  doctor       User?               @relation("TeamDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
-  ta           User?               @relation("TeamTA", fields: [taId], references: [id], onDelete: SetNull)
-  members      TeamMember[]
-  invitations  TeamInvitation[]
-  joinRequests TeamJoinRequest[]
-  supervisorRequests TeamSupervisorRequest[]
-  githubRepository GitHubTeamRepository?
-  tasks        Task[]
+  leader                 User                      @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  doctor                 User?                     @relation("TeamDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
+  ta                     User?                     @relation("TeamTA", fields: [taId], references: [id], onDelete: SetNull)
+  members                TeamMember[]
+  invitations            TeamInvitation[]
+  joinRequests           TeamJoinRequest[]
+  supervisorRequests     TeamSupervisorRequest[]
+  githubRepository       GitHubTeamRepository?
+  tasks                  Task[]
   taskSubmissionEvidence TaskSubmissionEvidence[]
-  sprints      Sprint[]
-  weeklyReports WeeklyReport[]
-  submissions  Submission[]
-  documents    TeamDocument[]
-  meetings     Meeting[]
-  risks         Risk[]
-  proposal      Proposal?
-  supervisorNotes      TeamSupervisorNote[]
-  deliverableDeadlines TeamDeliverableDeadline[]
-  announcements        Announcement[]
+  sprints                Sprint[]
+  weeklyReports          WeeklyReport[]
+  submissions            Submission[]
+  documents              TeamDocument[]
+  meetings               Meeting[]
+  risks                  Risk[]
+  proposal               Proposal?
+  supervisorNotes        TeamSupervisorNote[]
+  deliverableDeadlines   TeamDeliverableDeadline[]
+  announcements          Announcement[]
   announcementTargets  AnnouncementTargetTeam[]
-  rubricTemplates      TeamRubricTemplate[]
-  groupConversation TeamGroupConversation?
+  rubricTemplates        TeamRubricTemplate[]
+  groupConversation      TeamGroupConversation?
   // Gamification relations
   gamificationEvents        GamificationEvent[]        @relation("GamificationEventTeam")
   xpTransactionsAsRecipient XpTransaction[]            @relation("XpTransactionRecipientTeam")
@@ -617,12 +632,12 @@ model TeamInvitation {
 
 model TeamJoinRequest {
   id        String                @id @default(cuid())
-  teamId     String
-  userId     String
-  message    String?
-  status     TeamJoinRequestStatus @default(PENDING)
-  createdAt  DateTime              @default(now())
-  updatedAt  DateTime              @updatedAt
+  teamId    String
+  userId    String
+  message   String?
+  status    TeamJoinRequestStatus @default(PENDING)
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation("TeamJoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
@@ -656,27 +671,27 @@ model TeamSupervisorRequest {
 }
 
 model GitHubTeamRepository {
-  id                            String                           @id @default(cuid())
-  teamId                        String                           @unique
-  ownerLogin                    String
-  ownerType                     GitHubOwnerType                 @default(USER)
-  repoName                      String
-  fullName                      String                           @unique
-  installationId                String?
-  defaultBranch                 String                           @default("main")
-  visibility                    GitHubRepositoryVisibility       @default(PRIVATE)
-  repoUrl                       String
-  cloneUrlHttps                 String?
-  cloneUrlSsh                   String?
-  connectionStatus              GitHubRepositoryConnectionStatus @default(PENDING)
-  syncStatus                    GitHubSyncStatus                @default(IDLE)
-  lastSyncAt                    DateTime?
-  lastWebhookAt                 DateTime?
-  syncIssuesToTasks             Boolean                          @default(true)
-  syncActivityToWeeklyReports   Boolean                          @default(true)
-  syncReleasesToSubmissions     Boolean                          @default(true)
-  createdAt                     DateTime                         @default(now())
-  updatedAt                     DateTime                         @updatedAt
+  id                          String                           @id @default(cuid())
+  teamId                      String                           @unique
+  ownerLogin                  String
+  ownerType                   GitHubOwnerType                  @default(USER)
+  repoName                    String
+  fullName                    String                           @unique
+  installationId              String?
+  defaultBranch               String                           @default("main")
+  visibility                  GitHubRepositoryVisibility       @default(PRIVATE)
+  repoUrl                     String
+  cloneUrlHttps               String?
+  cloneUrlSsh                 String?
+  connectionStatus            GitHubRepositoryConnectionStatus @default(PENDING)
+  syncStatus                  GitHubSyncStatus                 @default(IDLE)
+  lastSyncAt                  DateTime?
+  lastWebhookAt               DateTime?
+  syncIssuesToTasks           Boolean                          @default(true)
+  syncActivityToWeeklyReports Boolean                          @default(true)
+  syncReleasesToSubmissions   Boolean                          @default(true)
+  createdAt                   DateTime                         @default(now())
+  updatedAt                   DateTime                         @updatedAt
 
   team              Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   webhookDeliveries GitHubWebhookDelivery[]
@@ -688,38 +703,38 @@ model GitHubTeamRepository {
 }
 
 model GitHubUserConnection {
-  id                      String    @id @default(cuid())
-  userId                  String    @unique
-  githubUserId            String    @unique
-  login                   String
-  displayName             String?
-  avatarUrl               String?
-  accessTokenEncrypted    String
-  refreshTokenEncrypted   String?
-  accessTokenExpiresAt    DateTime?
-  refreshTokenExpiresAt   DateTime?
-  tokenType               String?
-  scopes                  String[]  @default([])
-  isActive                Boolean   @default(true)
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  githubUserId          String    @unique
+  login                 String
+  displayName           String?
+  avatarUrl             String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  tokenType             String?
+  scopes                String[]  @default([])
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model GitHubWebhookDelivery {
-  id                 String                      @id @default(cuid())
-  repositoryId       String?
-  deliveryId         String                      @unique
-  event              String
-  action             String?
-  signatureVerified  Boolean                     @default(false)
-  status             GitHubWebhookDeliveryStatus @default(PENDING)
-  error              String?
-  payload            Json?
-  processedAt        DateTime?
-  createdAt          DateTime                    @default(now())
-  updatedAt          DateTime                    @updatedAt
+  id                String                      @id @default(cuid())
+  repositoryId      String?
+  deliveryId        String                      @unique
+  event             String
+  action            String?
+  signatureVerified Boolean                     @default(false)
+  status            GitHubWebhookDeliveryStatus @default(PENDING)
+  error             String?
+  payload           Json?
+  processedAt       DateTime?
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
 
   repository GitHubTeamRepository? @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
 
@@ -728,15 +743,15 @@ model GitHubWebhookDelivery {
 }
 
 model GitHubSyncCursor {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   repositoryId String
   resourceType String
   cursorKey    String?
   etag         String?
   cursor       Json?
   lastSyncedAt DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   repository GitHubTeamRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
 
@@ -744,60 +759,60 @@ model GitHubSyncCursor {
 }
 
 model Task {
-  id                      String               @id @default(cuid())
-  teamId                  String
-  sprintId                String?
-  taskType                TaskType             @default(OTHER)
-  integrationMode         TaskIntegrationMode  @default(MANUAL)
-  origin                  TaskOrigin           @default(GPMS)
-  githubIssueId           String?              @unique
-  githubIssueNumber       Int?
-  githubIssueUrl          String?
-  githubIssueState        String?
-  githubBranchName        String?
-  githubPullRequestId     String?
-  githubPullRequestNumber Int?
-  githubPullRequestUrl    String?
-  githubPullRequestState  String?
-  githubPullRequestBase   String?
-  githubPullRequestHead   String?
+  id                        String              @id @default(cuid())
+  teamId                    String
+  sprintId                  String?
+  taskType                  TaskType            @default(OTHER)
+  integrationMode           TaskIntegrationMode @default(MANUAL)
+  origin                    TaskOrigin          @default(GPMS)
+  githubIssueId             String?             @unique
+  githubIssueNumber         Int?
+  githubIssueUrl            String?
+  githubIssueState          String?
+  githubBranchName          String?
+  githubPullRequestId       String?
+  githubPullRequestNumber   Int?
+  githubPullRequestUrl      String?
+  githubPullRequestState    String?
+  githubPullRequestBase     String?
+  githubPullRequestHead     String?
   githubPullRequestMergedAt DateTime?
-  githubLatestCommitSha   String?
-  githubLatestCommitUrl   String?
-  githubCommitCount       Int                  @default(0)
-  title                   String
-  description             String?
-  status                  TaskStatus           @default(BACKLOG)
-  priority                TaskPriority         @default(MEDIUM)
-  storyPoints             Int                  @default(3)
-  actualPoints            Int?
-  unplanned               Boolean              @default(false)
-  assigneeUserId          String?
-  createdByUserId         String?
-  reviewedByUserId        String?
-  labels                  String[]             @default([])
-  startDate               DateTime?
-  dueDate                 DateTime?
-  acceptedAt              DateTime?
-  submittedForReviewAt    DateTime?
-  reviewedAt              DateTime?
-  reviewFeedback          String?
-  reviewComment           String?
-  reviewDecision          TaskReviewDecision?
-  reviewSnapshot          Json?
-  syncedFromGithub        Boolean              @default(false)
-  lastSyncedAt            DateTime?
-  createdAt               DateTime             @default(now())
-  updatedAt               DateTime             @updatedAt
+  githubLatestCommitSha     String?
+  githubLatestCommitUrl     String?
+  githubCommitCount         Int                 @default(0)
+  title                     String
+  description               String?
+  status                    TaskStatus          @default(BACKLOG)
+  priority                  TaskPriority        @default(MEDIUM)
+  storyPoints               Int                 @default(3)
+  actualPoints              Int?
+  unplanned                 Boolean             @default(false)
+  assigneeUserId            String?
+  createdByUserId           String?
+  reviewedByUserId          String?
+  labels                    String[]            @default([])
+  startDate                 DateTime?
+  dueDate                   DateTime?
+  acceptedAt                DateTime?
+  submittedForReviewAt      DateTime?
+  reviewedAt                DateTime?
+  reviewFeedback            String?
+  reviewComment             String?
+  reviewDecision            TaskReviewDecision?
+  reviewSnapshot            Json?
+  syncedFromGithub          Boolean             @default(false)
+  lastSyncedAt              DateTime?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
 
-  team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  sprint     Sprint? @relation(fields: [sprintId], references: [id], onDelete: SetNull)
-  assignee   User? @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
-  createdBy  User? @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  reviewedBy User? @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  team               Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sprint             Sprint?                  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee           User?                    @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  createdBy          User?                    @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy         User?                    @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
   githubContributions GitHubContribution[] @relation("GitHubContributionTask")
   submissionEvidence TaskSubmissionEvidence[]
-  reviews    TaskReview[]
+  reviews            TaskReview[]
 
   @@unique([teamId, githubIssueNumber])
   @@index([teamId, status])
@@ -817,14 +832,14 @@ model Task {
 /// changing the task status. We keep the pointer fields on Task too (latest
 /// decisive review) so existing reads don't break.
 model TaskReview {
-  id              String              @id @default(cuid())
-  taskId          String
-  reviewerUserId  String
-  reviewerRole    TaskReviewerRole
-  decision        TaskReviewDecision
-  comment         String?
-  snapshot        Json?
-  createdAt       DateTime            @default(now())
+  id             String             @id @default(cuid())
+  taskId         String
+  reviewerUserId String
+  reviewerRole   TaskReviewerRole
+  decision       TaskReviewDecision
+  comment        String?
+  snapshot       Json?
+  createdAt      DateTime           @default(now())
 
   task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
   reviewer User @relation("TaskReviewAuthor", fields: [reviewerUserId], references: [id], onDelete: Cascade)
@@ -870,9 +885,10 @@ model Sprint {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  team      Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  createdBy User?  @relation("SprintCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  tasks     Task[]
+  team        Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy   User?              @relation("SprintCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  evaluations SprintEvaluation[]
 
   @@unique([teamId, name])
   @@index([teamId, status])
@@ -880,8 +896,40 @@ model Sprint {
   @@index([createdByUserId])
 }
 
+model SprintEvaluation {
+  id                  String                        @id @default(cuid())
+  sprintId            String
+  evaluatorUserId     String
+  evaluatorRole       SprintEvaluationEvaluatorRole
+  status              SprintEvaluationStatus        @default(DRAFT)
+  score               Int?
+  feedback            String?
+  planningQuality     Int?
+  taskCompletion      Int?
+  progressConsistency Int?
+  teamCollaboration   Int?
+  deadlineCommitment  Int?
+  earlyEvaluation     Boolean                       @default(false)
+  evaluatedAt         DateTime?
+  reviewedByUserId    String?
+  reviewedAt          DateTime?
+  reviewComment       String?
+  finalizedAt         DateTime?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  sprint     Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  evaluator  User   @relation("SprintEvaluationEvaluator", fields: [evaluatorUserId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation("SprintEvaluationReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([sprintId, evaluatorUserId, evaluatorRole])
+  @@index([sprintId, status])
+  @@index([evaluatorUserId])
+  @@index([reviewedByUserId])
+}
+
 model WeeklyReport {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   teamId         String
   submittedById  String?
   weekLabel      String
@@ -890,10 +938,10 @@ model WeeklyReport {
   summaryDraft   String?
   summaryFinal   String?
   githubActivity Json?
-  isSubmitted    Boolean  @default(false)
+  isSubmitted    Boolean   @default(false)
   submittedAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   submittedBy User? @relation("WeeklyReportSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
@@ -925,45 +973,45 @@ model Submission {
 
   // Two-step review flow:
   // Step 1 — TA first-pass review (recommendation)
-  taRecommendedGrade  Int?
-  taFeedback          String?
-  taReviewedByUserId  String?
-  taReviewedAt        DateTime?
+  taRecommendedGrade Int?
+  taFeedback         String?
+  taReviewedByUserId String?
+  taReviewedAt       DateTime?
 
   // Step 2 — Doctor final grade (authoritative)
-  reviewedByUserId  String?
-  reviewedAt        DateTime?
-  feedback          String?
-  grade             Int?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  feedback         String?
+  grade            Int?
 
   // Rubric used for grading: [{ name, score, maxScore }]
-  rubric            Json?
+  rubric Json?
 
   // Grade revision audit trail (every time the doctor changes the grade
   // after the first finalize, the previous state is pushed here).
   // Stored as an array of { grade, feedback, rubric, reviewedAt, reviewedBy, changedAt, reason }.
-  gradeHistory      Json?
+  gradeHistory Json?
 
   // Defense meeting link (only required for DEPLOYMENT-phase deliverables).
-  defenseMeetingId  String?              @unique
+  defenseMeetingId String? @unique
 
-  submittedAt       DateTime             @default(now())
-  deadline          DateTime?
-  late              Boolean              @default(false)
+  submittedAt DateTime  @default(now())
+  deadline    DateTime?
+  late        Boolean   @default(false)
 
   // Duplicate detection (gamification anti-cheat)
   fileHash             String?
   normalizedTextHash   String?
   contentFingerprint   String?
 
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  team           Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  submittedBy    User?    @relation("SubmissionSubmitter",   fields: [submittedByUserId],  references: [id], onDelete: SetNull)
-  reviewedBy     User?    @relation("SubmissionReviewer",    fields: [reviewedByUserId],   references: [id], onDelete: SetNull)
-  taReviewedBy   User?    @relation("SubmissionTAReviewer",  fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
-  defenseMeeting Meeting? @relation("MeetingForSubmission",  fields: [defenseMeetingId],   references: [id], onDelete: SetNull)
+  team           Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  submittedBy    User?               @relation("SubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  reviewedBy     User?               @relation("SubmissionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  taReviewedBy   User?               @relation("SubmissionTAReviewer", fields: [taReviewedByUserId], references: [id], onDelete: SetNull)
+  defenseMeeting Meeting?            @relation("MeetingForSubmission", fields: [defenseMeetingId], references: [id], onDelete: SetNull)
   comments       SubmissionComment[]
 
   @@index([teamId, deliverableType])
@@ -1239,41 +1287,40 @@ model DiscussionView {
   @@index([userId])
 }
 
-
 model Meeting {
-  id                   String             @id @default(cuid())
-  teamId               String
-  organizerId          String
-  organizerRole        Role
-  title                String
-  description          String?
-  agenda               String?
-  startAt              DateTime
-  endAt                DateTime
-  timezone             String             @default("Africa/Cairo")
-  mode                 MeetingMode        @default(VIRTUAL)
-  status               MeetingStatus      @default(PENDING_APPROVAL)
-  provider             MeetingProvider    @default(MANUAL)
-  location             String?
-  joinUrl              String?
-  requiresApproval     Boolean            @default(false)
-  approvalRequestedAt  DateTime?
-  confirmedAt          DateTime?
-  cancelledAt          DateTime?
-  externalProvider     CalendarProvider?
-  externalCalendarId   String?
-  externalEventId      String?
-  externalSyncStatus   ExternalSyncStatus @default(NOT_CONNECTED)
-  externalSyncError    String?
-  externalSyncedAt     DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                  String             @id @default(cuid())
+  teamId              String
+  organizerId         String
+  organizerRole       Role
+  title               String
+  description         String?
+  agenda              String?
+  startAt             DateTime
+  endAt               DateTime
+  timezone            String             @default("Africa/Cairo")
+  mode                MeetingMode        @default(VIRTUAL)
+  status              MeetingStatus      @default(PENDING_APPROVAL)
+  provider            MeetingProvider    @default(MANUAL)
+  location            String?
+  joinUrl             String?
+  requiresApproval    Boolean            @default(false)
+  approvalRequestedAt DateTime?
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  externalProvider    CalendarProvider?
+  externalCalendarId  String?
+  externalEventId     String?
+  externalSyncStatus  ExternalSyncStatus @default(NOT_CONNECTED)
+  externalSyncError   String?
+  externalSyncedAt    DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  team                 Team               @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  organizer            User               @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  team                 Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  organizer            User                 @relation("MeetingOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
   participants         MeetingParticipant[]
   approvals            MeetingApproval[]
-  defenseForSubmission Submission?         @relation("MeetingForSubmission")
+  defenseForSubmission Submission?          @relation("MeetingForSubmission")
 
   @@index([teamId, startAt])
   @@index([organizerId, startAt])
@@ -1293,12 +1340,12 @@ model MeetingParticipant {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  meeting         Meeting                @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user            User?                  @relation("MeetingParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User?   @relation("MeetingParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
 
+  @@unique([meetingId, userId])
   @@index([meetingId])
   @@index([userId])
-  @@unique([meetingId, userId])
 }
 
 model MeetingApproval {
@@ -1314,12 +1361,12 @@ model MeetingApproval {
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
 
-  meeting         Meeting               @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  approver        User                  @relation("MeetingApprovalUser", fields: [approverUserId], references: [id], onDelete: Cascade)
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  approver User    @relation("MeetingApprovalUser", fields: [approverUserId], references: [id], onDelete: Cascade)
 
+  @@unique([meetingId, approverUserId])
   @@index([meetingId])
   @@index([approverUserId, status])
-  @@unique([meetingId, approverUserId])
 }
 
 model CalendarIntegration {
@@ -1340,51 +1387,51 @@ model CalendarIntegration {
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
 
-  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, provider])
   @@index([provider, syncEnabled])
 }
 
 model Proposal {
-  id                String         @id @default(cuid())
-  teamId            String         @unique
-  authoredByUserId  String
+  id               String @id @default(cuid())
+  teamId           String @unique
+  authoredByUserId String
 
   // Core fields
-  title             String
-  abstract          String
-  problemStatement  String
-  objectives        String[]       @default([])
-  scope             String
-  methodology       String
-  technologies      String[]       @default([])
-  deliverables      String[]       @default([])
-  timeline          String?
+  title            String
+  abstract         String
+  problemStatement String
+  objectives       String[] @default([])
+  scope            String
+  methodology      String
+  technologies     String[] @default([])
+  deliverables     String[] @default([])
+  timeline         String?
 
   // Optional attached file (e.g. signed PDF)
-  fileName          String?
-  fileSize          Int?
-  fileType          String?
-  fileUrl           String?
+  fileName String?
+  fileSize Int?
+  fileType String?
+  fileUrl  String?
 
   // Review workflow
-  status            ProposalStatus @default(DRAFT)
-  feedback          String?
-  reviewedByUserId  String?
-  reviewedAt        DateTime?
-  submittedAt       DateTime?
+  status           ProposalStatus @default(DRAFT)
+  feedback         String?
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  submittedAt      DateTime?
 
   // Versioning (for revisions)
-  version           Int            @default(1)
-  revisionCount     Int            @default(0)
+  version       Int @default(1)
+  revisionCount Int @default(0)
 
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  authoredBy  User  @relation("ProposalAuthor",   fields: [authoredByUserId], references: [id], onDelete: Cascade)
-  reviewedBy  User? @relation("ProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  team       Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  authoredBy User  @relation("ProposalAuthor", fields: [authoredByUserId], references: [id], onDelete: Cascade)
+  reviewedBy User? @relation("ProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([authoredByUserId])
@@ -1397,7 +1444,7 @@ model TeamSupervisorNote {
   id           String   @id @default(cuid())
   teamId       String
   authorUserId String
-  authorRole   Role     // DOCTOR or TA (so we can show whose note it is)
+  authorRole   Role // DOCTOR or TA (so we can show whose note it is)
   content      String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -1432,17 +1479,17 @@ model TeamDeliverableDeadline {
 // Announcements a supervisor broadcasts to target team(s).
 // On create, notifications are pushed to every member of the target team(s).
 model Announcement {
-  id          String   @id @default(cuid())
+  id           String   @id @default(cuid())
   authorUserId String
-  authorRole  Role
+  authorRole   Role
   // Legacy direct target. Broadcasts and filtered audiences store concrete
   // recipients in AnnouncementTargetTeam.
-  teamId      String?
-  title       String
-  content     String
-  pinned      Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  teamId       String?
+  title        String
+  content      String
+  pinned       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   author User  @relation("AnnouncementAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
   team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)

@@ -64,7 +64,7 @@ const navigationItems: NavigationItem[] = [
   { name: "All Teams", href: "/dashboard/teams", icon: Users, roles: ["admin"] },
   { name: "My Teams", href: "/dashboard/teams", icon: Users, roles: ["doctor", "ta"] },
   { name: "Tasks & Boards", href: "/dashboard/tasks", icon: CheckSquare, roles: ["leader", "member"] },
-  { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member"] },
+  { name: "Sprints", href: "/dashboard/sprints", icon: ClipboardList, roles: ["leader", "member", "doctor", "ta", "admin"] },
   { name: "Time Tracker", href: "/dashboard/time-tracker", icon: Timer, roles: ["leader", "member"] },
   { name: "Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["doctor", "ta", "leader", "member"] },
   { name: "Proposals", href: "/dashboard/proposals", icon: FileText, roles: ["doctor", "leader", "member"] },

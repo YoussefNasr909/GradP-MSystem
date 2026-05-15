@@ -3,12 +3,20 @@ import {
   completeSprintService,
   createSprintService,
   deleteSprintService,
+  listAssignedSprintTeamsService,
   listSprintsBoardService,
   moveTaskToBacklogService,
+  reviewSprintEvaluationService,
   startSprintService,
   updateSprintService,
   updateSprintTaskService,
+  upsertMySprintEvaluationService,
 } from "./sprints.service.js";
+
+export async function listAssignedSprintTeams(req, res) {
+  const result = await listAssignedSprintTeamsService(req.user);
+  res.json({ ok: true, data: result });
+}
 
 export async function listSprintsBoard(req, res) {
   const result = await listSprintsBoardService(req.user, req.validated.query);
@@ -57,5 +65,20 @@ export async function moveTaskToBacklog(req, res) {
 
 export async function updateSprintTask(req, res) {
   const result = await updateSprintTaskService(req.user, req.validated.params.taskId, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function upsertMySprintEvaluation(req, res) {
+  const result = await upsertMySprintEvaluationService(req.user, req.validated.params.id, req.validated.body);
+  res.json({ ok: true, data: result });
+}
+
+export async function reviewSprintEvaluation(req, res) {
+  const result = await reviewSprintEvaluationService(
+    req.user,
+    req.validated.params.id,
+    req.validated.params.evaluationId,
+    req.validated.body,
+  );
   res.json({ ok: true, data: result });
 }

@@ -1,5 +1,14 @@
 import { apiRequest } from "./http"
-import type { ApiSprint, ApiSprintBoard, ApiSprintStatus, ApiSprintTask } from "./types"
+import type {
+  ApiSprint,
+  ApiSprintBoard,
+  ApiSprintEvaluation,
+  ApiSprintEvaluationCriteria,
+  ApiSprintEvaluationStatus,
+  ApiSprintStatus,
+  ApiSprintTask,
+  ApiTeamSummary,
+} from "./types"
 
 type ListSprintsParams = {
   teamId?: string
@@ -22,6 +31,19 @@ type SprintTaskPayload = {
   unplanned?: boolean
 }
 
+type SprintEvaluationPayload = {
+  status?: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">
+  feedback?: string
+  earlyEvaluation?: boolean
+  criteria?: Partial<ApiSprintEvaluationCriteria>
+}
+
+type SprintEvaluationReviewPayload = {
+  status: Extract<ApiSprintEvaluationStatus, "APPROVED" | "REJECTED" | "NEEDS_CHANGES">
+  reviewComment?: string
+  earlyEvaluation?: boolean
+}
+
 function buildSprintsQuery(params: ListSprintsParams = {}) {
   const searchParams = new URLSearchParams()
 
@@ -32,6 +54,7 @@ function buildSprintsQuery(params: ListSprintsParams = {}) {
 }
 
 export const sprintsApi = {
+  assignedTeams: () => apiRequest<ApiTeamSummary[]>("/sprints/assigned-teams"),
   board: (params?: ListSprintsParams) => apiRequest<ApiSprintBoard>(buildSprintsQuery(params)),
   create: (payload: SprintPayload) =>
     apiRequest<ApiSprint>("/sprints", {
@@ -66,6 +89,16 @@ export const sprintsApi = {
     }),
   updateTask: (taskId: string, payload: SprintTaskPayload) =>
     apiRequest<ApiSprintTask>(`/sprints/tasks/${taskId}`, {
+      method: "PATCH",
+      body: payload,
+    }),
+  saveEvaluation: (sprintId: string, payload: SprintEvaluationPayload) =>
+    apiRequest<ApiSprintEvaluation>(`/sprints/${sprintId}/evaluations/me`, {
+      method: "PUT",
+      body: payload,
+    }),
+  reviewEvaluation: (sprintId: string, evaluationId: string, payload: SprintEvaluationReviewPayload) =>
+    apiRequest<ApiSprintEvaluation>(`/sprints/${sprintId}/evaluations/${evaluationId}/review`, {
       method: "PATCH",
       body: payload,
     }),
