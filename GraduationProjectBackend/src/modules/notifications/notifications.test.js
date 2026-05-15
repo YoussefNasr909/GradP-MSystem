@@ -8,12 +8,15 @@
  * Run: node --test src/modules/notifications/notifications.test.js
  */
 
-import { test, describe, before } from "node:test";
+import http from "node:http";
+import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
 import bcrypt from "bcrypt";
 import { prisma } from "../../loaders/dbLoader.js";
+import { createApp } from "../../app.js";
 
-const BASE = "http://localhost:4000/api/v1";
+let BASE = null;
+let testServer = null;
 const DEMO_PASSWORD = "demo123";
 const DEMO_LOGIN_EMAILS = [
   "mariam.salah@student.edu",
@@ -37,6 +40,22 @@ async function request(path, options = {}) {
   const text = await res.text();
   const json = text ? JSON.parse(text) : null;
   return { status: res.status, ok: res.ok, body: json };
+}
+
+async function startTestServer() {
+  const app = createApp();
+  testServer = http.createServer(app);
+  await new Promise((resolve) => testServer.listen(0, "127.0.0.1", resolve));
+  const address = testServer.address();
+  BASE = `http://127.0.0.1:${address.port}/api/v1`;
+}
+
+async function stopTestServer() {
+  if (!testServer) return;
+  await new Promise((resolve, reject) => {
+    testServer.close((error) => (error ? reject(error) : resolve()));
+  });
+  testServer = null;
 }
 
 async function ensureDemoLogin(email, password = DEMO_PASSWORD) {
@@ -78,7 +97,7 @@ async function login(email, password = DEMO_PASSWORD) {
   if (!res.ok) {
     throw new Error(`Login failed for ${email}: ${JSON.stringify(res.body)}`);
   }
-  return res.body.data.accessToken;
+  return res.body.data.token;
 }
 
 // ─── Shared state (populated in before()) ────────────────────────────────────
@@ -103,6 +122,8 @@ describe("Notification System", { concurrency: false }, () => {
 
   // Run sequentially — tokens are shared across all subtests
   before(async () => {
+    await startTestServer();
+
     const loginUsersReady = await Promise.all(DEMO_LOGIN_EMAILS.map((email) => ensureDemoLogin(email)));
     if (loginUsersReady.some((ready) => !ready)) {
       ctx.notificationSeedMissing =
@@ -113,6 +134,10 @@ describe("Notification System", { concurrency: false }, () => {
     ctx.leaderToken  = await login("mariam.salah@student.edu");
     ctx.studentToken = await login("amira.khalil@student.edu");
     ctx.doctorToken  = await login("ahmed.hassan@university.edu");
+  });
+
+  after(async () => {
+    await stopTestServer();
   });
 
   // ── 1. GET /notifications — correct response shape ────────────────────────

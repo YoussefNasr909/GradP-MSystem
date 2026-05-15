@@ -220,6 +220,12 @@ enum NotificationType {
   SUBMISSION_GRADED
   SUBMISSION_FEEDBACK
   SYSTEM
+  // Gamification
+  XP_AWARDED
+  XP_FROZEN
+  XP_REVERSED
+  BADGE_UNLOCKED
+  XP_ADJUSTMENT_REVIEWED
 }
 
 enum DiscussionCategory {
@@ -430,6 +436,22 @@ model User {
   discussionComments      DiscussionComment[]   @relation("DiscussionCommentAuthor")
   discussionLikes         DiscussionLike[]      @relation("DiscussionLikeUser")
   discussionViews         DiscussionView[]      @relation("DiscussionViewUser")
+  // Gamification relations
+  createdGamificationRules       GamificationRule[]         @relation("GamificationRuleCreator")
+  gamificationEventsAsActor      GamificationEvent[]        @relation("GamificationEventActor")
+  xpTransactionsAsRecipient      XpTransaction[]            @relation("XpTransactionRecipientUser")
+  xpTransactionsCreated          XpTransaction[]            @relation("XpTransactionCreator")
+  xpTransactionsReviewed         XpTransaction[]            @relation("XpTransactionReviewer")
+  xpBalance                      UserXpBalance?
+  userBadges                     UserBadge[]                @relation("UserBadgeOwner")
+  leaderboardSnapshots           LeaderboardSnapshot[]      @relation("LeaderboardSnapshotUser")
+  githubContributions            GitHubContribution[]       @relation("GitHubContributionUser")
+  suspiciousActivityCases        SuspiciousActivityCase[]   @relation("SuspiciousActivityUser")
+  assignedSuspiciousCases        SuspiciousActivityCase[]   @relation("SuspiciousActivityReviewer")
+  xpAdjustmentRequestsCreated    XpAdjustmentRequest[]      @relation("XpAdjustmentRequester")
+  xpAdjustmentRequestsAsTarget   XpAdjustmentRequest[]      @relation("XpAdjustmentTargetUser")
+  xpAdjustmentRequestsApproved   XpAdjustmentRequest[]      @relation("XpAdjustmentApprover")
+  gamificationAuditLogs          GamificationAuditLog[]     @relation("GamificationAuditActor")
 }
 
 model UserSettings {
@@ -515,6 +537,15 @@ model Team {
   announcementTargets  AnnouncementTargetTeam[]
   rubricTemplates      TeamRubricTemplate[]
   groupConversation TeamGroupConversation?
+  // Gamification relations
+  gamificationEvents        GamificationEvent[]        @relation("GamificationEventTeam")
+  xpTransactionsAsRecipient XpTransaction[]            @relation("XpTransactionRecipientTeam")
+  xpBalance                 TeamXpBalance?
+  teamBadges                TeamBadge[]                @relation("TeamBadgeOwner")
+  leaderboardSnapshots      LeaderboardSnapshot[]      @relation("LeaderboardSnapshotTeam")
+  githubContributions       GitHubContribution[]       @relation("GitHubContributionTeam")
+  suspiciousActivityCases   SuspiciousActivityCase[]   @relation("SuspiciousActivityTeam")
+  xpAdjustmentRequests      XpAdjustmentRequest[]      @relation("XpAdjustmentTargetTeam")
 
   @@index([visibility, stage])
   @@index([name])
@@ -650,6 +681,7 @@ model GitHubTeamRepository {
   team              Team                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   webhookDeliveries GitHubWebhookDelivery[]
   syncCursors       GitHubSyncCursor[]
+  contributions     GitHubContribution[]
 
   @@index([ownerLogin, repoName])
   @@index([installationId])
@@ -763,6 +795,7 @@ model Task {
   assignee   User? @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
   createdBy  User? @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   reviewedBy User? @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  githubContributions GitHubContribution[] @relation("GitHubContributionTask")
   submissionEvidence TaskSubmissionEvidence[]
   reviews    TaskReview[]
 
@@ -917,6 +950,12 @@ model Submission {
   submittedAt       DateTime             @default(now())
   deadline          DateTime?
   late              Boolean              @default(false)
+
+  // Duplicate detection (gamification anti-cheat)
+  fileHash             String?
+  normalizedTextHash   String?
+  contentFingerprint   String?
+
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -933,6 +972,9 @@ model Submission {
   @@index([submittedByUserId])
   @@index([reviewedByUserId])
   @@index([taReviewedByUserId])
+  @@index([fileHash])
+  @@index([normalizedTextHash])
+  @@index([teamId, deliverableType, version])
 }
 
 // Conversation thread on a single submission.
@@ -1408,6 +1450,482 @@ model Announcement {
 
   @@index([authorUserId, createdAt])
   @@index([teamId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Gamification Enums
+// ─────────────────────────────────────────────────────────────
+
+enum GamificationEventType {
+  TASK_APPROVED
+  TASK_REOPENED
+  SUBMISSION_APPROVED
+  SUBMISSION_GRADE_UPDATED
+  TEAM_STAGE_ADVANCED
+  WEEKLY_REPORT_APPROVED
+  GITHUB_PR_MERGED
+  GITHUB_PR_REVIEWED
+  GITHUB_RELEASE_CREATED
+  MANUAL_XP_ADJUSTMENT_APPROVED
+  BADGE_UNLOCKED
+}
+
+enum GamificationEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum XpRecipientType {
+  USER
+  TEAM
+}
+
+enum XpTransactionStatus {
+  PENDING
+  AWARDED
+  FROZEN
+  REJECTED
+  REVERSED
+}
+
+enum XpTransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum GamificationActorType {
+  SYSTEM
+  USER
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum BadgeTargetType {
+  USER
+  TEAM
+}
+
+enum LeaderboardScopeType {
+  GLOBAL
+  SUPERVISOR
+  TEAM
+  TRACK
+  DEPARTMENT
+}
+
+enum LeaderboardType {
+  INDIVIDUAL_WEEKLY
+  INDIVIDUAL_SEMESTER
+  INDIVIDUAL_LIFETIME
+  TEAM_WEEKLY
+  TEAM_SEMESTER
+}
+
+enum SuspiciousActivityStatus {
+  OPEN
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ESCALATED
+  DISMISSED
+}
+
+enum XpAdjustmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum GamificationAuditAction {
+  RULE_CREATED
+  RULE_UPDATED
+  EVENT_EMITTED
+  EVENT_PROCESSED
+  TRANSACTION_CREATED
+  TRANSACTION_FROZEN
+  TRANSACTION_REVERSED
+  CASE_RESOLVED
+  ADJUSTMENT_REQUESTED
+  ADJUSTMENT_APPROVED
+  ADJUSTMENT_REJECTED
+}
+
+// ─────────────────────────────────────────────────────────────
+// Gamification Models
+// ─────────────────────────────────────────────────────────────
+
+// Configurable scoring rules used by the rule engine.
+model GamificationRule {
+  id              String                @id @default(cuid())
+  code            String
+  name            String
+  description     String?
+  eventType       GamificationEventType
+  targetType      XpRecipientType
+  baseXp          Int
+  conditions      Json?
+  multipliers     Json?
+  caps            Json?
+  version         Int                   @default(1)
+  isActive        Boolean               @default(true)
+  createdByUserId String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  createdBy User? @relation("GamificationRuleCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([code, version])
+  @@index([eventType, isActive])
+  @@index([code, isActive])
+}
+
+// Immutable event outbox emitted by domain services, processed asynchronously.
+model GamificationEvent {
+  id              String                  @id @default(cuid())
+  eventType       GamificationEventType
+  sourceType      String
+  sourceId        String
+  teamId          String?
+  actorUserId     String?
+  payload         Json?
+  occurredAt      DateTime                @default(now())
+  processedAt     DateTime?
+  status          GamificationEventStatus @default(PENDING)
+  idempotencyKey  String                  @unique
+  attempts        Int                     @default(0)
+  lastError       String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  team      Team? @relation("GamificationEventTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  actorUser User? @relation("GamificationEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  xpTransactions      XpTransaction[]
+  suspiciousCases     SuspiciousActivityCase[]
+  xpAdjustmentRequest XpAdjustmentRequest?     @relation("XpAdjustmentEvent")
+
+  @@index([status, createdAt])
+  @@index([eventType, occurredAt])
+  @@index([sourceType, sourceId])
+  @@index([teamId, occurredAt])
+  @@index([actorUserId, occurredAt])
+}
+
+// Immutable XP ledger — the source of truth for all balance and history views.
+model XpTransaction {
+  id                       String                 @id @default(cuid())
+  idempotencyKey           String?                @unique
+  recipientType            XpRecipientType
+  userId                   String?
+  teamId                   String?
+  amount                   Int
+  direction                XpTransactionDirection
+  status                   XpTransactionStatus    @default(PENDING)
+  reason                   String
+  eventId                  String
+  sourceType               String
+  sourceId                 String
+  ruleCode                 String?
+  ruleVersion              Int?
+  baseXp                   Int?
+  qualityMultiplier        Float?
+  timelinessMultiplier     Float?
+  evidenceMultiplier       Float?
+  difficultyMultiplier     Float?
+  createdByType            GamificationActorType  @default(SYSTEM)
+  createdByUserId          String?
+  reviewedByUserId         String?
+  reviewedAt               DateTime?
+  reversalOfTransactionId  String?
+  metadata                 Json?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  user                   User?          @relation("XpTransactionRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
+  team                   Team?          @relation("XpTransactionRecipientTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  event                  GamificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdByUser          User?          @relation("XpTransactionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedByUser         User?          @relation("XpTransactionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reversalOfTransaction  XpTransaction? @relation("XpTransactionReversal", fields: [reversalOfTransactionId], references: [id], onDelete: SetNull)
+  reversedByTransactions XpTransaction[] @relation("XpTransactionReversal")
+
+  userBadgeReward     UserBadge?               @relation("UserBadgeTransaction")
+  teamBadgeReward     TeamBadge?               @relation("TeamBadgeTransaction")
+  suspiciousCase      SuspiciousActivityCase?  @relation("SuspiciousActivityTransaction")
+  xpAdjustmentRequest XpAdjustmentRequest?     @relation("XpAdjustmentTransaction")
+
+  @@index([userId, status, createdAt])
+  @@index([teamId, status, createdAt])
+  @@index([eventId])
+  @@index([sourceType, sourceId])
+  @@index([ruleCode, ruleVersion])
+  @@index([reversalOfTransactionId])
+}
+
+// Fast read model for user XP profile, dashboard, and leaderboards.
+model UserXpBalance {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  lifetimeXp         Int      @default(0)
+  semesterXp         Int      @default(0)
+  monthlyXp          Int      @default(0)
+  weeklyXp           Int      @default(0)
+  pendingXp          Int      @default(0)
+  frozenXp           Int      @default(0)
+  level              Int      @default(1)
+  qualityScore       Float?
+  lastRecalculatedAt DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([weeklyXp])
+  @@index([semesterXp])
+  @@index([level])
+}
+
+// Fast read model for team XP panels and team leaderboards.
+model TeamXpBalance {
+  id                 String   @id @default(cuid())
+  teamId             String   @unique
+  lifetimeTeamXp     Int      @default(0)
+  semesterTeamXp     Int      @default(0)
+  monthlyTeamXp      Int      @default(0)
+  weeklyTeamXp       Int      @default(0)
+  pendingTeamXp      Int      @default(0)
+  frozenTeamXp       Int      @default(0)
+  teamHealthScore    Float?
+  leaderboardScore   Float?
+  lastRecalculatedAt DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([weeklyTeamXp])
+  @@index([semesterTeamXp])
+  @@index([leaderboardScore])
+}
+
+// Backend-owned badge catalog.
+model BadgeDefinition {
+  id          String          @id @default(cuid())
+  code        String          @unique
+  name        String
+  description String?
+  category    String?
+  rarity      BadgeRarity     @default(COMMON)
+  targetType  BadgeTargetType @default(USER)
+  level       Int             @default(1)
+  criteria    Json?
+  xpReward    Int             @default(0)
+  icon        String?
+  isHidden    Boolean         @default(false)
+  isSeasonal  Boolean         @default(false)
+  activeFrom  DateTime?
+  activeTo    DateTime?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  userBadges UserBadge[]
+  teamBadges TeamBadge[]
+
+  @@index([targetType, isActive])
+  @@index([category, rarity])
+}
+
+// Records user badge unlocks and progress.
+model UserBadge {
+  id                   String   @id @default(cuid())
+  userId               String
+  badgeDefinitionId    String
+  unlockedAt           DateTime?
+  progress             Float?
+  metadata             Json?
+  createdTransactionId String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user               User            @relation("UserBadgeOwner", fields: [userId], references: [id], onDelete: Cascade)
+  badgeDefinition    BadgeDefinition @relation(fields: [badgeDefinitionId], references: [id], onDelete: Cascade)
+  createdTransaction XpTransaction?  @relation("UserBadgeTransaction", fields: [createdTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, badgeDefinitionId])
+  @@index([userId, unlockedAt])
+  @@index([badgeDefinitionId])
+}
+
+// Records team badge unlocks and progress.
+model TeamBadge {
+  id                   String   @id @default(cuid())
+  teamId               String
+  badgeDefinitionId    String
+  unlockedAt           DateTime?
+  progress             Float?
+  metadata             Json?
+  createdTransactionId String?  @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  team               Team            @relation("TeamBadgeOwner", fields: [teamId], references: [id], onDelete: Cascade)
+  badgeDefinition    BadgeDefinition @relation(fields: [badgeDefinitionId], references: [id], onDelete: Cascade)
+  createdTransaction XpTransaction?  @relation("TeamBadgeTransaction", fields: [createdTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([teamId, badgeDefinitionId])
+  @@index([teamId, unlockedAt])
+  @@index([badgeDefinitionId])
+}
+
+// Stores generated leaderboard ranks for fast reads and historical comparison.
+model LeaderboardSnapshot {
+  id              String              @id @default(cuid())
+  scopeType       LeaderboardScopeType
+  scopeId         String?
+  leaderboardType LeaderboardType
+  periodStart     DateTime
+  periodEnd       DateTime
+  rank            Int
+  userId          String?
+  teamId          String?
+  score           Float
+  breakdown       Json?
+  generatedAt     DateTime            @default(now())
+
+  user User? @relation("LeaderboardSnapshotUser", fields: [userId], references: [id], onDelete: SetNull)
+  team Team? @relation("LeaderboardSnapshotTeam", fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([leaderboardType, scopeType, scopeId, periodStart, periodEnd, userId, teamId])
+  @@index([leaderboardType, scopeType, scopeId, periodStart, periodEnd, rank])
+  @@index([userId, leaderboardType, generatedAt])
+  @@index([teamId, leaderboardType, generatedAt])
+}
+
+// Normalized GitHub scoring input separate from raw webhook payloads.
+model GitHubContribution {
+  id               String   @id @default(cuid())
+  repositoryId     String
+  githubEventType  String
+  githubNodeId     String?
+  githubUrl        String?
+  userId           String?
+  teamId           String?
+  taskId           String?
+  pullRequestNumber Int?
+  issueNumber      Int?
+  commitSha        String?
+  diffStats        Json?
+  qualitySignals   Json?
+  isRewardable     Boolean  @default(true)
+  suspicionScore   Float    @default(0)
+  payloadHash      String?
+  occurredAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  repository GitHubTeamRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  user       User?                @relation("GitHubContributionUser", fields: [userId], references: [id], onDelete: SetNull)
+  team       Team?                @relation("GitHubContributionTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  task       Task?                @relation("GitHubContributionTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([repositoryId, githubEventType, githubNodeId])
+  @@index([teamId, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([taskId])
+  @@index([isRewardable, suspicionScore])
+}
+
+// Staff review queue for frozen or suspicious XP.
+model SuspiciousActivityCase {
+  id                   String                   @id @default(cuid())
+  userId               String?
+  teamId               String?
+  eventId              String?
+  transactionId        String?                  @unique
+  score                Float                    @default(0)
+  status               SuspiciousActivityStatus @default(OPEN)
+  reason               String
+  signals              Json?
+  assignedReviewerId   String?
+  resolution           String?
+  studentVisibleReason String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  resolvedAt           DateTime?
+
+  user               User?              @relation("SuspiciousActivityUser", fields: [userId], references: [id], onDelete: SetNull)
+  team               Team?              @relation("SuspiciousActivityTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  event              GamificationEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  transaction        XpTransaction?     @relation("SuspiciousActivityTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+  assignedReviewer   User?              @relation("SuspiciousActivityReviewer", fields: [assignedReviewerId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([teamId, status])
+  @@index([userId, status])
+  @@index([assignedReviewerId, status])
+}
+
+// Controlled manual XP changes with review and audit.
+model XpAdjustmentRequest {
+  id                   String             @id @default(cuid())
+  requestedByUserId    String
+  targetUserId         String?
+  targetTeamId         String?
+  amount               Int
+  reason               String
+  sourceReference      String?
+  status               XpAdjustmentStatus @default(PENDING)
+  approvedByUserId     String?
+  createdEventId       String?            @unique
+  createdTransactionId String?            @unique
+  reviewComment        String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  reviewedAt           DateTime?
+
+  requestedBy        User?              @relation("XpAdjustmentRequester", fields: [requestedByUserId], references: [id], onDelete: Cascade)
+  targetUser         User?              @relation("XpAdjustmentTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetTeam         Team?              @relation("XpAdjustmentTargetTeam", fields: [targetTeamId], references: [id], onDelete: SetNull)
+  approvedBy         User?              @relation("XpAdjustmentApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  createdEvent       GamificationEvent? @relation("XpAdjustmentEvent", fields: [createdEventId], references: [id], onDelete: SetNull)
+  createdTransaction XpTransaction?     @relation("XpAdjustmentTransaction", fields: [createdTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requestedByUserId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([targetTeamId, createdAt])
+  @@index([approvedByUserId, reviewedAt])
+}
+
+// Append-only audit trail for gamification actions.
+model GamificationAuditLog {
+  id           String                  @id @default(cuid())
+  actorUserId  String?
+  action       GamificationAuditAction
+  targetType   String
+  targetId     String
+  before       Json?
+  after        Json?
+  reason       String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime                @default(now())
+
+  actorUser User? @relation("GamificationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+  @@index([action, createdAt])
 }
 
 model AnnouncementTargetTeam {

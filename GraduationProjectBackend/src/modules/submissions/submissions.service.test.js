@@ -4,11 +4,13 @@ import { AppError } from "../../common/errors/AppError.js"
 import {
   assertPhaseSubmissionGate,
   assertRubricGradeMatches,
+  buildContentFingerprint,
   getEarliestIncompleteRequiredPhase,
   getLatestPhaseSubmission,
   getRubricScaledScore,
   isPhaseUnlockedForSubmission,
   isOptionalEvidenceSubmission,
+  normalizeSubmissionText,
   normalizeRubric,
   shouldEnforcePhaseSubmissionGate,
 } from "./submissions.service.js"
@@ -87,6 +89,29 @@ test("normalizeRubric rejects criterion scores over max score", () => {
       error.code === "RUBRIC_SCORE_EXCEEDS_MAX" &&
       error.statusCode === 422,
   )
+})
+
+test("buildContentFingerprint is deterministic for the same uploaded content context", () => {
+  const first = buildContentFingerprint({
+    fileHash: "abc123",
+    deliverableType: "SRS",
+    sdlcPhase: "REQUIREMENTS",
+    fileSize: 4096,
+  })
+  const second = buildContentFingerprint({
+    fileHash: "abc123",
+    deliverableType: "SRS",
+    sdlcPhase: "REQUIREMENTS",
+    fileSize: 4096,
+  })
+
+  assert.equal(first, second)
+  assert.equal(typeof first, "string")
+  assert.equal(first.length, 64)
+})
+
+test("normalizeSubmissionText is case and whitespace stable", () => {
+  assert.equal(normalizeSubmissionText("  Hello\nWORLD\t "), "hello world")
 })
 
 test("getRubricScaledScore scales rubric totals to 100", () => {

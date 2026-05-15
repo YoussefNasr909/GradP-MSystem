@@ -79,7 +79,7 @@ export function LeaderboardCard({ users, currentUserId, compact = false }: Leade
                 </div>
 
                 <div className="text-right">
-                  <p className="text-lg font-bold gradient-text">{user.xp || 0}</p>
+                  <p className="text-lg font-bold text-primary">{user.xp || 0}</p>
                   <p className="text-xs text-muted-foreground">XP</p>
                 </div>
               </div>

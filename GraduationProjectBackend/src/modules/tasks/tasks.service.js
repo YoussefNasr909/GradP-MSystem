@@ -1,4 +1,8 @@
 import { AppError } from "../../common/errors/AppError.js";
+import {
+  buildGamificationIdempotencyKey,
+  emitGamificationEvent,
+} from "../gamification/gamification.emitter.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId, listTeams } from "../teams/teams.repository.js";
 import {
@@ -653,16 +657,38 @@ function buildReviewSnapshot(task, actor, overrides = {}) {
   };
 }
 
+function computeTaskTimelinessTier(task, reviewedAt = new Date()) {
+  if (!task?.dueDate) return "onTime";
+
+  const due = new Date(task.dueDate);
+  const reviewed = new Date(reviewedAt);
+  const lateMs = reviewed.getTime() - due.getTime();
+  if (lateMs <= 0) return "onTime";
+
+  const hoursLate = lateMs / (1000 * 60 * 60);
+  if (hoursLate <= 24) return "lt24h";
+  if (hoursLate <= 72) return "lt3d";
+  if (hoursLate <= 168) return "lt7d";
+  return "gt7d";
+}
+
+function computeTaskEvidenceLevel(task, merged) {
+  if (task?.integrationMode === "GITHUB") {
+    if (merged || task?.githubPullRequestNumber || task?.githubPullRequestUrl) {
+      return "repoBackedWithPR";
+    }
+    return "repoBackedNoPR";
+  }
+
+  return "manual";
+}
+
 export function shouldMergeApprovedTaskPullRequest(payload = {}) {
   return payload.mergePullRequest === true;
 }
 
-/** Minimum length for a "Request Resubmission" comment. Kept in sync with the
- *  frontend `RESUBMISSION_MIN_LENGTH` constant so the UX matches the API. */
 export const RESUBMISSION_COMMENT_MIN_LENGTH = 10;
 
-/** Throws a 422 if the review comment isn't long enough to be actionable.
- *  Used by both `rejectTaskService` and `buildTaskResubmissionUpdate`. */
 export function assertReviewCommentMeetsMinimum(reviewComment) {
   const normalized = normalizeText(reviewComment);
   if (!normalized) {
@@ -1174,6 +1200,30 @@ export async function approveTaskService(actor, taskId, payload = {}) {
     });
   }
 
+  // Gamification: emit TASK_APPROVED event
+  emitGamificationEvent({
+    eventType: "TASK_APPROVED",
+    sourceType: "Task",
+    sourceId: updatedTask.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "TASK_APPROVED",
+      updatedTask.id,
+      (updatedTask.reviewedAt ?? new Date()).toISOString(),
+    ),
+    teamId: task.teamId ?? task.team?.id ?? null,
+    actorUserId: actor.id,
+    payload: {
+      taskType: task.taskType,
+      assigneeUserId: task.assigneeUserId,
+      integrationMode: task.integrationMode,
+      priority: task.priority,
+      storyPoints: Number(task.storyPoints ?? 0),
+      timeliness: computeTaskTimelinessTier(task, updatedTask.reviewedAt ?? new Date()),
+      evidenceLevel: computeTaskEvidenceLevel(task, merged),
+      merged,
+    },
+  });
+
   // Notify the other team reviewer so they see a second opinion is available.
   await notifyCounterpartReviewer(task, actor, reviewerRole, "APPROVED", reviewComment);
 
@@ -1251,6 +1301,25 @@ export async function rejectTaskService(actor, taskId, payload) {
       actionUrl: "/dashboard/tasks",
     });
   }
+
+  // Gamification: emit TASK_REOPENED event (may trigger XP reversal in Phase 4)
+  emitGamificationEvent({
+    eventType: "TASK_REOPENED",
+    sourceType: "Task",
+    sourceId: updatedTask.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "TASK_REOPENED",
+      updatedTask.id,
+      (updatedTask.reviewedAt ?? new Date()).toISOString(),
+    ),
+    teamId: task.teamId ?? task.team?.id ?? null,
+    actorUserId: actor.id,
+    payload: {
+      taskType: task.taskType,
+      assigneeUserId: task.assigneeUserId,
+      previousStatus: task.status,
+    },
+  });
 
   // Notify the counterpart reviewer.
   await notifyCounterpartReviewer(task, actor, reviewerRole, "CHANGES_REQUESTED", reviewComment);
