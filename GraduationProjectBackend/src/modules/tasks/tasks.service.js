@@ -1,4 +1,8 @@
 import { AppError } from "../../common/errors/AppError.js";
+import {
+  buildGamificationIdempotencyKey,
+  emitGamificationEvent,
+} from "../gamification/gamification.emitter.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { findTeamById, findTeamByLeaderId, findTeamMemberByUserId, listTeams } from "../teams/teams.repository.js";
 import {
@@ -590,6 +594,32 @@ function buildReviewSnapshot(task, actor, overrides = {}) {
   };
 }
 
+function computeTaskTimelinessTier(task, reviewedAt = new Date()) {
+  if (!task?.dueDate) return "onTime";
+
+  const due = new Date(task.dueDate);
+  const reviewed = new Date(reviewedAt);
+  const lateMs = reviewed.getTime() - due.getTime();
+  if (lateMs <= 0) return "onTime";
+
+  const hoursLate = lateMs / (1000 * 60 * 60);
+  if (hoursLate <= 24) return "lt24h";
+  if (hoursLate <= 72) return "lt3d";
+  if (hoursLate <= 168) return "lt7d";
+  return "gt7d";
+}
+
+function computeTaskEvidenceLevel(task, merged) {
+  if (task?.integrationMode === "GITHUB") {
+    if (merged || task?.githubPullRequestNumber || task?.githubPullRequestUrl) {
+      return "repoBackedWithPR";
+    }
+    return "repoBackedNoPR";
+  }
+
+  return "manual";
+}
+
 function buildMissingGitHubReviewEvidenceMessage(task) {
   const reviewGate = buildGitHubReviewGate(task);
   const messages = {
@@ -886,6 +916,30 @@ export async function approveTaskService(actor, taskId, payload = {}) {
     });
   }
 
+  // Gamification: emit TASK_APPROVED event
+  emitGamificationEvent({
+    eventType: "TASK_APPROVED",
+    sourceType: "Task",
+    sourceId: updated.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "TASK_APPROVED",
+      updated.id,
+      updated.reviewedAt.toISOString(),
+    ),
+    teamId: task.teamId ?? task.team?.id ?? null,
+    actorUserId: actor.id,
+    payload: {
+      taskType: task.taskType,
+      assigneeUserId: task.assigneeUserId,
+      integrationMode: task.integrationMode,
+      priority: task.priority,
+      storyPoints: Number(task.storyPoints ?? 0),
+      timeliness: computeTaskTimelinessTier(task, updated.reviewedAt ?? new Date()),
+      evidenceLevel: computeTaskEvidenceLevel(task, merged),
+      merged,
+    },
+  });
+
   return toTaskResponse(updated, actor);
 }
 
@@ -938,6 +992,25 @@ export async function rejectTaskService(actor, taskId, payload) {
       actionUrl: "/dashboard/tasks",
     });
   }
+
+  // Gamification: emit TASK_REOPENED event (may trigger XP reversal in Phase 4)
+  emitGamificationEvent({
+    eventType: "TASK_REOPENED",
+    sourceType: "Task",
+    sourceId: updated.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "TASK_REOPENED",
+      updated.id,
+      updated.reviewedAt.toISOString(),
+    ),
+    teamId: task.teamId ?? task.team?.id ?? null,
+    actorUserId: actor.id,
+    payload: {
+      taskType: task.taskType,
+      assigneeUserId: task.assigneeUserId,
+      previousStatus: task.status,
+    },
+  });
 
   return toTaskResponse(updated, actor);
 }

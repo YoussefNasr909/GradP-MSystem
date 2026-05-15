@@ -1,4 +1,4 @@
-﻿import crypto from "node:crypto";
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { App, Octokit } from "octokit";
 import { prisma } from "../../loaders/dbLoader.js";
@@ -14,6 +14,7 @@ import {
   taskSelect,
   updateTaskById as updateTaskRecordById,
 } from "../tasks/tasks.repository.js";
+import { emitGamificationEvent, buildGamificationIdempotencyKey } from "../gamification/gamification.emitter.js";
 
 const READONLY_ROLES = [ROLES.DOCTOR, ROLES.TA];
 const MEMBER_WRITE_ROLES = [ROLES.LEADER, ROLES.STUDENT];
@@ -1617,6 +1618,28 @@ async function syncReleasesIntoSubmissions(team, repositoryRecord, readOctokit) 
     });
 
     synced.push(submission);
+
+    try {
+      await emitGamificationEvent({
+        type: "GITHUB_RELEASE_CREATED",
+        userId: team.leaderId || actor?.id, // Release isn't necessarily tied to one user, but we provide someone.
+        teamId: team.id,
+        idempotencyKey: buildGamificationIdempotencyKey(
+          "GITHUB_RELEASE_CREATED",
+          "GitHubTeamRepository",
+          repositoryRecord.id,
+          `release:${release.id}`
+        ),
+        payload: {
+          releaseId: release.id,
+          tagName: release.tag_name,
+          repositoryId: repositoryRecord.id,
+          teamId: team.id,
+        },
+      });
+    } catch (error) {
+      console.warn(`[GITHUB] Failed to emit gamification event GITHUB_RELEASE_CREATED:`, error.message);
+    }
   }
 
   await upsertSyncCursor(repositoryRecord.id, "releases");
@@ -3516,6 +3539,38 @@ export async function reviewPullRequestService(actor, pullNumber, payload) {
     throw mapGitHubRepositoryWriteError(error, repositoryRecord);
   }
 
+  try {
+    const prResponse = await writeOctokit.rest.pulls.get({
+      owner: repositoryRecord.ownerLogin,
+      repo: repositoryRecord.repoName,
+      pull_number: pullNumber,
+    });
+    const authorLogin = prResponse.data?.user?.login;
+    if (actor.githubUsername && authorLogin && authorLogin.toLowerCase() !== actor.githubUsername.toLowerCase()) {
+      const iso = new Date().toISOString();
+      await emitGamificationEvent({
+        type: "GITHUB_PR_REVIEWED",
+        userId: actor.id,
+        teamId: repositoryRecord.teamId,
+        idempotencyKey: buildGamificationIdempotencyKey(
+          "GITHUB_PR_REVIEWED",
+          "GitHubTeamRepository",
+          repositoryRecord.id,
+          `PR:${pullNumber}:reviewer:${actor.id}:at:${iso}`
+        ),
+        payload: {
+          pullNumber,
+          repositoryId: repositoryRecord.id,
+          teamId: repositoryRecord.teamId,
+          reviewerUserId: actor.id,
+          event: payload.event,
+        },
+      });
+    }
+  } catch (error) {
+    console.warn(`[GITHUB] Failed to emit gamification event GITHUB_PR_REVIEWED:`, error.message);
+  }
+
   return {
     id: String(data.id),
     state: data.state,
@@ -3538,6 +3593,50 @@ export async function mergePullRequestService(actor, pullNumber, payload) {
     commit_message: payload.commitMessage,
     merge_method: payload.mergeMethod ?? "merge",
   });
+
+  try {
+    const prResponse = await writeOctokit.rest.pulls.get({
+      owner: repositoryRecord.ownerLogin,
+      repo: repositoryRecord.repoName,
+      pull_number: pullNumber,
+    });
+    const authorLogin = prResponse.data?.user?.login;
+    let authorUserId = actor.id;
+    if (authorLogin) {
+      const prAuthor = await prisma.user.findFirst({
+        where: { githubUsername: { equals: authorLogin, mode: "insensitive" } },
+      });
+      if (prAuthor) {
+        authorUserId = prAuthor.id;
+      }
+    }
+
+    const task = await findTaskByGitHubPullRequestNumber(repositoryRecord.teamId, pullNumber);
+    const iso = new Date().toISOString();
+    
+    await emitGamificationEvent({
+      type: "GITHUB_PR_MERGED",
+      userId: authorUserId,
+      teamId: repositoryRecord.teamId,
+      taskId: task?.id || null,
+      idempotencyKey: buildGamificationIdempotencyKey(
+        "GITHUB_PR_MERGED",
+        "GitHubTeamRepository",
+        repositoryRecord.id,
+        `PR:${pullNumber}:mergedAt:${iso}`
+      ),
+      payload: {
+        pullNumber,
+        repositoryId: repositoryRecord.id,
+        teamId: repositoryRecord.teamId,
+        userId: authorUserId,
+        taskId: task?.id || null,
+        mergedAt: iso,
+      },
+    });
+  } catch (error) {
+    console.warn(`[GITHUB] Failed to emit gamification event GITHUB_PR_MERGED:`, error.message);
+  }
 
   return data;
 }

@@ -43,7 +43,6 @@ import {
 } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useRouter, useSearchParams } from "next/navigation"
-import { users } from "@/data/users"
 import Link from "next/link"
 import { useTheme } from "next-themes"
 import { FormAlert } from "@/components/ui/form-alert"
@@ -257,7 +256,7 @@ const submitVerifyEmail = async () => {
   }
 }
 
- const { setCurrentUser, setAuth, accessToken, currentUser, hasHydrated } = useAuthStore()
+ const { setAuth, accessToken, currentUser, hasHydrated } = useAuthStore()
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -399,14 +398,7 @@ if (loginCooldown > 0) {
     setLoginSuccess(true)
     setTimeout(() => router.push("/dashboard"), 1000)
   } catch (err: any) {
-    // demo fallback
-    const demoUser = users.find((u) => u.email === trimmedEmail)
-    if (demoUser && password === "demo123") {
-      setCurrentUser(demoUser)
-      setLoginSuccess(true)
-      setTimeout(() => router.push("/dashboard"), 1000)
-      return
-    }
+    // Rate limit handling
 const rl = getRateLimitInfo(err)
 if (rl) {
   setError("")

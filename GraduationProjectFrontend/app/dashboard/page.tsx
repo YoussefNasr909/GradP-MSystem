@@ -84,6 +84,7 @@ import NextLink from "next/link"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
+import { useGamificationOverview } from "@/lib/hooks/use-gamification"
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -139,6 +140,12 @@ function StudentMemberDashboard() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  const { data: gamification } = useGamificationOverview()
+  const xp = gamification?.lifetimeXp ?? 0
+  const level = gamification?.currentLevel ?? 1
+  const streak = gamification?.streakDays ?? 0
+  const gold = gamification?.goldBalance ?? 0
 
   useEffect(() => {
     if (myTeamState?.team) return
@@ -251,7 +258,7 @@ function StudentMemberDashboard() {
           title: "Gamification",
           icon: Trophy,
           href: "/dashboard/gamification",
-          count: currentUser?.xp || 0,
+          count: xp,
           color: "from-yellow-500 to-orange-500",
           description: "XP & achievements", // Changed description
         },
@@ -310,7 +317,7 @@ function StudentMemberDashboard() {
           title: "Gamification",
           icon: Trophy,
           href: "/dashboard/gamification",
-          count: currentUser?.xp || 0,
+          count: xp,
           color: "from-yellow-500 to-orange-500",
           description: "XP & achievements",
         },
@@ -356,14 +363,6 @@ function StudentMemberDashboard() {
       time: "1 day ago",
       icon: Award,
       color: "text-amber-500",
-    },
-    {
-      id: 5,
-      type: "xp",
-      message: "Gained 150 XP for task completion",
-      time: "1 day ago",
-      icon: Sparkles,
-      color: "text-pink-500",
     },
   ]
 
@@ -420,16 +419,16 @@ function StudentMemberDashboard() {
 
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <Badge variant="outline" className="gap-1 border-orange-500/50 text-orange-600">
-                    <Flame className="h-3 w-3" /> {currentUser?.streak || 15} Day Streak
+                    <Flame className="h-3 w-3" /> {streak} Day Streak
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
-                    <Sparkles className="h-3 w-3" /> Level {currentUser?.level || 8}
+                    <Sparkles className="h-3 w-3" /> Level {level}
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-600">
-                    <Trophy className="h-3 w-3" /> {currentUser?.xp || 1800} XP
+                    <Trophy className="h-3 w-3" /> {xp} XP
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-yellow-500/50 text-yellow-600">
-                    <Coins className="h-3 w-3" /> {currentUser?.gold || 290} Gold
+                    <Coins className="h-3 w-3" /> {gold} Gold
                   </Badge>
                 </div>
               </div>
@@ -785,18 +784,21 @@ function StudentMemberDashboard() {
                   <Trophy className="h-5 w-5 text-amber-500" /> Level Progress
                 </h3>
                 <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-                  Level {currentUser?.level || 8}
+                  Level {level}
                 </Badge>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span>{currentUser?.xp || 1800} XP</span>
-                  <span className="text-muted-foreground">2000 XP to Level {(currentUser?.level || 8) + 1}</span>
+                  <span>{xp} XP</span>
+                  <span className="text-muted-foreground">Next level at {level * level * 100} XP</span>
                 </div>
-                <Progress value={((currentUser?.xp || 1800) % 500) / 5} className="h-3" />
+                <Progress 
+                  value={((xp - (level - 1) * (level - 1) * 100) / (level * level * 100 - (level - 1) * (level - 1) * 100)) * 100} 
+                  className="h-3" 
+                />
                 <p className="text-xs text-muted-foreground text-center">
-                  {500 - ((currentUser?.xp || 1800) % 500)} XP until next level
+                  {level * level * 100 - xp} XP until next level
                 </p>
               </div>
 
@@ -831,6 +833,10 @@ function TeamLeaderDashboard() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  const { data: gamification } = useGamificationOverview()
+  const xp = gamification?.lifetimeXp ?? 0
+  const streak = gamification?.streakDays ?? 0
 
   const liveTeam = myTeamState?.team ?? null
   const myTeam = liveTeam
@@ -994,10 +1000,10 @@ function TeamLeaderDashboard() {
                     <Crown className="h-3 w-3" /> Team Leader
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-orange-500/50 text-orange-600">
-                    <Flame className="h-3 w-3" /> {currentUser?.streak || 7} Day Streak
+                    <Flame className="h-3 w-3" /> {streak} Day Streak
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-600">
-                    <Trophy className="h-3 w-3" /> {currentUser?.xp || 2850} XP
+                    <Trophy className="h-3 w-3" /> {xp} XP
                   </Badge>
                 </div>
               </div>

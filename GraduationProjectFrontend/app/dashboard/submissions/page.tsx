@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useMemo } from "react"
+import { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -325,8 +325,14 @@ function SubmissionDetailDialog({
   const [doctorRubric, setDoctorRubric] = useState<RubricItem[]>([])
   const [taRubric,     setTaRubric]     = useState<RubricItem[]>([])
   const [doctorRubricScore, setDoctorRubricScore] = useState<number | null>(null)
+  const [doctorRubricTouched, setDoctorRubricTouched] = useState(false)
+  const [taRubricTouched, setTaRubricTouched] = useState(false)
   const [overrideReason, setOverrideReason] = useState("")
   const [loading, setLoading] = useState(false)
+  const doctorRubricScoreRef = useRef<number | null>(null)
+  const doctorGradeManuallyEditedRef = useRef(false)
+  const taRubricScoreRef = useRef<number | null>(null)
+  const taGradeManuallyEditedRef = useRef(false)
 
   // Unlock dialog state
   const [unlockOpen, setUnlockOpen] = useState(false)
@@ -335,6 +341,43 @@ function SubmissionDetailDialog({
 
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleDoctorRubricChange = useCallback((next: RubricItem[]) => {
+    setDoctorRubricTouched(true)
+    setDoctorRubric(next)
+  }, [])
+
+  const handleDoctorRubricTotalChange = useCallback((total: number) => {
+    const previousTotal = doctorRubricScoreRef.current
+    doctorRubricScoreRef.current = total
+    setDoctorRubricScore(total)
+    setGrade((current) => {
+      if (doctorGradeManuallyEditedRef.current) return current
+      if (current === "" && total > 0) return String(total)
+      if (previousTotal !== null && current === String(previousTotal)) {
+        return String(total)
+      }
+      return current
+    })
+  }, [])
+
+  const handleTaRubricChange = useCallback((next: RubricItem[]) => {
+    setTaRubricTouched(true)
+    setTaRubric(next)
+  }, [])
+
+  const handleTaRubricTotalChange = useCallback((total: number) => {
+    const previousTotal = taRubricScoreRef.current
+    taRubricScoreRef.current = total
+    setRecommendedGrade((current) => {
+      if (taGradeManuallyEditedRef.current) return current
+      if (current === "" && total > 0) return String(total)
+      if (previousTotal !== null && current === String(previousTotal)) {
+        return String(total)
+      }
+      return current
+    })
+  }, [])
 
   const submission = submissions.find(s => s.id === selectedVersionId) || submissions[0]
 
@@ -346,6 +389,50 @@ function SubmissionDetailDialog({
 
   const isLatest = submission.id === submissions[0]?.id
   const hasMultipleVersions = submissions.length > 1;
+  const doctorRubricHasAssessment = doctorRubric.some((item) => Number(item.score) > 0)
+  const taRubricHasAssessment = taRubric.some((item) => Number(item.score) > 0)
+  const shouldSubmitDoctorRubric = doctorRubricTouched || doctorRubricHasAssessment
+  const shouldSubmitTaRubric = taRubricTouched || taRubricHasAssessment
+  const parsedFinalGrade = grade === "" ? null : Number(grade)
+  const doctorRubricMismatch =
+    shouldSubmitDoctorRubric &&
+    doctorRubricScore !== null &&
+    parsedFinalGrade !== null &&
+    Number.isFinite(parsedFinalGrade) &&
+    parsedFinalGrade !== doctorRubricScore
+  const deploymentDefenseBlocked =
+    submission.sdlcPhase === "DEPLOYMENT" &&
+    (!submission.defenseMeeting || submission.defenseMeeting.status !== "COMPLETED")
+
+  function openDoctorGradeDialog() {
+    doctorGradeManuallyEditedRef.current = false
+    doctorRubricScoreRef.current = null
+    setDoctorRubricScore(null)
+    setDoctorRubricTouched(false)
+    setOverrideReason("")
+    setGrade(
+      submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined
+        ? String(submission.taRecommendedGrade)
+        : submission.grade !== null && submission.grade !== undefined
+          ? String(submission.grade)
+          : "",
+    )
+    setGradeFeedback(submission.taFeedback || submission.feedback || "")
+    setGradeDialogOpen(true)
+  }
+
+  function openTaReviewDialog() {
+    taGradeManuallyEditedRef.current = false
+    taRubricScoreRef.current = null
+    setTaRubricTouched(false)
+    setRecommendedGrade(
+      submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined
+        ? String(submission.taRecommendedGrade)
+        : "",
+    )
+    setTaFeedback(submission.taFeedback || "")
+    setTaReviewDialogOpen(true)
+  }
 
   async function handleDeleteSingle() {
     setIsDeleting(true)
@@ -373,16 +460,31 @@ function SubmissionDetailDialog({
       toast.error("Grade must be between 0 and 100")
       return
     }
+    const feedback = gradeFeedback.trim()
+    if (feedback.length > 0 && feedback.length < 3) {
+      toast.error("Final feedback must be at least 3 characters, or leave it empty.")
+      return
+    }
+    if (deploymentDefenseBlocked) {
+      toast.error("Complete and link the defense meeting before finalizing deployment deliverables.")
+      return
+    }
+    const rubricForPayload = shouldSubmitDoctorRubric ? doctorRubric : undefined
+    const needsOverrideReason =
+      Boolean(rubricForPayload) &&
+      doctorRubricScore !== null &&
+      doctorRubricScore !== g
+    if (needsOverrideReason && overrideReason.trim().length < 5) {
+      toast.error("Add an override reason of at least 5 characters because the grade differs from the rubric total.")
+      return
+    }
     setLoading(true)
     try {
       const updated = await submissionsApi.grade(submission.id, {
         grade: g,
-        feedback: gradeFeedback || undefined,
-        rubric: doctorRubric.length > 0 ? doctorRubric : undefined,
-        overrideReason:
-          doctorRubricScore !== null && doctorRubricScore !== g
-            ? overrideReason.trim() || undefined
-            : undefined,
+        feedback: feedback || undefined,
+        rubric: rubricForPayload,
+        overrideReason: needsOverrideReason ? overrideReason.trim() : undefined,
       })
       onGraded(updated)
       setGradeDialogOpen(false)
@@ -401,12 +503,17 @@ function SubmissionDetailDialog({
       toast.error("Recommended grade must be between 0 and 100")
       return
     }
+    const feedback = taFeedback.trim()
+    if (feedback.length > 0 && feedback.length < 3) {
+      toast.error("TA feedback must be at least 3 characters, or leave it empty.")
+      return
+    }
     setLoading(true)
     try {
       const updated = await submissionsApi.taReview(submission.id, {
         recommendedGrade: g,
-        feedback: taFeedback || undefined,
-        rubric: taRubric.length > 0 ? taRubric : undefined,
+        feedback: feedback || undefined,
+        rubric: shouldSubmitTaRubric ? taRubric : undefined,
       })
       onGraded(updated)
       setTaReviewDialogOpen(false)
@@ -847,7 +954,7 @@ function SubmissionDetailDialog({
                       <Button
                         size="lg"
                         className="flex-1 shadow-sm font-semibold bg-cyan-600 hover:bg-cyan-700"
-                        onClick={() => { setOpen(false); setTaReviewDialogOpen(true) }}
+                        onClick={openTaReviewDialog}
                       >
                         <Star className="h-5 w-5 mr-2" />
                         {submission.taReviewedAt ? "Update Recommendation" : "Submit First-Pass Review"}
@@ -857,17 +964,7 @@ function SubmissionDetailDialog({
                       <Button
                         size="lg"
                         className="flex-1 shadow-sm font-semibold bg-amber-600 hover:bg-amber-700"
-                        onClick={() => {
-                          // Pre-fill from TA recommendation if it exists
-                          if (submission.taRecommendedGrade !== null && !grade) {
-                            setGrade(String(submission.taRecommendedGrade))
-                          }
-                          if (submission.taFeedback && !gradeFeedback) {
-                            setGradeFeedback(submission.taFeedback)
-                          }
-                          setOpen(false)
-                          setGradeDialogOpen(true)
-                        }}
+                        onClick={openDoctorGradeDialog}
                       >
                         <Award className="h-5 w-5 mr-2" />
                         Finalize Grade
@@ -898,6 +995,10 @@ function SubmissionDetailDialog({
           if (open) {
             // Async load: saved rubric → team custom template → global default
             void resolveInitialRubric(submission).then(setDoctorRubric)
+            doctorGradeManuallyEditedRef.current = false
+            doctorRubricScoreRef.current = null
+            setDoctorRubricScore(null)
+            setDoctorRubricTouched(false)
             setOverrideReason("")
           }
         }}
@@ -924,15 +1025,36 @@ function SubmissionDetailDialog({
               </div>
             )}
 
+            {deploymentDefenseBlocked && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4" />
+                  Defense meeting required
+                </div>
+                <p className="mt-1 text-xs opacity-90">
+                  Deployment deliverables can only be finalized after a linked defense meeting is marked completed.
+                </p>
+              </div>
+            )}
+
+            {submission.status === "PENDING" && submission.taRecommendedGrade === null && (
+              <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-xs text-cyan-900 dark:border-cyan-900/50 dark:bg-cyan-950/30 dark:text-cyan-200">
+                If this team has an assigned TA, the TA must submit a first-pass recommendation before the doctor can finalize.
+              </div>
+            )}
+
             <RubricEditor
               value={doctorRubric}
-              onChange={setDoctorRubric}
-              onTotalChange={(total) => {
-                setDoctorRubricScore(total)
-                setGrade(String(total))
-              }}
+              onChange={handleDoctorRubricChange}
+              onTotalChange={handleDoctorRubricTotalChange}
               defaultRubricType={submission.deliverableType}
             />
+
+            {!shouldSubmitDoctorRubric && doctorRubric.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                This rubric is just a template until you score or edit it, so manual grades will not be blocked by empty criteria.
+              </p>
+            )}
 
             <div>
               <Label>Final Grade (0–100)</Label>
@@ -941,12 +1063,15 @@ function SubmissionDetailDialog({
                 min={0}
                 max={100}
                 value={grade}
-                onChange={(e) => setGrade(e.target.value)}
+                onChange={(e) => {
+                  doctorGradeManuallyEditedRef.current = true
+                  setGrade(e.target.value)
+                }}
                 placeholder="Driven by rubric, or override here"
                 className="mt-1.5"
               />
             </div>
-            {doctorRubricScore !== null && grade !== "" && Number(grade) !== doctorRubricScore && (
+            {doctorRubricMismatch && (
               <div>
                 <Label>Override Reason</Label>
                 <Textarea
@@ -956,6 +1081,9 @@ function SubmissionDetailDialog({
                   className="mt-1.5 resize-none"
                   rows={3}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Required because the final grade differs from the rubric total.
+                </p>
               </div>
             )}
             <div>
@@ -969,7 +1097,7 @@ function SubmissionDetailDialog({
               />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleGrade} disabled={loading} className="flex-1 bg-amber-600 hover:bg-amber-700">
+              <Button onClick={handleGrade} disabled={loading || deploymentDefenseBlocked} className="flex-1 bg-amber-600 hover:bg-amber-700">
                 {loading ? "Saving..." : "Finalize Grade"}
               </Button>
               <Button
@@ -991,6 +1119,9 @@ function SubmissionDetailDialog({
           setTaReviewDialogOpen(open)
           if (open) {
             void resolveInitialRubric(submission).then(setTaRubric)
+            taGradeManuallyEditedRef.current = false
+            taRubricScoreRef.current = null
+            setTaRubricTouched(false)
           }
         }}
       >
@@ -1009,10 +1140,16 @@ function SubmissionDetailDialog({
 
             <RubricEditor
               value={taRubric}
-              onChange={setTaRubric}
-              onTotalChange={(total) => setRecommendedGrade(String(total))}
+              onChange={handleTaRubricChange}
+              onTotalChange={handleTaRubricTotalChange}
               defaultRubricType={submission.deliverableType}
             />
+
+            {!shouldSubmitTaRubric && taRubric.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                This rubric is just a template until you score or edit it, so a manual recommendation will not save empty criteria.
+              </p>
+            )}
 
             <div>
               <Label>Recommended Grade (0–100)</Label>
@@ -1021,7 +1158,10 @@ function SubmissionDetailDialog({
                 min={0}
                 max={100}
                 value={recommendedGrade}
-                onChange={(e) => setRecommendedGrade(e.target.value)}
+                onChange={(e) => {
+                  taGradeManuallyEditedRef.current = true
+                  setRecommendedGrade(e.target.value)
+                }}
                 placeholder="Driven by rubric, or override here"
                 className="mt-1.5"
               />

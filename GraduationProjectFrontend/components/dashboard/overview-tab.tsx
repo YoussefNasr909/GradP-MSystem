@@ -28,6 +28,7 @@ import {
   Rocket,
   Activity,
 } from "lucide-react"
+import { useGamificationOverview } from "@/lib/hooks/use-gamification"
 import { teams } from "@/data/teams"
 import { tasks } from "@/data/tasks"
 import { getUserById } from "@/data/users"
@@ -38,6 +39,11 @@ export function OverviewTab() {
   const { currentUser } = useAuthStore()
   const isLeader = currentUser?.role === "leader"
   const [showAllTasks, setShowAllTasks] = useState(false)
+
+  const { data: gamification } = useGamificationOverview()
+  const xp = gamification?.lifetimeXp ?? 0
+  const level = gamification?.currentLevel ?? 1
+  const streak = gamification?.streakDays ?? 0
 
   const myTeams = teams.filter((t) => currentUser?.id && t.memberIds?.includes(currentUser.id))
   const myTeam = myTeams[0]
@@ -206,19 +212,19 @@ export function OverviewTab() {
               </p>
 
               <div className="flex flex-wrap items-center gap-3">
-                <motion.div
+                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card border border-orange-500/30"
                 >
                   <Flame className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">{currentUser?.streak || 15} Day Streak</span>
+                  <span className="text-sm font-medium">{streak} Day Streak</span>
                 </motion.div>
-                <motion.div
+                 <motion.div
                   whileHover={{ scale: 1.05 }}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card border border-primary/30"
                 >
                   <Sparkles className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">Level {currentUser?.level || 1}</span>
+                  <span className="text-sm font-medium">Level {level}</span>
                 </motion.div>
                 <motion.div
                   whileHover={{ scale: 1.05 }}
@@ -298,11 +304,11 @@ export function OverviewTab() {
               : "No tasks yet",
             trend: { value: 8, isPositive: true },
           },
-          {
+           {
             title: "XP Earned",
-            value: currentUser?.xp || 0,
+            value: xp,
             icon: Trophy,
-            description: `Level ${currentUser?.level || 1}`,
+            description: `Level ${level}`,
             trend: { value: 150, isPositive: true },
           },
         ].map((stat, index) => (

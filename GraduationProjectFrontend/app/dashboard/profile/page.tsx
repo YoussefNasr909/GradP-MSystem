@@ -68,6 +68,7 @@ const tasks: any[] = []
 function getUserById(_id: string): any { return null }
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useGamificationOverview, useGamificationBadges } from "@/lib/hooks/use-gamification"
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -141,6 +142,13 @@ export default function ProfilePage() {
   const [isAdminSummaryLoading, setIsAdminSummaryLoading] = useState(false)
   const [adminSummaryError, setAdminSummaryError] = useState("")
   const isStudent = currentUser?.role === "leader" || currentUser?.role === "member"
+
+  const { data: gamification } = useGamificationOverview()
+  const { data: realBadges } = useGamificationBadges()
+  const xp = gamification?.lifetimeXp ?? 0
+  const level = gamification?.currentLevel ?? 1
+  const streak = gamification?.streakDays ?? 0
+  const gold = gamification?.goldBalance ?? 0
 
   const DEPARTMENT_TO_API: Record<(typeof departmentOptions)[number], Department> = {
     "Computer Science": "COMPUTER_SCIENCE",
@@ -342,43 +350,15 @@ useEffect(() => {
     }
   }
 
-  // Mock achievements for students
-  const achievements = [
-    {
-      id: "1",
-      name: "First Task",
-      icon: "🎯",
-      description: "Complete your first task",
-      unlocked: true,
-      date: "2024-01-15",
-    },
-    { id: "2", name: "Team Player", icon: "🤝", description: "Join a team", unlocked: true, date: "2024-01-10" },
-    {
-      id: "3",
-      name: "Code Warrior",
-      icon: "⚔️",
-      description: "Complete 10 coding tasks",
-      unlocked: true,
-      date: "2024-02-20",
-    },
-    {
-      id: "4",
-      name: "Early Bird",
-      icon: "🐦",
-      description: "Submit 5 tasks before deadline",
-      unlocked: true,
-      date: "2024-02-25",
-    },
-    {
-      id: "5",
-      name: "Streak Master",
-      icon: "🔥",
-      description: "Maintain 7-day streak",
-      unlocked: (currentUser?.streak || 0) >= 7,
-      date: (currentUser?.streak || 0) >= 7 ? "2024-03-01" : undefined,
-    },
-    { id: "6", name: "Knowledge Seeker", icon: "📚", description: "Read 10 knowledge articles", unlocked: false },
-  ]
+  // Map real badges to UI format
+  const achievements = (realBadges || []).map(badge => ({
+    id: badge.id,
+    name: badge.name,
+    icon: badge.icon || "🏆",
+    description: badge.description,
+    unlocked: true,
+    date: badge.unlockedAt
+  }))
 
   // Mock activity for all roles
   const recentActivity = [
@@ -456,7 +436,7 @@ useEffect(() => {
                 {/* Level Badge for Students */}
                 {isStudent && (
                   <div className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
-                    Lvl {currentUser.level || 1}
+                    Lvl {level}
                   </div>
                 )}
               </div>
@@ -528,15 +508,15 @@ useEffect(() => {
                   <div className="flex flex-wrap gap-4 pt-2">
                     <div className="flex items-center gap-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 px-3 py-1 rounded-full">
                       <Zap className="h-4 w-4" />
-                      <span className="font-semibold">{currentUser.xp || 0} XP</span>
+                      <span className="font-semibold">{xp} XP</span>
                     </div>
                     <div className="flex items-center gap-2 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 px-3 py-1 rounded-full">
                       <Coins className="h-4 w-4" />
-                      <span className="font-semibold">{currentUser.gold || 0} Gold</span>
+                      <span className="font-semibold">{gold} Gold</span>
                     </div>
                     <div className="flex items-center gap-2 bg-orange-500/10 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full">
                       <Flame className="h-4 w-4" />
-                      <span className="font-semibold">{currentUser.streak || 0} Day Streak</span>
+                      <span className="font-semibold">{streak} Day Streak</span>
                     </div>
                   </div>
                 )}
@@ -843,7 +823,7 @@ useEffect(() => {
                   </div>
                   <Progress value={myTeam.progress} />
                   <div className="flex -space-x-2">
-                    {myTeam.memberIds.slice(0, 5).map((memberId) => {
+                    {myTeam.memberIds.slice(0, 5).map((memberId: string) => {
                       const member = getUserById(memberId)
                       return member ? (
                         <Avatar key={memberId} className="h-8 w-8 border-2 border-background">
@@ -1111,23 +1091,26 @@ useEffect(() => {
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className="h-12 w-12 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-lg">
-                            {currentUser.level || 1}
+                            {level}
                           </div>
                           <div>
-                            <p className="font-semibold">Level {currentUser.level || 1}</p>
+                            <p className="font-semibold">Level {level}</p>
                             <p className="text-sm text-muted-foreground">
-                              {currentUser.xp || 0} / {((currentUser.level || 1) + 1) * 1000} XP
+                              {xp} / {level * level * 100} XP
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-medium">
-                            {((currentUser.level || 1) + 1) * 1000 - (currentUser.xp || 0)} XP
+                            {level * level * 100 - xp} XP
                           </p>
                           <p className="text-xs text-muted-foreground">to next level</p>
                         </div>
                       </div>
-                      <Progress value={((currentUser.xp || 0) % 1000) / 10} className="h-3" />
+                      <Progress 
+                        value={((xp - (level - 1) * (level - 1) * 100) / (level * level * 100 - (level - 1) * (level - 1) * 100)) * 100} 
+                        className="h-3" 
+                      />
                     </div>
                   )}
                 </TabsContent>

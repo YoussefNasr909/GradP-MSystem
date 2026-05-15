@@ -1,6 +1,12 @@
 import "dotenv/config";
 
 const str = (v) => (typeof v === "string" ? v.trim() : v);
+const bool = (v, fallback = false) => {
+  const normalized = str(v)?.toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return fallback;
+};
 const csv = (v) =>
   (typeof v === "string" ? v : "")
     .split(",")
@@ -72,6 +78,10 @@ mailBrand: process.env.MAIL_BRAND ?? "GPMS",
   githubAppSetupCallbackUrl: str(process.env.GITHUB_APP_SETUP_CALLBACK_URL),
   githubIntegrationRedirectUri: str(process.env.GITHUB_INTEGRATION_REDIRECT_URI),
   githubTokenEncryptionSecret: str(process.env.GITHUB_TOKEN_ENCRYPTION_SECRET),
+
+  gamificationEnabled: bool(process.env.GAMIFICATION_ENABLED, true),
+  gamificationWorkerEnabled: bool(process.env.GAMIFICATION_WORKER_ENABLED, true),
+  gamificationWorkerIntervalMs: Number(process.env.GAMIFICATION_WORKER_INTERVAL_MS ?? 30000),
 };
 
 if (!env.databaseUrl) throw new Error("Missing DATABASE_URL in .env");
