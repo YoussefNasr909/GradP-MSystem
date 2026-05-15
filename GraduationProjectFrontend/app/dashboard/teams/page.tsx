@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ClipboardList,
   Crown,
   ExternalLink,
   Hash,
@@ -539,6 +540,14 @@ export default function TeamsPage() {
                               {isSupervisorOfTeam && <ExternalLink className="ml-1.5 h-3.5 w-3.5" />}
                             </Link>
                           </Button>
+                          {isSupportRole && (
+                            <Button asChild size="sm" className="flex-1 rounded-xl">
+                              <Link href={`/dashboard/sprints?teamId=${team.id}`}>
+                                Sprints
+                                <ClipboardList className="ml-1.5 h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
+                          )}
                           {!isSupportRole && (
                             team.hasPendingInvitation ? (
                               <Button asChild className="flex-1 rounded-xl">

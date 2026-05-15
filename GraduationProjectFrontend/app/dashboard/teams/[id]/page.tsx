@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation"
 import {
   ArrowRight,
   Check,
+  ClipboardList,
   Copy,
   Globe2,
   Layers3,
@@ -137,6 +138,7 @@ export default function TeamDetailPage() {
 
   const canJoin = currentUser?.role === "member" && team.permissions.canRequestToJoin && !team.hasPendingInvitation
   const canManage = team.permissions.canManage
+  const isSupportRole = currentUser?.role === "doctor" || currentUser?.role === "ta" || currentUser?.role === "admin"
   const seatsRemaining = Math.max(team.maxMembers - team.memberCount, 0)
   const openSeatsLabel = seatsRemaining === 0 ? "Full team" : `${seatsRemaining} open ${seatsRemaining === 1 ? "seat" : "seats"}`
   const occupancyRatio = team.maxMembers > 0 ? team.memberCount / team.maxMembers : 0
@@ -202,6 +204,16 @@ export default function TeamDetailPage() {
                   <Button className="group h-11 w-full justify-between sm:min-w-[210px]" onClick={() => setIsJoinDialogOpen(true)}>
                     Request to Join
                     <Send className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                  </Button>
+                </motion.div>
+              )}
+              {isSupportRole && (
+                <motion.div {...getActionMotion(reduceMotion)} className="w-full sm:w-auto">
+                  <Button className="group h-11 w-full justify-between sm:min-w-[210px]" asChild>
+                    <Link href={`/dashboard/sprints?teamId=${team.id}`}>
+                      Open Sprints
+                      <ClipboardList className="h-4 w-4 transition-transform duration-200 group-hover:scale-105" />
+                    </Link>
                   </Button>
                 </motion.div>
               )}
@@ -392,6 +404,21 @@ export default function TeamDetailPage() {
                   <Button className="mt-4 w-full justify-between" onClick={() => setIsJoinDialogOpen(true)}>
                     Request to Join
                     <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {isSupportRole && (
+                <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+                  <p className="text-sm font-medium text-foreground">Sprint evaluation</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Open this team&apos;s sprint board to review progress, tasks, and Doctor/TA evaluations.
+                  </p>
+                  <Button className="mt-4 w-full justify-between" asChild>
+                    <Link href={`/dashboard/sprints?teamId=${team.id}`}>
+                      Open Sprints
+                      <ClipboardList className="h-4 w-4" />
+                    </Link>
                   </Button>
                 </div>
               )}
