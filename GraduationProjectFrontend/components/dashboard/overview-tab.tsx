@@ -41,9 +41,9 @@ export function OverviewTab() {
   const [showAllTasks, setShowAllTasks] = useState(false)
 
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.lifetimeXp ?? 0
-  const level = gamification?.currentLevel ?? 1
-  const streak = gamification?.streakDays ?? 0
+  const xp = gamification?.balance?.lifetimeXp ?? 0
+  const level = gamification?.balance?.level ?? 1
+  const streak = 0
 
   const myTeams = teams.filter((t) => currentUser?.id && t.memberIds?.includes(currentUser.id))
   const myTeam = myTeams[0]

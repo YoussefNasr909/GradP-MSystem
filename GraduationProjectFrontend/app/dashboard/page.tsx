@@ -142,10 +142,10 @@ function StudentMemberDashboard() {
   }, [])
 
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.lifetimeXp ?? 0
-  const level = gamification?.currentLevel ?? 1
-  const streak = gamification?.streakDays ?? 0
-  const gold = gamification?.goldBalance ?? 0
+  const xp = gamification?.balance?.lifetimeXp ?? 0
+  const level = gamification?.balance?.level ?? 1
+  const streak = 0
+  const gold = 0
 
   useEffect(() => {
     if (myTeamState?.team) return
@@ -835,8 +835,8 @@ function TeamLeaderDashboard() {
   }, [])
 
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.lifetimeXp ?? 0
-  const streak = gamification?.streakDays ?? 0
+  const xp = gamification?.balance?.lifetimeXp ?? 0
+  const streak = 0
 
   const liveTeam = myTeamState?.team ?? null
   const myTeam = liveTeam
