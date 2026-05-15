@@ -1,4 +1,5 @@
 import { prisma } from "../../loaders/dbLoader.js";
+import { ROLES } from "../../common/constants/roles.js";
 import { PHASE_WEIGHTS, calculateWeightedFinal } from "../submissions/evaluation-policy.js";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -560,7 +561,7 @@ export async function getTeamActivity(teamId, { limit = 50 } = {}) {
       take: 10,
     }),
     prisma.announcement.findMany({
-      where: { OR: [{ teamId }, { teamId: null }] },
+      where: { targetTeams: { some: { teamId } } },
       select: {
         id: true, title: true, content: true, createdAt: true, authorRole: true,
         author: { select: { firstName: true, lastName: true, avatarUrl: true, role: true } },
@@ -748,8 +749,39 @@ export async function getTeamActivity(teamId, { limit = 50 } = {}) {
 // Aggregates from existing tables — no new models needed.
 
 const STAGE_ORDER = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"];
+const STUDENT_SIDE_ROLES = new Set([ROLES.STUDENT, ROLES.LEADER]);
 
-export async function getAnalytics() {
+function countScopedUsersByRole(teams) {
+  const scopedUsers = new Map();
+
+  const addUser = (user) => {
+    if (!user?.id || !STUDENT_SIDE_ROLES.has(user.role)) return;
+    scopedUsers.set(user.id, user.role);
+  };
+
+  for (const team of teams) {
+    addUser(team.leader);
+    for (const member of team.members ?? []) {
+      addUser(member.user);
+    }
+  }
+
+  const usersByRole = {};
+  for (const role of scopedUsers.values()) {
+    usersByRole[role] = (usersByRole[role] ?? 0) + 1;
+  }
+
+  return {
+    totalUsers: scopedUsers.size,
+    usersByRole,
+  };
+}
+
+export async function getAnalytics({ actor } = {}) {
+  const isDoctor = actor?.role === "DOCTOR";
+  const teamWhere = isDoctor ? { doctorId: actor.id } : {};
+  const teamScopedWhere = isDoctor ? { team: { doctorId: actor.id } } : {};
+
   const [
     userCounts,
     teams,
@@ -759,38 +791,49 @@ export async function getAnalytics() {
     meetings,
     risks,
   ] = await Promise.all([
-    prisma.user.groupBy({ by: ["role"], _count: { _all: true } }),
+    isDoctor ? Promise.resolve(null) : prisma.user.groupBy({ by: ["role"], _count: { _all: true } }),
     prisma.team.findMany({
+      where: teamWhere,
       select: {
         id: true,
         name: true,
         stage: true,
         createdAt: true,
-        members: { select: { userId: true } },
+        leader: { select: { id: true, role: true } },
+        doctor: { select: { id: true, role: true } },
+        ta: { select: { id: true, role: true } },
+        members: { select: { user: { select: { id: true, role: true } } } },
       },
     }),
     prisma.task.findMany({
+      where: teamScopedWhere,
       select: {
         id: true, status: true, priority: true, dueDate: true,
         createdAt: true, updatedAt: true, integrationMode: true,
       },
     }),
     prisma.submission.findMany({
+      where: teamScopedWhere,
       select: {
         id: true, status: true, sdlcPhase: true, deliverableType: true,
         grade: true, late: true, submittedAt: true,
       },
     }),
     prisma.proposal.findMany({
+      where: teamScopedWhere,
       select: { id: true, status: true, createdAt: true, submittedAt: true, reviewedAt: true },
     }),
-    prisma.meeting.findMany({ select: { id: true, status: true, createdAt: true } }),
-    prisma.risk.findMany({ select: { id: true, status: true, severity: true, createdAt: true } }),
+    prisma.meeting.findMany({ where: teamScopedWhere, select: { id: true, status: true, createdAt: true } }),
+    prisma.risk.findMany({ where: teamScopedWhere, select: { id: true, status: true, severity: true, createdAt: true } }),
   ]);
 
   // ── Overview ───────────────────────────────────────────────────────────────
-  const totalUsers = userCounts.reduce((s, r) => s + r._count._all, 0);
-  const usersByRole = Object.fromEntries(userCounts.map((r) => [r.role, r._count._all]));
+  const { totalUsers, usersByRole } = isDoctor
+    ? countScopedUsersByRole(teams)
+    : {
+        totalUsers: userCounts.reduce((s, r) => s + r._count._all, 0),
+        usersByRole: Object.fromEntries(userCounts.map((r) => [r.role, r._count._all])),
+      };
 
   const teamsByStage = STAGE_ORDER.map((stage) => ({
     stage,
@@ -875,7 +918,7 @@ export async function getAnalytics() {
     MONITORING: risks.filter((r) => r.status === "MONITORING").length,
     RESOLVED:   risks.filter((r) => r.status === "RESOLVED").length,
   };
-  const criticalRisksOpen = risks.filter((r) => r.status === "OPEN" && r.severity === "CRITICAL").length;
+  const criticalRisksActive = risks.filter((r) => r.status !== "RESOLVED" && r.severity === "CRITICAL").length;
 
   // ── Time-series (last 12 weeks) ────────────────────────────────────────────
   function bucketByWeek(items, dateField) {
@@ -945,7 +988,8 @@ export async function getAnalytics() {
     risks: {
       total: risks.length,
       byStatus: risksByStatus,
-      criticalOpen: criticalRisksOpen,
+      criticalOpen: criticalRisksActive,
+      criticalActive: criticalRisksActive,
     },
     trend,
   };

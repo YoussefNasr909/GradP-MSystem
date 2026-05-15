@@ -16,6 +16,9 @@ const select = {
   updatedAt: true,
   author: { select: { id: true, firstName: true, lastName: true, role: true, avatarUrl: true } },
   team:   { select: { id: true, name: true } },
+  targetTeams: {
+    select: { team: { select: { id: true, name: true, stage: true } } },
+  },
 };
 
 function fullName(u) {
@@ -23,7 +26,14 @@ function fullName(u) {
 }
 function shape(a) {
   if (!a) return null;
-  return { ...a, author: a.author ? { ...a.author, fullName: fullName(a.author) } : null };
+  const targetTeams = (a.targetTeams?.map((target) => target.team).filter(Boolean) ?? [])
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return {
+    ...a,
+    targetTeams,
+    targetTeamCount: targetTeams.length,
+    author: a.author ? { ...a.author, fullName: fullName(a.author) } : null,
+  };
 }
 
 async function getSupervisedTeamIds(actor) {
@@ -79,18 +89,9 @@ export async function listAnnouncementsService(actor) {
   const teamId = await getActorTeamId(actor);
   if (!teamId) return [];
 
-  const team = await prisma.team.findUnique({
-    where: { id: teamId },
-    select: { doctorId: true, taId: true },
-  });
-  const supervisorIds = [team?.doctorId, team?.taId].filter(Boolean);
-
   const rows = await prisma.announcement.findMany({
     where: {
-      OR: [
-        { teamId },
-        { teamId: null, authorUserId: { in: supervisorIds } },
-      ],
+      targetTeams: { some: { teamId } },
     },
     select,
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
@@ -147,17 +148,26 @@ export async function createAnnouncementService(actor, { title, content, teamId,
     throw new AppError("Only supervisors can post announcements.", 403, "ANNOUNCEMENT_FORBIDDEN");
   }
 
+  let targetTeamIds;
+
   // If targeting a specific team, the supervisor must actually supervise it
-  if (teamId && actor.role !== ROLES.ADMIN) {
+  if (teamId) {
     const team = await prisma.team.findUnique({
       where: { id: teamId },
       select: { doctorId: true, taId: true },
     });
     if (!team) throw new AppError("Team not found.", 404, "TEAM_NOT_FOUND");
-    if (team.doctorId !== actor.id && team.taId !== actor.id) {
+    if (actor.role !== ROLES.ADMIN && team.doctorId !== actor.id && team.taId !== actor.id) {
       throw new AppError("You're not a supervisor for this team.", 403, "ANNOUNCEMENT_FORBIDDEN");
     }
+    targetTeamIds = [teamId];
+  } else if (audience && audience !== "all") {
+    targetTeamIds = await resolveAudienceTeamIds(actor, audience, audienceParam);
+  } else {
+    targetTeamIds = await getSupervisedTeamIds(actor);
   }
+
+  const uniqueTargetTeamIds = Array.from(new Set(targetTeamIds));
 
   const created = await prisma.announcement.create({
     data: {
@@ -167,28 +177,27 @@ export async function createAnnouncementService(actor, { title, content, teamId,
       title: title.trim(),
       content: content.trim(),
       pinned: Boolean(pinned),
+      ...(uniqueTargetTeamIds.length > 0
+        ? {
+            targetTeams: {
+              create: uniqueTargetTeamIds.map((targetTeamId) => ({
+                team: { connect: { id: targetTeamId } },
+              })),
+            },
+          }
+        : {}),
     },
     select,
   });
 
-  // Determine target teams for notifications
-  let supervisedIds;
-  if (teamId) {
-    supervisedIds = [teamId];
-  } else if (audience && audience !== "all") {
-    supervisedIds = await resolveAudienceTeamIds(actor, audience, audienceParam);
-  } else {
-    supervisedIds = await getSupervisedTeamIds(actor);
-  }
-
-  if (supervisedIds.length > 0) {
+  if (uniqueTargetTeamIds.length > 0) {
     const teams = await prisma.team.findMany({
-      where: { id: { in: supervisedIds } },
+      where: { id: { in: uniqueTargetTeamIds } },
       select: { id: true, leaderId: true, members: { select: { userId: true } } },
     });
     const userIds = new Set();
     for (const t of teams) {
-      userIds.add(t.leaderId);
+      if (t.leaderId) userIds.add(t.leaderId);
       t.members.forEach((m) => userIds.add(m.userId));
     }
     await Promise.all(
@@ -199,7 +208,7 @@ export async function createAnnouncementService(actor, { title, content, teamId,
           title: `Announcement: ${created.title}`,
           message: created.content.length > 200 ? created.content.slice(0, 200) + "…" : created.content,
           actionUrl: "/dashboard/announcements",
-        }),
+        }, prisma, { throwOnFailure: true }),
       ),
     );
   }

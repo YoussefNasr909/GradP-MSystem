@@ -1,4 +1,10 @@
 import { AppError } from "../../common/errors/AppError.js";
+import {
+  buildGamificationIdempotencyKey,
+  emitGamificationEvent,
+} from "../gamification/gamification.emitter.js";
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import { ROLES } from "../../common/constants/roles.js";
 import { prisma } from "../../loaders/dbLoader.js";
 import {
@@ -81,6 +87,42 @@ const STAGE_ORDER = [
 
 function buildFullName(user) {
   return `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim();
+}
+
+async function hashUploadedSubmissionFile(file) {
+  if (!file?.path) return null;
+
+  const buffer = await fs.readFile(file.path);
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+export function normalizeSubmissionText(text) {
+  return String(text ?? "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function hashUploadedSubmissionText(file) {
+  if (!file?.path) return null;
+
+  const name = String(file.originalname ?? "").toLowerCase();
+  const isTextFile = file.mimetype === "text/plain" || name.endsWith(".txt");
+  if (!isTextFile) return null;
+
+  const text = await fs.readFile(file.path, "utf8");
+  const normalized = normalizeSubmissionText(text);
+  if (!normalized) return null;
+  return crypto.createHash("sha256").update(normalized).digest("hex");
+}
+
+export function buildContentFingerprint({ fileHash, deliverableType, sdlcPhase, fileSize }) {
+  if (!fileHash) return null;
+
+  return crypto
+    .createHash("sha256")
+    .update([fileHash, deliverableType, sdlcPhase, fileSize ?? ""].join(":"))
+    .digest("hex");
 }
 
 function toSubmissionResponse(submission) {
@@ -359,6 +401,14 @@ export async function createSubmissionService(actor, payload, file) {
   const latestVersion = await getLatestVersionForDeliverable(team.id, deliverableType);
   const version = latestVersion + 1;
   const isLate = deadline ? new Date() > new Date(deadline) : false;
+  const fileHash = await hashUploadedSubmissionFile(file);
+  const normalizedTextHash = await hashUploadedSubmissionText(file);
+  const contentFingerprint = buildContentFingerprint({
+    fileHash,
+    deliverableType,
+    sdlcPhase,
+    fileSize: file?.size,
+  });
 
   const data = {
     teamId: team.id,
@@ -373,6 +423,9 @@ export async function createSubmissionService(actor, payload, file) {
     deadline: deadline ? new Date(deadline) : null,
     submittedByUserId: actor.id,
     submittedAt: new Date(),
+    fileHash,
+    normalizedTextHash,
+    contentFingerprint,
     ...(file && {
       fileName: file.originalname,
       fileSize: file.size,
@@ -618,6 +671,28 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
   // Auto-suggest stage advance: if this approval was the last required
   // deliverable for the team's current phase, nudge the leader.
   await maybeNudgeStageAdvance(submission.teamId, submission.sdlcPhase);
+
+  // Gamification: emit SUBMISSION_APPROVED event
+  emitGamificationEvent({
+    eventType: "SUBMISSION_APPROVED",
+    sourceType: "Submission",
+    sourceId: submissionId,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "SUBMISSION_APPROVED",
+      submissionId,
+      `v${submission.version ?? 1}`,
+      updated.reviewedAt.toISOString(),
+    ),
+    teamId: submission.teamId,
+    actorUserId: actor.id,
+    payload: {
+      deliverableType: submission.deliverableType,
+      sdlcPhase: submission.sdlcPhase,
+      grade,
+      version: submission.version ?? 1,
+      submittedByUserId: submission.submittedByUserId ?? submission.submittedBy?.id ?? null,
+    },
+  });
 
   return toSubmissionResponse(updated);
 }
@@ -937,6 +1012,24 @@ export async function advanceStageService(actor, query) {
       ),
     );
   }
+  // Gamification: emit TEAM_STAGE_ADVANCED event
+  emitGamificationEvent({
+    eventType: "TEAM_STAGE_ADVANCED",
+    sourceType: "Team",
+    sourceId: team.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "TEAM_STAGE_ADVANCED",
+      team.id,
+      nextStage,
+    ),
+    teamId: team.id,
+    actorUserId: actor.id,
+    payload: {
+      previousStage: team.stage,
+      newStage: nextStage,
+      transitionKey: `${team.stage}->${nextStage}`,
+    },
+  });
 
   return {
     team: updated,
@@ -1100,6 +1193,29 @@ export async function bulkApproveSubmissionsService(actor, { submissionIds, feed
           actionUrl: "/dashboard/submissions",
         });
       }
+
+      // Gamification: emit SUBMISSION_APPROVED for each bulk-approved submission
+      emitGamificationEvent({
+        eventType: "SUBMISSION_APPROVED",
+        sourceType: "Submission",
+        sourceId: id,
+        idempotencyKey: buildGamificationIdempotencyKey(
+          "SUBMISSION_APPROVED",
+          id,
+          `v${sub.version ?? 1}`,
+          "bulk",
+        ),
+        teamId: sub.teamId,
+        actorUserId: actor.id,
+        payload: {
+          deliverableType: sub.deliverableType,
+          sdlcPhase: sub.sdlcPhase,
+          grade: finalGrade,
+          version: sub.version ?? 1,
+          submittedByUserId: sub.submittedByUserId ?? sub.submittedBy?.id ?? null,
+          bulk: true,
+        },
+      });
 
       approved.push(id);
     } catch (err) {

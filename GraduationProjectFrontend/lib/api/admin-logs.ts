@@ -1,4 +1,5 @@
-import { apiRequest } from "./http"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { API_BASE_URL, apiRequest } from "./http"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -202,6 +203,7 @@ export interface AnalyticsResponse {
     total: number
     byStatus: Record<string, number>
     criticalOpen: number
+    criticalActive?: number
   }
   trend: {
     submissions: { label: string; start: string; count: number }[]
@@ -212,6 +214,43 @@ export interface AnalyticsResponse {
 
 export const analyticsApi = {
   get: () => apiRequest<AnalyticsResponse>("/admin/analytics"),
+}
+
+async function downloadAdminBlob(path: string, filename: string) {
+  const token = useAuthStore.getState().accessToken
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    headers: {
+      Accept: "application/pdf",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => "")
+    throw new Error(message || `Download failed (${res.status})`)
+  }
+
+  const contentType = res.headers.get("content-type") ?? ""
+  if (!contentType.toLowerCase().includes("application/pdf")) {
+    const message = await res.text().catch(() => "")
+    throw new Error(message || "The server did not return a PDF file.")
+  }
+
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export const reportDownloadsApi = {
+  gradesPdf: () => downloadAdminBlob("/admin/reports/grades.pdf", `grades-report-${new Date().toISOString().slice(0, 10)}.pdf`),
+  phasesPdf: () => downloadAdminBlob("/admin/reports/sdlc-phases.pdf", `sdlc-phases-report-${new Date().toISOString().slice(0, 10)}.pdf`),
+  analyticsPdf: () => downloadAdminBlob("/admin/reports/analytics.pdf", `analytics-report-${new Date().toISOString().slice(0, 10)}.pdf`),
 }
 
 export const gradesOverviewApi = {
