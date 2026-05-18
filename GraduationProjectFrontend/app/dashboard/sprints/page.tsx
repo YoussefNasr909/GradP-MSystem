@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   AlertCircle,
@@ -387,9 +388,23 @@ function SprintTaskCard({
         <div className="rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/30">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold uppercase text-muted-foreground">Sprint planning</span>
-            <Badge variant="outline" className="rounded-md px-2 text-[10px]">
-              {task.actualPoints === null ? `Estimate ${task.storyPoints} SP` : `Actual ${task.actualPoints} SP`}
-            </Badge>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <Badge variant="outline" className="rounded-md px-2 text-[10px]">
+                {task.actualPoints === null ? `Estimate ${task.storyPoints} SP` : `Actual ${task.actualPoints} SP`}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "rounded-md px-2 text-[10px] cursor-help",
+                  task.gamificationImpact.eligible
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "text-muted-foreground"
+                )}
+                title={`Base XP: ${task.gamificationImpact.baseXp}\nEffort multiplier: x${task.gamificationImpact.effortMultiplier}\nPriority multiplier: x${task.gamificationImpact.priorityMultiplier}\nEvidence multiplier: x${task.gamificationImpact.evidenceMultiplier}`}
+              >
+                Est. +{task.gamificationImpact.estimatedXp} XP
+              </Badge>
+            </div>
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -556,6 +571,13 @@ function SprintGroup({
             <span>{sprint.stats.totalTasks} tasks</span>
             <span>{sprint.stats.unplannedTasks} unplanned</span>
             <span>{sprint.stats.progress}% complete</span>
+            <span
+              className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300 cursor-help"
+              title={`Base XP: ${sprint.gamificationImpact.baseTeamXp}\nCompletion multiplier: x${sprint.gamificationImpact.completionMultiplier}`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Est. +{sprint.gamificationImpact.estimatedTeamXp} team XP
+            </span>
           </div>
           {canManage ? (
             <div className="flex flex-wrap gap-2">
@@ -622,6 +644,8 @@ function SprintGroup({
 
 export default function SprintsPage() {
   const shouldReduceMotion = useReducedMotion()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { data: myTeamState, isLoading: isTeamLoading } = useMyTeamState()
   const [board, setBoard] = useState<ApiSprintBoard | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -636,7 +660,9 @@ export default function SprintsPage() {
   const [hasSubmittedSprintForm, setHasSubmittedSprintForm] = useState(false)
   const [actionInFlight, setActionInFlight] = useState("")
 
-  const teamId = myTeamState?.team?.id
+  const requestedTeamId = searchParams.get("teamId")
+  const supportTeamOptions = myTeamState?.supervisedTeams ?? []
+  const teamId = requestedTeamId ?? myTeamState?.team?.id ?? null
 
   const loadBoard = useCallback(async () => {
     if (!teamId) {
@@ -662,6 +688,11 @@ export default function SprintsPage() {
       setIsLoading(false)
     }
   }, [isTeamLoading, teamId])
+
+  function handleSupportTeamSelection(nextTeamId: string) {
+    if (!nextTeamId) return
+    router.push(`/dashboard/sprints?teamId=${encodeURIComponent(nextTeamId)}`)
+  }
 
   useEffect(() => {
     void loadBoard()
@@ -963,6 +994,33 @@ export default function SprintsPage() {
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
               Loading sprints
+            </div>
+          </Card>
+        ) : !teamId ? (
+          <Card className="rounded-lg border-dashed p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Select a team workspace</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose a supervised or managed team to review its sprint board.
+                </p>
+              </div>
+              {supportTeamOptions.length ? (
+                <Select value={requestedTeamId ?? undefined} onValueChange={handleSupportTeamSelection}>
+                  <SelectTrigger className="w-full rounded-lg lg:w-[320px]">
+                    <SelectValue placeholder="Choose team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supportTeamOptions.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">No teams are available for this account.</p>
+              )}
             </div>
           </Card>
         ) : board ? (

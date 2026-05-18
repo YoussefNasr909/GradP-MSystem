@@ -1,4 +1,5 @@
 import { notify } from "../../common/utils/notify.js";
+import { computeLevel } from "./gamification.math.js";
 
 const BADGE_REWARD_RULE_CODE = "BADGE_REWARD";
 
@@ -454,8 +455,4 @@ function toPositiveInteger(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return null;
   return parsed;
-}
-
-function computeLevel(lifetimeXp) {
-  return Math.floor(Math.sqrt(Math.max(0, lifetimeXp) / 100)) + 1;
 }

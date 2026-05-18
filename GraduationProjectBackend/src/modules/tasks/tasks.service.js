@@ -657,12 +657,12 @@ function buildReviewSnapshot(task, actor, overrides = {}) {
   };
 }
 
-function computeTaskTimelinessTier(task, reviewedAt = new Date()) {
+function computeTaskTimelinessTier(task, completedAt = new Date()) {
   if (!task?.dueDate) return "onTime";
 
   const due = new Date(task.dueDate);
-  const reviewed = new Date(reviewedAt);
-  const lateMs = reviewed.getTime() - due.getTime();
+  const completed = new Date(completedAt);
+  const lateMs = completed.getTime() - due.getTime();
   if (lateMs <= 0) return "onTime";
 
   const hoursLate = lateMs / (1000 * 60 * 60);
@@ -1215,10 +1215,23 @@ export async function approveTaskService(actor, taskId, payload = {}) {
     payload: {
       taskType: task.taskType,
       assigneeUserId: task.assigneeUserId,
+      approvedByUserId: actor.id,
+      reviewerRole,
       integrationMode: task.integrationMode,
       priority: task.priority,
       storyPoints: Number(task.storyPoints ?? 0),
-      timeliness: computeTaskTimelinessTier(task, updatedTask.reviewedAt ?? new Date()),
+      actualPoints: task.actualPoints ?? null,
+      createdAt: task.createdAt?.toISOString?.() ?? null,
+      acceptedAt: task.acceptedAt?.toISOString?.() ?? null,
+      submittedForReviewAt:
+        updatedTask.submittedForReviewAt?.toISOString?.() ??
+        task.submittedForReviewAt?.toISOString?.() ??
+        null,
+      reviewedAt: updatedTask.reviewedAt?.toISOString?.() ?? null,
+      timeliness: computeTaskTimelinessTier(
+        task,
+        updatedTask.submittedForReviewAt ?? task.submittedForReviewAt ?? updatedTask.reviewedAt ?? new Date(),
+      ),
       evidenceLevel: computeTaskEvidenceLevel(task, merged),
       merged,
     },
@@ -1302,24 +1315,26 @@ export async function rejectTaskService(actor, taskId, payload) {
     });
   }
 
-  // Gamification: emit TASK_REOPENED event (may trigger XP reversal in Phase 4)
-  emitGamificationEvent({
-    eventType: "TASK_REOPENED",
-    sourceType: "Task",
-    sourceId: updatedTask.id,
-    idempotencyKey: buildGamificationIdempotencyKey(
-      "TASK_REOPENED",
-      updatedTask.id,
-      (updatedTask.reviewedAt ?? new Date()).toISOString(),
-    ),
-    teamId: task.teamId ?? task.team?.id ?? null,
-    actorUserId: actor.id,
-    payload: {
-      taskType: task.taskType,
-      assigneeUserId: task.assigneeUserId,
-      previousStatus: task.status,
-    },
-  });
+  if (isPrimaryReview) {
+    // Gamification: only real workflow reopens reverse previously awarded task XP.
+    emitGamificationEvent({
+      eventType: "TASK_REOPENED",
+      sourceType: "Task",
+      sourceId: updatedTask.id,
+      idempotencyKey: buildGamificationIdempotencyKey(
+        "TASK_REOPENED",
+        updatedTask.id,
+        (updatedTask.reviewedAt ?? new Date()).toISOString(),
+      ),
+      teamId: task.teamId ?? task.team?.id ?? null,
+      actorUserId: actor.id,
+      payload: {
+        taskType: task.taskType,
+        assigneeUserId: task.assigneeUserId,
+        previousStatus: task.status,
+      },
+    });
+  }
 
   // Notify the counterpart reviewer.
   await notifyCounterpartReviewer(task, actor, reviewerRole, "CHANGES_REQUESTED", reviewComment);

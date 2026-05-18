@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button"
 import { Calendar, Clock, ChevronLeft, ChevronRight, GanttChart } from "lucide-react"
 // Mock arrays neutralized. Timeline is currently a placeholder view — when this
 // page is wired to real data, replace these with tasksApi.list + teamsApi.my.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const tasks: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const teams: any[] = []
+type TimelineTaskPlaceholder = { id: string; title: string; teamId: string; dueDate?: string | Date; status?: string }
+type TimelineTeamPlaceholder = { id: string; name?: string; leaderId?: string; memberIds: string[] }
+const tasks: TimelineTaskPlaceholder[] = []
+const teams: TimelineTeamPlaceholder[] = []
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useState } from "react"
 import { TeamRequiredGuard } from "@/components/team-required-guard"

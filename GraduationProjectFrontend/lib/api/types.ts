@@ -348,6 +348,17 @@ export type ApiTask = {
 
 export type ApiSprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED"
 
+export type ApiSprintTaskGamificationImpact = {
+  eventType: "TASK_APPROVED"
+  baseXp: number
+  estimatedXp: number
+  effortPoints: number
+  effortMultiplier: number
+  priorityMultiplier: number
+  evidenceMultiplier: number
+  eligible: boolean
+}
+
 export type ApiSprintTask = {
   id: string
   teamId: string
@@ -378,6 +389,7 @@ export type ApiSprintTask = {
   assignee: ApiTeamUser | null
   createdBy: ApiTeamUser | null
   isPastEndDate: boolean
+  gamificationImpact: ApiSprintTaskGamificationImpact
 }
 
 export type ApiSprintStats = {
@@ -388,6 +400,14 @@ export type ApiSprintStats = {
   unplannedTasks: number
   unplannedStoryPoints: number
   progress: number
+}
+
+export type ApiSprintGamificationImpact = {
+  eventType: "SPRINT_COMPLETED"
+  baseTeamXp: number
+  completionMultiplier: number
+  estimatedTeamXp: number
+  eligible: boolean
 }
 
 export type ApiSprint = {
@@ -404,6 +424,7 @@ export type ApiSprint = {
   createdBy: ApiTeamUser | null
   tasks: ApiSprintTask[]
   stats: ApiSprintStats
+  gamificationImpact: ApiSprintGamificationImpact
 }
 
 export type ApiSprintBoard = {

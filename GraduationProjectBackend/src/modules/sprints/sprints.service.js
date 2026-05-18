@@ -3,6 +3,11 @@ import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { prisma } from "../../loaders/dbLoader.js";
 import { teamUserSelect, findTeamById, findTeamByLeaderId, findTeamMemberByUserId } from "../teams/teams.repository.js";
+import {
+  buildGamificationIdempotencyKey,
+  emitGamificationEvent,
+} from "../gamification/gamification.emitter.js";
+import { calculateXp } from "../gamification/gamification.rules-engine.js";
 
 const TASK_STATUS_ORDER = {
   BACKLOG: 0,
@@ -17,6 +22,53 @@ const SPRINT_ORDER = {
   ACTIVE: 0,
   PLANNED: 1,
   COMPLETED: 2,
+};
+
+// WARNING: These task XP estimates mirror the gamification rules defined in
+// prisma/seed.js. If you update rule multipliers or base XP in the seed,
+// ensure you update these estimates to match.
+const TASK_XP_RULE_ESTIMATES = {
+  CODE: {
+    baseXp: 80,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+      evidence: { repoBackedWithPR: 1.15, repoBackedNoPR: 1.0, manual: 0.5 },
+    },
+  },
+  DOCUMENTATION: {
+    baseXp: 60,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+    },
+  },
+  DESIGN: {
+    baseXp: 70,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+    },
+  },
+  RESEARCH: {
+    baseXp: 50,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+    },
+  },
+  MEETING: {
+    baseXp: 20,
+    multipliers: {},
+  },
+  PRESENTATION: {
+    baseXp: 60,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+    },
+  },
+  OTHER: {
+    baseXp: 30,
+    multipliers: {
+      difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
+    },
+  },
 };
 
 const sprintTaskSelect = {
@@ -343,6 +395,42 @@ function isTaskPastDue(task) {
   return Boolean(task.dueDate) && normalizeVisibleStatus(task.status) !== "DONE" && new Date(task.dueDate).getTime() < Date.now();
 }
 
+function getTaskEvidenceLevel(task) {
+  if (task.integrationMode !== "GITHUB") return "manual";
+  if (task.githubPullRequestNumber || task.githubPullRequestUrl) return "repoBackedWithPR";
+  return "repoBackedNoPR";
+}
+
+function buildTaskGamificationImpact(task) {
+  const taskType = task.taskType ?? "OTHER";
+  const estimateRule = TASK_XP_RULE_ESTIMATES[taskType] ?? TASK_XP_RULE_ESTIMATES.OTHER;
+  const payload = {
+    taskType,
+    priority: task.priority,
+    storyPoints: Number(task.storyPoints ?? 0),
+    actualPoints: task.actualPoints ?? null,
+    evidenceLevel: getTaskEvidenceLevel(task),
+  };
+  const { amount, breakdown } = calculateXp(
+    {
+      baseXp: estimateRule.baseXp,
+      multipliers: estimateRule.multipliers,
+    },
+    payload,
+  );
+
+  return {
+    eventType: "TASK_APPROVED",
+    baseXp: estimateRule.baseXp,
+    estimatedXp: amount,
+    effortPoints: Number(payload.actualPoints ?? payload.storyPoints),
+    effortMultiplier: breakdown.effortMultiplier ?? 1,
+    priorityMultiplier: breakdown.difficultyMultiplier ?? 1,
+    evidenceMultiplier: breakdown.evidenceMultiplier ?? 1,
+    eligible: Number(payload.storyPoints) >= 1,
+  };
+}
+
 function toSprintTaskResponse(task) {
   return {
     id: task.id,
@@ -374,6 +462,7 @@ function toSprintTaskResponse(task) {
     assignee: toUserSummary(task.assignee),
     createdBy: toUserSummary(task.createdBy),
     isPastEndDate: isTaskPastDue(task),
+    gamificationImpact: buildTaskGamificationImpact(task),
   };
 }
 
@@ -396,8 +485,58 @@ function buildSprintStats(tasks) {
   };
 }
 
+function sprintCompletionMultiplier(progress) {
+  if (progress >= 90) return 1.25;
+  if (progress >= 80) return 1.0;
+  if (progress >= 70) return 0.7;
+  if (progress >= 60) return 0.4;
+  return 0;
+}
+
+function buildSprintGamificationImpact(stats, status) {
+  const baseTeamXp = 120;
+  const completionMultiplier = sprintCompletionMultiplier(stats.progress);
+  return {
+    eventType: "SPRINT_COMPLETED",
+    baseTeamXp,
+    completionMultiplier,
+    estimatedTeamXp: Math.round(baseTeamXp * completionMultiplier),
+    eligible: status === "ACTIVE" || status === "COMPLETED",
+  };
+}
+
+function buildSprintCompletedGamificationPayload(sprint) {
+  const stats = buildSprintStats(sprint.tasks ?? []);
+  return {
+    sprintId: sprint.id,
+    sprintName: sprint.name,
+    completedAt: sprint.completedAt?.toISOString?.() ?? new Date().toISOString(),
+    totalTasks: stats.totalTasks,
+    completedTasks: stats.completedTasks,
+    totalStoryPoints: stats.totalStoryPoints,
+    completedStoryPoints: stats.completedStoryPoints,
+    unplannedTasks: stats.unplannedTasks,
+    unplannedStoryPoints: stats.unplannedStoryPoints,
+    completionPercent: stats.progress,
+    grade: stats.progress,
+  };
+}
+
+function emitSprintCompletedGamificationEvent(sprint, actor) {
+  emitGamificationEvent({
+    eventType: "SPRINT_COMPLETED",
+    sourceType: "Sprint",
+    sourceId: sprint.id,
+    idempotencyKey: buildGamificationIdempotencyKey("SPRINT_COMPLETED", "Sprint", sprint.id),
+    teamId: sprint.teamId,
+    actorUserId: actor.id,
+    payload: buildSprintCompletedGamificationPayload(sprint),
+  });
+}
+
 function toSprintResponse(sprint) {
   const tasks = [...(sprint.tasks ?? [])].sort(compareTasks).map(toSprintTaskResponse);
+  const stats = buildSprintStats(sprint.tasks ?? []);
 
   return {
     id: sprint.id,
@@ -412,7 +551,8 @@ function toSprintResponse(sprint) {
     updatedAt: sprint.updatedAt,
     createdBy: toUserSummary(sprint.createdBy),
     tasks,
-    stats: buildSprintStats(sprint.tasks ?? []),
+    stats,
+    gamificationImpact: buildSprintGamificationImpact(stats, sprint.status),
   };
 }
 
@@ -615,6 +755,10 @@ export async function updateSprintService(actor, sprintId, payload) {
       select: sprintSelect,
     });
 
+    if (sprint.status !== "COMPLETED" && updated.status === "COMPLETED") {
+      emitSprintCompletedGamificationEvent(updated, actor);
+    }
+
     return toSprintResponse(updated);
   } catch (error) {
     mapSprintPersistenceError(error);
@@ -663,6 +807,8 @@ export async function completeSprintService(actor, sprintId) {
     data: { status: "COMPLETED", completedAt: new Date() },
     select: sprintSelect,
   });
+
+  emitSprintCompletedGamificationEvent(updated, actor);
 
   return toSprintResponse(updated);
 }

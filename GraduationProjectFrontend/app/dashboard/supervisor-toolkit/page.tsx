@@ -843,7 +843,7 @@ function RubricsPanel({ teamId, userRole }: { teamId: string; userRole: string }
                   Customize {editingType} Rubric
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Define the criteria you'll use to grade this deliverable for this team.
+                  Define the criteria you&apos;ll use to grade this deliverable for this team.
                 </p>
               </div>
             </div>

@@ -369,7 +369,7 @@ export default function ReviewTasksPage() {
         <Card className="max-w-md border-border/60 p-10 text-center">
           <Lock className="mx-auto mb-5 h-12 w-12 text-destructive" />
           <h2 className="mb-2 text-2xl font-bold">Reviewer Access Only</h2>
-          <p className="text-sm leading-6 text-muted-foreground">This review queue is open to team leaders, TAs, and admins. Either reviewer can approve or request resubmission on a team's task.</p>
+          <p className="text-sm leading-6 text-muted-foreground">This review queue is open to team leaders, TAs, and admins. Either reviewer can approve or request resubmission on a team&apos;s task.</p>
         </Card>
       </motion.div>
     )

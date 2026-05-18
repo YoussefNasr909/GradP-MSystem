@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -15,9 +15,10 @@ import {
   CheckCircle2, Crown, Clock, ChevronRight, Sparkles, Lock,
   BookOpen, Code, GitBranch, FileText, Rocket, Shield, ArrowUp,
   ArrowDown, History, Loader2, AlertCircle, RefreshCw,
-  ShieldAlert,
+  ShieldAlert, Coins, ShoppingBag, Gift,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/components/ui/use-toast"
 import {
   useGamificationOverview,
   useGamificationHistory,
@@ -26,8 +27,10 @@ import {
   useGamificationRules,
   useTeamGamificationSummary,
 } from "@/lib/hooks/use-gamification"
+import { useEconomyOverview } from "@/lib/hooks/use-economy"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import type { XpTransaction, BadgeInfo, LeaderboardEntry, GamificationRule } from "@/lib/api/gamification"
+import { economyApi, type CoinTransaction, type QuestProgress, type RewardItem } from "@/lib/api/economy"
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -90,11 +93,17 @@ function LoadingState() {
 
 export default function GamificationPage() {
   const { currentUser } = useAuthStore()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("overview")
   const [leaderboardType, setLeaderboardType] = useState("INDIVIDUAL_WEEKLY")
   const [historyPage, setHistoryPage] = useState(1)
+  const [claimingQuestId, setClaimingQuestId] = useState<string | null>(null)
+  const [purchasingRewardId, setPurchasingRewardId] = useState<string | null>(null)
+  const [equippingPurchaseId, setEquippingPurchaseId] = useState<string | null>(null)
+  const [seenQuestToastIds, setSeenQuestToastIds] = useState<Set<string>>(new Set())
 
   const overview = useGamificationOverview()
+  const economy = useEconomyOverview()
   const badges = useGamificationBadges()
   const history = useGamificationHistory(historyPage)
   const leaderboard = useLeaderboard(leaderboardType)
@@ -110,7 +119,68 @@ export default function GamificationPage() {
   const weeklyXp = balance?.weeklyXp ?? 0
   const monthlyXp = balance?.monthlyXp ?? 0
   const semesterXp = balance?.semesterXp ?? 0
+  const pendingXp = balance?.pendingXp ?? 0
+  const frozenXp = balance?.frozenXp ?? 0
   const progress = xpProgress(lifetimeXp, level)
+  const coinBalance = economy.data?.wallet.balance ?? 0
+  const equippedTitle = economy.data?.equippedRewards.find((purchase) => purchase.rewardItem.type === "TITLE")
+  const equippedFrame = economy.data?.equippedRewards.find((purchase) => purchase.rewardItem.type === "AVATAR_FRAME")
+  const equippedBadgeSkin = economy.data?.equippedRewards.find((purchase) => purchase.rewardItem.type === "BADGE_SKIN")
+
+  useEffect(() => {
+    const newlyClaimable = economy.data?.quests.filter((quest) => quest.claimable && !seenQuestToastIds.has(quest.id)) ?? []
+    if (newlyClaimable.length === 0) return
+
+    const first = newlyClaimable[0]
+    toast({
+      title: "Quest reward ready",
+      description: `${first.quest.title} can be claimed for ${first.quest.coinReward} coins.`,
+    })
+    setSeenQuestToastIds((current) => new Set([...current, ...newlyClaimable.map((quest) => quest.id)]))
+  }, [economy.data?.quests, seenQuestToastIds, toast])
+
+  async function handleClaimQuest(progressId: string) {
+    setClaimingQuestId(progressId)
+    try {
+      await economyApi.claimQuest(progressId)
+      economy.refetch()
+      toast({ title: "Quest reward claimed", description: "Coins were added to your wallet." })
+    } catch (error: any) {
+      toast({ title: "Could not claim quest", description: error?.message ?? "Please try again.", variant: "destructive" })
+    } finally {
+      setClaimingQuestId(null)
+    }
+  }
+
+  async function handlePurchaseReward(rewardItemId: string) {
+    setPurchasingRewardId(rewardItemId)
+    try {
+      await economyApi.purchaseReward(rewardItemId)
+      economy.refetch()
+      toast({ title: "Reward purchased", description: "Your wallet and reward collection were updated." })
+    } catch (error: any) {
+      toast({ title: "Could not purchase reward", description: error?.message ?? "Please try again.", variant: "destructive" })
+    } finally {
+      setPurchasingRewardId(null)
+    }
+  }
+
+  async function handleEquipReward(item: RewardItem, equipped = true) {
+    if (!item.purchase) return
+    setEquippingPurchaseId(item.purchase.id)
+    try {
+      await economyApi.equipReward(item.purchase.id, equipped)
+      economy.refetch()
+      toast({
+        title: equipped ? "Reward equipped" : "Reward unequipped",
+        description: `${item.name} is now ${equipped ? "active on" : "removed from"} your profile cosmetics.`,
+      })
+    } catch (error: any) {
+      toast({ title: "Could not update reward", description: error?.message ?? "Please try again.", variant: "destructive" })
+    } finally {
+      setEquippingPurchaseId(null)
+    }
+  }
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-7xl">
@@ -136,6 +206,14 @@ export default function GamificationPage() {
           <Badge variant="outline" className="text-sm px-3 py-1.5 glass-card">
             <Zap className="h-4 w-4 mr-1.5 text-yellow-500" /> {lifetimeXp.toLocaleString()} XP
           </Badge>
+          <Badge variant="outline" className="text-sm px-3 py-1.5 glass-card">
+            <Coins className="h-4 w-4 mr-1.5 text-amber-500" /> {coinBalance.toLocaleString()} Coins
+          </Badge>
+          {equippedTitle && (
+            <Badge variant="outline" className="text-sm px-3 py-1.5 glass-card">
+              <Crown className="h-4 w-4 mr-1.5 text-primary" /> {equippedTitle.rewardItem.name}
+            </Badge>
+          )}
         </div>
       </motion.div>
 
@@ -146,6 +224,9 @@ export default function GamificationPage() {
           <TabsTrigger value="badges"><Award className="h-4 w-4 mr-1.5" /> Badges</TabsTrigger>
           <TabsTrigger value="leaderboard"><Crown className="h-4 w-4 mr-1.5" /> Leaderboard</TabsTrigger>
           <TabsTrigger value="history"><History className="h-4 w-4 mr-1.5" /> History</TabsTrigger>
+          <TabsTrigger value="quests"><Target className="h-4 w-4 mr-1.5" /> Quests</TabsTrigger>
+          <TabsTrigger value="store"><ShoppingBag className="h-4 w-4 mr-1.5" /> Store</TabsTrigger>
+          <TabsTrigger value="coins"><Coins className="h-4 w-4 mr-1.5" /> Coins</TabsTrigger>
           <TabsTrigger value="rules"><BookOpen className="h-4 w-4 mr-1.5" /> Rules</TabsTrigger>
         </TabsList>
 
@@ -154,11 +235,14 @@ export default function GamificationPage() {
           {overview.loading ? <LoadingState /> : overview.error ? <ErrorState message={overview.error} onRetry={overview.refetch} /> : (
             <>
               {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
                 <StatsCard icon={Zap} label="Lifetime XP" value={lifetimeXp.toLocaleString()} color="text-yellow-500" bg="bg-yellow-500/10" />
+                <StatsCard icon={Coins} label="Coins" value={coinBalance.toLocaleString()} color="text-amber-500" bg="bg-amber-500/10" />
                 <StatsCard icon={Flame} label="Weekly XP" value={weeklyXp.toLocaleString()} color="text-orange-500" bg="bg-orange-500/10" />
                 <StatsCard icon={Clock} label="Monthly XP" value={monthlyXp.toLocaleString()} color="text-cyan-500" bg="bg-cyan-500/10" />
                 <StatsCard icon={Sparkles} label="Semester XP" value={semesterXp.toLocaleString()} color="text-indigo-500" bg="bg-indigo-500/10" />
+                <StatsCard icon={Clock} label="Pending XP" value={pendingXp.toLocaleString()} color="text-slate-500" bg="bg-slate-500/10" />
+                <StatsCard icon={ShieldAlert} label="Frozen XP" value={frozenXp.toLocaleString()} color="text-amber-600" bg="bg-amber-500/10" />
                 <StatsCard icon={Trophy} label="Level" value={String(level)} color="text-primary" bg="bg-primary/10" />
               </div>
 
@@ -179,6 +263,34 @@ export default function GamificationPage() {
                 </div>
                 <Progress value={progress} className="h-3" />
               </Card>
+
+              {(equippedTitle || equippedFrame || equippedBadgeSkin) && (
+                <Card className="glass-card p-6 rounded-2xl border border-amber-500/20">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-amber-500" /> Active Cosmetics
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-5 items-center">
+                    <div className={cn(
+                      "rounded-full p-1.5 border-2",
+                      equippedFrame ? "border-amber-500 bg-amber-500/10" : "border-border",
+                    )}>
+                      <Avatar className="h-20 w-20">
+                        <AvatarImage src={currentUser?.avatarUrl ?? undefined} />
+                        <AvatarFallback>{currentUser?.name?.[0] ?? "U"}</AvatarFallback>
+                      </Avatar>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{currentUser?.name}</span>
+                        {equippedTitle && <Badge variant="secondary">{equippedTitle.rewardItem.name}</Badge>}
+                        {equippedFrame && <Badge variant="outline">{equippedFrame.rewardItem.name}</Badge>}
+                        {equippedBadgeSkin && <Badge variant="outline">{equippedBadgeSkin.rewardItem.name}</Badge>}
+                      </div>
+                      <p className="text-sm text-muted-foreground">Equipped rewards show on your gamification profile preview and badge surfaces.</p>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {teamSummary.data && (
                 <Card className="glass-card p-6 rounded-2xl border border-emerald-500/20">
@@ -240,7 +352,7 @@ export default function GamificationPage() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {overview.data?.badges?.slice(0, 6).map((badge) => (
-                      <BadgeCard key={badge.code} badge={badge} compact />
+                      <BadgeCard key={badge.code} badge={badge} compact badgeSkinName={equippedBadgeSkin?.rewardItem.name} />
                     ))}
                   </div>
                 )}
@@ -261,7 +373,7 @@ export default function GamificationPage() {
                 <Badge variant="outline">{badges.data?.filter(b => b.earned).length ?? 0} / {badges.data?.length ?? 0} earned</Badge>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {badges.data?.map((badge) => <BadgeCard key={badge.code} badge={badge} />)}
+                {badges.data?.map((badge) => <BadgeCard key={badge.code} badge={badge} badgeSkinName={equippedBadgeSkin?.rewardItem.name} />)}
               </div>
             </div>
           )}
@@ -333,6 +445,101 @@ export default function GamificationPage() {
           )}
         </TabsContent>
 
+        {/* QUESTS TAB */}
+        <TabsContent value="quests" className="mt-6">
+          {economy.loading ? <LoadingState /> : economy.error ? <ErrorState message={economy.error} onRetry={economy.refetch} /> : (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold">Quests</h2>
+                  <p className="text-sm text-muted-foreground">Earn coins from healthy project activity without changing XP rules.</p>
+                </div>
+                <Badge variant="outline" className="w-fit">
+                  <Coins className="h-3.5 w-3.5 mr-1.5 text-amber-500" /> {coinBalance.toLocaleString()} coins
+                </Badge>
+              </div>
+              {economy.data?.quests?.length === 0 ? (
+                <Card className="glass-card p-8 rounded-2xl text-center text-muted-foreground">
+                  No quests are active right now.
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {economy.data?.quests.map((quest) => (
+                    <QuestCard
+                      key={quest.id}
+                      progress={quest}
+                      claiming={claimingQuestId === quest.id}
+                      onClaim={() => handleClaimQuest(quest.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* STORE TAB */}
+        <TabsContent value="store" className="mt-6">
+          {economy.loading ? <LoadingState /> : economy.error ? <ErrorState message={economy.error} onRetry={economy.refetch} /> : (
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold">Reward Store</h2>
+                  <p className="text-sm text-muted-foreground">Spend coins on profile cosmetics. XP, ranks, and anti-cheat stay untouched.</p>
+                </div>
+                <Badge variant="outline" className="w-fit">
+                  <Coins className="h-3.5 w-3.5 mr-1.5 text-amber-500" /> {coinBalance.toLocaleString()} coins available
+                </Badge>
+              </div>
+              {economy.data?.rewards?.length === 0 ? (
+                <Card className="glass-card p-8 rounded-2xl text-center text-muted-foreground">
+                  No reward items are available yet.
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {economy.data?.rewards.map((item) => (
+                    <RewardCard
+                      key={item.id}
+                      item={item}
+                      coinBalance={coinBalance}
+                      purchasing={purchasingRewardId === item.id}
+                      equipping={equippingPurchaseId === item.purchase?.id}
+                      onPurchase={() => handlePurchaseReward(item.id)}
+                      onEquip={(equipped) => handleEquipReward(item, equipped)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* COINS TAB */}
+        <TabsContent value="coins" className="mt-6">
+          {economy.loading ? <LoadingState /> : economy.error ? <ErrorState message={economy.error} onRetry={economy.refetch} /> : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <StatsCard icon={Coins} label="Balance" value={(economy.data?.wallet.balance ?? 0).toLocaleString()} color="text-amber-500" bg="bg-amber-500/10" />
+                <StatsCard icon={ArrowUp} label="Lifetime Earned" value={(economy.data?.wallet.lifetimeEarned ?? 0).toLocaleString()} color="text-green-500" bg="bg-green-500/10" />
+                <StatsCard icon={ArrowDown} label="Lifetime Spent" value={(economy.data?.wallet.lifetimeSpent ?? 0).toLocaleString()} color="text-red-500" bg="bg-red-500/10" />
+              </div>
+              <Card className="glass-card rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold">Coin Ledger</h2>
+                  <Badge variant="outline">{economy.data?.recentTransactions.length ?? 0} recent</Badge>
+                </div>
+                {economy.data?.recentTransactions.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-12">No coin transactions yet.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {economy.data?.recentTransactions.map((tx) => <CoinTransactionRow key={tx.id} tx={tx} />)}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+        </TabsContent>
+
         {/* RULES TAB */}
         <TabsContent value="rules" className="mt-6">
           {rules.loading ? <LoadingState /> : rules.error ? <ErrorState message={rules.error} onRetry={rules.refetch} /> : (
@@ -369,15 +576,43 @@ function StatsCard({ icon: Icon, label, value, color, bg }: { icon: any; label: 
 
 function TransactionRow({ tx }: { tx: XpTransaction }) {
   const isCredit = tx.direction === "CREDIT"
+  const isFrozen = tx.status === "FROZEN"
+  const isRejected = tx.status === "REJECTED"
+  const isReversed = tx.status === "REVERSED"
+  const amountClass = isFrozen
+    ? "text-amber-600"
+    : isRejected || isReversed
+      ? "text-muted-foreground"
+      : isCredit
+        ? "text-green-500"
+        : "text-red-500"
   return (
-    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 p-3 rounded-xl glass-card border border-border/30">
-      <div className={cn("p-2 rounded-lg", isCredit ? "bg-green-500/10" : "bg-red-500/10")}>
-        {isCredit ? <ArrowUp className="h-4 w-4 text-green-500" /> : <ArrowDown className="h-4 w-4 text-red-500" />}
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className={cn(
+        "flex items-center gap-3 p-3 rounded-xl glass-card border",
+        isFrozen ? "border-amber-500/30 bg-amber-500/[0.04]" : "border-border/30",
+        isRejected || isReversed ? "opacity-75" : "",
+      )}
+    >
+      <div className={cn("p-2 rounded-lg", isCredit ? "bg-green-500/10" : "bg-red-500/10", isFrozen && "bg-amber-500/10")}>
+        {isCredit ? (
+          <ArrowUp className={cn("h-4 w-4 text-green-500", isFrozen && "text-amber-600")} />
+        ) : (
+          <ArrowDown className="h-4 w-4 text-red-500" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{tx.reason}</p>
         <div className="flex flex-wrap items-center gap-2 mt-1">
           <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+          <Badge
+            variant={isFrozen ? "secondary" : isRejected ? "destructive" : "outline"}
+            className={cn("text-[10px] py-0 px-1.5", isReversed && "text-muted-foreground")}
+          >
+            {tx.status.replaceAll("_", " ")}
+          </Badge>
           <Badge variant="outline" className="text-[10px] py-0 px-1.5">
             {formatSourceLabel(tx.sourceType)}
           </Badge>
@@ -388,19 +623,144 @@ function TransactionRow({ tx }: { tx: XpTransaction }) {
           ) : null}
         </div>
       </div>
-      <span className={cn("text-sm font-bold", isCredit ? "text-green-500" : "text-red-500")}>
+      <span className={cn("text-sm font-bold", amountClass)}>
         {isCredit ? "+" : "-"}{tx.amount} XP
       </span>
     </motion.div>
   )
 }
 
-function BadgeCard({ badge, compact }: { badge: BadgeInfo; compact?: boolean }) {
+function formatQuestMetric(metric: string) {
+  return metric.replaceAll("_", " ").toLowerCase()
+}
+
+function formatRewardType(type: string) {
+  return type.replaceAll("_", " ").toLowerCase()
+}
+
+function QuestCard({ progress, claiming, onClaim }: { progress: QuestProgress; claiming: boolean; onClaim: () => void }) {
+  const complete = Boolean(progress.completedAt)
+  const claimed = Boolean(progress.claimedAt)
+  const expiresLabel = progress.windowEndsAt ? `Ends ${formatDate(progress.windowEndsAt)}` : progress.windowLabel
+
+  return (
+    <Card className="glass-card p-5 rounded-xl border border-border/50">
+      <div className="flex items-start gap-3">
+        <div className={cn("p-2.5 rounded-lg", complete ? "bg-green-500/10" : "bg-primary/10")}>
+          <Target className={cn("h-5 w-5", complete ? "text-green-500" : "text-primary")} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h4 className="font-semibold text-sm">{progress.quest.title}</h4>
+            <Badge variant="outline" className="text-xs capitalize">{progress.quest.type.toLowerCase()}</Badge>
+            {claimed && <Badge variant="secondary" className="text-xs">Claimed</Badge>}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">{progress.quest.description}</p>
+          <Progress value={progress.progressPercentage} className="h-2" />
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
+            <div className="text-xs text-muted-foreground">
+              {progress.currentValue.toLocaleString()} / {progress.targetValue.toLocaleString()} {formatQuestMetric(progress.quest.metric)}
+              <span className="mx-1">.</span>
+              {expiresLabel}
+            </div>
+            <Button size="sm" disabled={!progress.claimable || claiming} onClick={onClaim}>
+              {claiming ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Coins className="h-4 w-4 mr-1.5" />}
+              {claimed ? "Claimed" : `Claim ${progress.quest.coinReward}`}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function RewardCard({
+  item,
+  coinBalance,
+  purchasing,
+  equipping,
+  onPurchase,
+  onEquip,
+}: {
+  item: RewardItem
+  coinBalance: number
+  purchasing: boolean
+  equipping: boolean
+  onPurchase: () => void
+  onEquip: (equipped: boolean) => void
+}) {
+  const affordable = coinBalance >= item.cost
+  const soldOut = item.inventory === 0
+  const disabled = !item.owned && (!affordable || soldOut || purchasing)
+  const equipped = Boolean(item.purchase?.isEquipped)
+
+  return (
+    <motion.div whileHover={{ scale: 1.02, y: -2 }}>
+      <Card className="glass-card p-5 rounded-xl border border-border/50 h-full flex flex-col">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="p-2.5 rounded-lg bg-amber-500/10">
+            <Gift className="h-5 w-5 text-amber-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h4 className="font-semibold text-sm">{item.name}</h4>
+              {item.owned && <Badge variant="secondary" className="text-xs">Owned</Badge>}
+            </div>
+            <p className="text-xs text-muted-foreground">{item.description}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <Badge variant="outline" className="text-xs capitalize">{formatRewardType(item.type)}</Badge>
+          {item.inventory !== null && <Badge variant="outline" className="text-xs">{item.inventory} available</Badge>}
+        </div>
+        <div className="mt-auto flex items-center justify-between gap-3">
+          <div className="font-semibold text-amber-600 flex items-center gap-1">
+            <Coins className="h-4 w-4" /> {item.cost.toLocaleString()}
+          </div>
+          <Button
+            size="sm"
+            disabled={disabled || equipping}
+            variant={item.owned ? "outline" : "default"}
+            onClick={() => (item.owned ? onEquip(!equipped) : onPurchase())}
+          >
+            {purchasing || equipping ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ShoppingBag className="h-4 w-4 mr-1.5" />}
+            {item.owned ? (equipped ? "Unequip" : "Equip") : soldOut ? "Sold out" : affordable ? "Buy" : "Need coins"}
+          </Button>
+        </div>
+      </Card>
+    </motion.div>
+  )
+}
+
+function CoinTransactionRow({ tx }: { tx: CoinTransaction }) {
+  const isCredit = tx.direction === "CREDIT"
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl glass-card border border-border/30">
+      <div className={cn("p-2 rounded-lg", isCredit ? "bg-green-500/10" : "bg-red-500/10")}>
+        {isCredit ? <ArrowUp className="h-4 w-4 text-green-500" /> : <ArrowDown className="h-4 w-4 text-red-500" />}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{tx.reason}</p>
+        <div className="flex flex-wrap items-center gap-2 mt-1">
+          <p className="text-xs text-muted-foreground">{formatDate(tx.createdAt)}</p>
+          <Badge variant="outline" className="text-[10px] py-0 px-1.5">{formatSourceLabel(tx.sourceType)}</Badge>
+        </div>
+      </div>
+      <span className={cn("text-sm font-bold", isCredit ? "text-green-500" : "text-red-500")}>
+        {isCredit ? "+" : "-"}{tx.amount} coins
+      </span>
+    </div>
+  )
+}
+
+function BadgeCard({ badge, compact, badgeSkinName }: { badge: BadgeInfo; compact?: boolean; badgeSkinName?: string }) {
   const Icon = badgeIcons[badge.icon ?? "star"] ?? Star
   const rarity = badge.rarity?.toUpperCase() ?? "COMMON"
   return (
     <motion.div whileHover={{ scale: 1.03, y: -2 }} className={cn(
       "glass-card p-4 rounded-xl border transition-all",
+      badgeSkinName && badge.earned ? "ring-1 ring-amber-400/50" : "",
       badge.earned ? rarityColors[rarity] ?? "border-border/50" : "border-border/50 opacity-60",
     )}>
       <div className="flex items-start gap-3">
@@ -416,6 +776,7 @@ function BadgeCard({ badge, compact }: { badge: BadgeInfo; compact?: boolean }) 
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs capitalize">{rarity.toLowerCase()}</Badge>
             {badge.xpReward ? <span className="text-xs text-muted-foreground">+{badge.xpReward} XP</span> : null}
+            {badgeSkinName && badge.earned ? <Badge variant="secondary" className="text-xs">{badgeSkinName}</Badge> : null}
           </div>
           {badge.earned && badge.unlockedAt && <p className="text-xs text-muted-foreground mt-1">Earned {formatDate(badge.unlockedAt)}</p>}
         </div>

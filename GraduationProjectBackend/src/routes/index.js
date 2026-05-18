@@ -26,6 +26,8 @@ import submissionCommentsRouter from "../modules/submission-comments/submission-
 import rubricTemplatesRouter from "../modules/rubric-templates/rubric-templates.routes.js";
 import sprintsRouter from "../modules/sprints/sprints.routes.js";
 import gamificationRouter from "../modules/gamification/gamification.routes.js";
+import economyRouter from "../modules/economy/economy.routes.js";
+import weeklyReportsRouter from "../modules/weekly-reports/weekly-reports.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -57,5 +59,7 @@ router.use("/submission-comments", submissionCommentsRouter);
 router.use("/rubric-templates", rubricTemplatesRouter);
 router.use("/sprints", sprintsRouter);
 router.use("/gamification", gamificationRouter);
+router.use("/economy", economyRouter);
+router.use("/weekly-reports", weeklyReportsRouter);
 export default router;
 

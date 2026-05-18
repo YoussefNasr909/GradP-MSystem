@@ -5,8 +5,11 @@ import {
   assertPhaseSubmissionGate,
   assertRubricGradeMatches,
   buildContentFingerprint,
+  buildSubmissionGamificationEvent,
+  extractSubmissionText,
   getEarliestIncompleteRequiredPhase,
   getLatestPhaseSubmission,
+  hashUploadedSubmissionText,
   getRubricScaledScore,
   isPhaseUnlockedForSubmission,
   isOptionalEvidenceSubmission,
@@ -15,6 +18,9 @@ import {
   shouldEnforcePhaseSubmissionGate,
 } from "./submissions.service.js"
 import { calculateWeightedFinal } from "./evaluation-policy.js"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 
 test("getLatestPhaseSubmission returns the newest phase item", () => {
   const latest = getLatestPhaseSubmission([
@@ -112,6 +118,83 @@ test("buildContentFingerprint is deterministic for the same uploaded content con
 
 test("normalizeSubmissionText is case and whitespace stable", () => {
   assert.equal(normalizeSubmissionText("  Hello\nWORLD\t "), "hello world")
+})
+
+test("extractSubmissionText reads text uploads for normalized hashing", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gpms-submission-"))
+  const filePath = path.join(dir, "submission.txt")
+  await fs.writeFile(filePath, "  Hello\nWORLD\t ")
+
+  try {
+    const file = { path: filePath, originalname: "submission.txt", mimetype: "text/plain" }
+    assert.equal(await extractSubmissionText(file), "  Hello\nWORLD\t ")
+    assert.equal(
+      await hashUploadedSubmissionText(file),
+      "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+    )
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("extractSubmissionText ignores unsupported uploads", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "gpms-submission-"))
+  const filePath = path.join(dir, "image.png")
+  await fs.writeFile(filePath, "not really an image")
+
+  try {
+    assert.equal(
+      await extractSubmissionText({ path: filePath, originalname: "image.png", mimetype: "image/png" }),
+      null,
+    )
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true })
+  }
+})
+
+test("buildSubmissionGamificationEvent emits approved event for first final grade", () => {
+  const event = buildSubmissionGamificationEvent({
+    submission: {
+      id: "submission-1",
+      teamId: "team-1",
+      deliverableType: "SRS",
+      sdlcPhase: "REQUIREMENTS",
+      version: 1,
+      grade: null,
+      submittedByUserId: "student-1",
+    },
+    updatedSubmission: { reviewedAt: new Date("2026-05-17T10:00:00.000Z") },
+    actor: { id: "doctor-1" },
+    grade: 92,
+    wasReGrade: false,
+  })
+
+  assert.equal(event.eventType, "SUBMISSION_APPROVED")
+  assert.equal(event.idempotencyKey, "SUBMISSION_APPROVED:Submission:submission-1:v1")
+  assert.equal(event.payload.grade, 92)
+})
+
+test("buildSubmissionGamificationEvent emits grade update event for re-grades", () => {
+  const event = buildSubmissionGamificationEvent({
+    submission: {
+      id: "submission-1",
+      teamId: "team-1",
+      deliverableType: "SRS",
+      sdlcPhase: "REQUIREMENTS",
+      version: 1,
+      grade: 82,
+      submittedByUserId: "student-1",
+    },
+    updatedSubmission: { reviewedAt: new Date("2026-05-17T10:00:00.000Z") },
+    actor: { id: "doctor-1" },
+    grade: 90,
+    wasReGrade: true,
+  })
+
+  assert.equal(event.eventType, "SUBMISSION_GRADE_UPDATED")
+  assert.equal(event.idempotencyKey, "SUBMISSION_GRADE_UPDATED:Submission:submission-1:2026-05-17T10:00:00.000Z")
+  assert.equal(event.payload.previousGrade, 82)
+  assert.equal(event.payload.gradeDelta, 8)
 })
 
 test("getRubricScaledScore scales rubric totals to 100", () => {
