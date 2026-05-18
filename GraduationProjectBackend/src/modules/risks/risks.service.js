@@ -100,8 +100,23 @@ function canEditRiskDetails(actor, risk) {
   return risk.approvalStatus !== "APPROVED" && risk.status !== "RESOLVED";
 }
 
-function canApproveRisk(actor, risk) {
+/**
+ * Risk approval authority:
+ *   - ADMIN can always approve (platform-wide authority — bypasses the team
+ *     check on purpose so admins can step in when a team has no supervisor).
+ *   - For a risk that has been resolved (the leader marked it "RESOLVED" and is
+ *     asking the supervisor to confirm closure), only the team's assigned
+ *     DOCTOR signs off.
+ *   - For an open risk (the leader is asking to enroll it into monitoring),
+ *     the team's assigned TA approves the monitoring plan.
+ * Anyone else (including a doctor on a risk that isn't RESOLVED, or a TA on a
+ * resolved risk) gets a 403 from `assertCanApproveRisk` upstream.
+ */
+export function canApproveRisk(actor, risk) {
+  if (!actor || !risk) return false;
   if (actor.role === ROLES.ADMIN) return true;
+  // Non-admin reviewers always need a team to compare against.
+  if (!risk.team) return false;
   if (risk.status === "RESOLVED") return isAssignedDoctor(actor, risk.team);
   return isAssignedTa(actor, risk.team);
 }

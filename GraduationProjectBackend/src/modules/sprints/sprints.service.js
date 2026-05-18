@@ -2,7 +2,13 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { prisma } from "../../loaders/dbLoader.js";
-import { teamUserSelect, findTeamById, findTeamByLeaderId, findTeamMemberByUserId } from "../teams/teams.repository.js";
+import {
+  teamSummarySelect,
+  teamUserSelect,
+  findTeamById,
+  findTeamByLeaderId,
+  findTeamMemberByUserId,
+} from "../teams/teams.repository.js";
 import {
   buildGamificationIdempotencyKey,
   emitGamificationEvent,
@@ -71,6 +77,21 @@ const TASK_XP_RULE_ESTIMATES = {
   },
 };
 
+const EVALUATION_STATUS = {
+  DRAFT: "DRAFT",
+  SUBMITTED: "SUBMITTED",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+  NEEDS_CHANGES: "NEEDS_CHANGES",
+};
+
+const EVALUATION_CRITERIA = [
+  "planningQuality",
+  "taskCompletion",
+  "progressConsistency",
+  "teamCollaboration",
+  "deadlineCommitment",
+];
 const sprintTaskSelect = {
   id: true,
   teamId: true,
@@ -101,6 +122,31 @@ const sprintTaskSelect = {
   createdBy: { select: teamUserSelect },
 };
 
+const sprintEvaluationSelect = {
+  id: true,
+  sprintId: true,
+  evaluatorUserId: true,
+  evaluatorRole: true,
+  status: true,
+  score: true,
+  feedback: true,
+  planningQuality: true,
+  taskCompletion: true,
+  progressConsistency: true,
+  teamCollaboration: true,
+  deadlineCommitment: true,
+  earlyEvaluation: true,
+  evaluatedAt: true,
+  reviewedByUserId: true,
+  reviewedAt: true,
+  reviewComment: true,
+  finalizedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  evaluator: { select: teamUserSelect },
+  reviewedBy: { select: teamUserSelect },
+};
+
 const sprintSelect = {
   id: true,
   teamId: true,
@@ -117,10 +163,19 @@ const sprintSelect = {
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
     select: sprintTaskSelect,
   },
+  evaluations: {
+    orderBy: [{ updatedAt: "desc" }],
+    select: sprintEvaluationSelect,
+  },
 };
 
 function normalizeText(value) {
   return String(value ?? "").trim();
+}
+
+function normalizeOptionalText(value) {
+  const normalized = normalizeText(value);
+  return normalized || null;
 }
 
 function isUniqueConstraintError(error) {
@@ -145,6 +200,36 @@ function toUserSummary(user) {
   return {
     ...user,
     fullName: buildFullName(user),
+  };
+}
+
+function toAssignedTeamSummary(team) {
+  const memberCount = 1 + (team?._count?.members ?? team?.members?.length ?? 0);
+  const maxMembers = team.maxMembers ?? memberCount;
+
+  return {
+    id: team.id,
+    name: team.name,
+    bio: team.bio,
+    inviteCode: null,
+    maxMembers,
+    memberCount,
+    slotsRemaining: Math.max(maxMembers - memberCount, 0),
+    visibility: team.visibility,
+    allowJoinRequests: Boolean(team.allowJoinRequests),
+    stage: team.stage,
+    stack: team.stack ?? [],
+    isFull: memberCount >= maxMembers,
+    isJoinable: false,
+    hasPendingInvitation: false,
+    hasPendingRequest: false,
+    isMember: false,
+    canManage: false,
+    leader: toUserSummary(team.leader),
+    doctor: toUserSummary(team.doctor),
+    ta: toUserSummary(team.ta),
+    createdAt: team.createdAt,
+    updatedAt: team.updatedAt,
   };
 }
 
@@ -223,6 +308,15 @@ function canViewTeam(actor, team) {
   if (canManageTeam(actor, team)) return true;
   if (team.doctor?.id === actor.id || team.ta?.id === actor.id) return true;
   return team.members.some((member) => member.user.id === actor.id);
+}
+
+function getTeamRoleForActor(actor, team) {
+  if (actor.role === ROLES.ADMIN) return "ADMIN";
+  if (team?.leader?.id === actor.id) return "LEADER";
+  if (team?.doctor?.id === actor.id) return ROLES.DOCTOR;
+  if (team?.ta?.id === actor.id) return ROLES.TA;
+  if (team?.members?.some((member) => member.user.id === actor.id)) return "MEMBER";
+  return null;
 }
 
 async function resolveActorTeamContext(actor, requestedTeamId) {
@@ -309,8 +403,11 @@ function assertCanManage(actor, team) {
 }
 
 function assertDateRange(startDate, endDate) {
-  if (endDate.getTime() < startDate.getTime()) {
-    throw new AppError("End date must be on or after the start date.", 422, "SPRINT_DATE_RANGE_INVALID");
+  const start = startOfDay(startDate);
+  const end = startOfDay(endDate);
+
+  if (end.getTime() <= start.getTime()) {
+    throw new AppError("Sprint end date must be after the start date.", 422, "SPRINT_DATE_RANGE_INVALID");
   }
 }
 
@@ -318,6 +415,32 @@ function startOfDay(value) {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
   return date;
+}
+
+function assertSprintEndIsNotPast(endDate) {
+  if (startOfDay(endDate).getTime() < startOfDay(new Date()).getTime()) {
+    throw new AppError("Sprint end date cannot be in the past.", 422, "SPRINT_END_DATE_PAST");
+  }
+}
+
+async function assertNoSprintOverlap(teamId, startDate, endDate, excludeSprintId = null) {
+  const overlappingSprint = await prisma.sprint.findFirst({
+    where: {
+      teamId,
+      ...(excludeSprintId ? { id: { not: excludeSprintId } } : {}),
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
+    select: { id: true, name: true, startDate: true, endDate: true },
+  });
+
+  if (overlappingSprint) {
+    throw new AppError(
+      `"${overlappingSprint.name}" already covers part of this date range. Team sprints are sequential and cannot overlap.`,
+      409,
+      "SPRINT_DATE_OVERLAP",
+    );
+  }
 }
 
 function endOfDay(value) {
@@ -534,9 +657,82 @@ function emitSprintCompletedGamificationEvent(sprint, actor) {
   });
 }
 
-function toSprintResponse(sprint) {
+function canSeeEvaluation(actor, teamRole, evaluation) {
+  if (actor.role === ROLES.ADMIN || teamRole === ROLES.DOCTOR || teamRole === ROLES.TA) return true;
+  return [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.APPROVED].includes(evaluation.status);
+}
+
+function canEditEvaluation(actor, teamRole, evaluation) {
+  if (actor.role !== ROLES.TA || teamRole !== ROLES.TA) return false;
+  if (evaluation.evaluatorUserId !== actor.id) return false;
+  return evaluation.status !== EVALUATION_STATUS.APPROVED;
+}
+
+function canReviewEvaluation(actor, teamRole, evaluation) {
+  return (
+    actor.role === ROLES.ADMIN &&
+    evaluation.evaluatorRole === ROLES.TA &&
+    evaluation.status !== EVALUATION_STATUS.DRAFT
+  );
+}
+
+function toSprintEvaluationResponse(evaluation, { actor, teamRole }) {
+  return {
+    id: evaluation.id,
+    sprintId: evaluation.sprintId,
+    evaluatorRole: evaluation.evaluatorRole,
+    status: evaluation.status,
+    score: evaluation.score ?? null,
+    feedback: evaluation.feedback ?? "",
+    criteria: {
+      planningQuality: evaluation.planningQuality ?? null,
+      taskCompletion: evaluation.taskCompletion ?? null,
+      progressConsistency: evaluation.progressConsistency ?? null,
+      teamCollaboration: evaluation.teamCollaboration ?? null,
+      deadlineCommitment: evaluation.deadlineCommitment ?? null,
+    },
+    earlyEvaluation: Boolean(evaluation.earlyEvaluation),
+    evaluatedAt: evaluation.evaluatedAt ?? null,
+    reviewedAt: evaluation.reviewedAt ?? null,
+    reviewComment: evaluation.reviewComment ?? "",
+    finalizedAt: evaluation.finalizedAt ?? null,
+    createdAt: evaluation.createdAt,
+    updatedAt: evaluation.updatedAt,
+    evaluator: toUserSummary(evaluation.evaluator),
+    reviewedBy: toUserSummary(evaluation.reviewedBy),
+    permissions: {
+      canEdit: canEditEvaluation(actor, teamRole, evaluation),
+      canReview: canReviewEvaluation(actor, teamRole, evaluation),
+    },
+  };
+}
+
+function buildEvaluationSummary(sprints, { actor, teamRole }) {
+  const visibleEvaluations = sprints
+    .flatMap((sprint) => sprint.evaluations ?? [])
+    .filter((evaluation) => canSeeEvaluation(actor, teamRole, evaluation));
+  const scoredEvaluations = visibleEvaluations.filter((evaluation) => Number.isInteger(evaluation.score));
+
+  return {
+    total: visibleEvaluations.length,
+    draft: visibleEvaluations.filter((evaluation) => evaluation.status === EVALUATION_STATUS.DRAFT).length,
+    submitted: visibleEvaluations.filter((evaluation) => evaluation.status === EVALUATION_STATUS.SUBMITTED).length,
+    approved: visibleEvaluations.filter((evaluation) => evaluation.status === EVALUATION_STATUS.APPROVED).length,
+    rejected: visibleEvaluations.filter((evaluation) => evaluation.status === EVALUATION_STATUS.REJECTED).length,
+    needsChanges: visibleEvaluations.filter((evaluation) => evaluation.status === EVALUATION_STATUS.NEEDS_CHANGES).length,
+    averageScore:
+      scoredEvaluations.length > 0
+        ? Math.round(scoredEvaluations.reduce((sum, evaluation) => sum + Number(evaluation.score), 0) / scoredEvaluations.length)
+        : null,
+  };
+}
+
+function toSprintResponse(sprint, context) {
   const tasks = [...(sprint.tasks ?? [])].sort(compareTasks).map(toSprintTaskResponse);
   const stats = buildSprintStats(sprint.tasks ?? []);
+  const evaluations = [...(sprint.evaluations ?? [])]
+    .filter((evaluation) => context && canSeeEvaluation(context.actor, context.teamRole, evaluation))
+    .map((evaluation) => toSprintEvaluationResponse(evaluation, context));
 
   return {
     id: sprint.id,
@@ -551,6 +747,7 @@ function toSprintResponse(sprint) {
     updatedAt: sprint.updatedAt,
     createdBy: toUserSummary(sprint.createdBy),
     tasks,
+    evaluations,
     stats,
     gamificationImpact: buildSprintGamificationImpact(stats, sprint.status),
   };
@@ -583,7 +780,7 @@ function buildBurndown(sprint) {
   });
 }
 
-function buildBoardMetrics(sprints, backlogTasks) {
+function buildBoardMetrics(sprints, backlogTasks, context) {
   const allSprintTasks = sprints.flatMap((sprint) => sprint.tasks ?? []);
   const allTasks = [...allSprintTasks, ...backlogTasks];
   const activeSprint = sprints.find((sprint) => sprint.status === "ACTIVE") ?? null;
@@ -632,11 +829,130 @@ function buildBoardMetrics(sprints, backlogTasks) {
       };
     }),
     burndown: buildBurndown(activeSprint),
+    evaluations: buildEvaluationSummary(sprints, context),
+  };
+}
+
+/**
+ * Returns the evaluator role label the actor can use to write a sprint
+ * evaluation on this team, or null if they can't write one.
+ *
+ * The only writers right now are the team's assigned TA. Admins do not write
+ * evaluations directly (they review + finalise TA evaluations via
+ * `assertCanReviewSprintEvaluation`). This function is defensively strict:
+ * both `actor.role === TA` AND `team.ta.id === actor.id` must match. A TA
+ * from a different team gets null — protecting against cross-team writes.
+ */
+export function getActorEvaluationRole(actor, team) {
+  if (!actor || !team) return null;
+  if (actor.role === ROLES.TA && team.ta?.id === actor.id) return ROLES.TA;
+  return null;
+}
+
+function normalizeNullableScore(value, fieldName, max = 100) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+
+  const score = Number(value);
+  if (!Number.isInteger(score) || score < 0 || score > max) {
+    throw new AppError(`${fieldName} must be a whole number between 0 and ${max}.`, 422, "SPRINT_EVALUATION_SCORE_INVALID");
+  }
+
+  return score;
+}
+
+function normalizeEvaluationData(payload = {}, existing = null) {
+  const status = payload.status ?? existing?.status ?? EVALUATION_STATUS.DRAFT;
+  const criteria = payload.criteria ?? {};
+  const normalized = {
+    status,
+    ...(payload.feedback !== undefined ? { feedback: normalizeOptionalText(payload.feedback) } : {}),
+    ...(payload.earlyEvaluation !== undefined ? { earlyEvaluation: Boolean(payload.earlyEvaluation) } : {}),
+  };
+
+  for (const criterion of EVALUATION_CRITERIA) {
+    const value = normalizeNullableScore(criteria[criterion], criterion, 20);
+      if (value !== undefined) normalized[criterion] = value;
+  }
+
+  const nextCriteria = Object.fromEntries(
+    EVALUATION_CRITERIA.map((criterion) => [criterion, normalized[criterion] !== undefined ? normalized[criterion] : existing?.[criterion] ?? null]),
+  );
+  const hasCompleteCriteria = EVALUATION_CRITERIA.every((criterion) => Number.isInteger(nextCriteria[criterion]));
+  normalized.score = hasCompleteCriteria
+    ? EVALUATION_CRITERIA.reduce((sum, criterion) => sum + Number(nextCriteria[criterion]), 0)
+    : null;
+
+  const nextFeedback = normalized.feedback !== undefined ? normalized.feedback : existing?.feedback ?? null;
+
+  if ([EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.APPROVED].includes(status)) {
+    if (!hasCompleteCriteria) {
+      throw new AppError("Complete all five criteria scores before submitting a sprint evaluation.", 422, "SPRINT_EVALUATION_CRITERIA_REQUIRED");
+    }
+
+    if (normalizeText(nextFeedback).length < 10) {
+      throw new AppError("Add feedback of at least 10 characters before submitting a sprint evaluation.", 422, "SPRINT_EVALUATION_FEEDBACK_REQUIRED");
+    }
+  }
+
+  return normalized;
+}
+
+function assertEvaluationCanBeFinalized(sprint, data) {
+  if (data.status !== EVALUATION_STATUS.APPROVED) return;
+  const earlyEvaluation = data.earlyEvaluation ?? false;
+  if (sprint.status !== "COMPLETED" && !earlyEvaluation) {
+    throw new AppError(
+      "Finalize evaluations only after the sprint is completed, or mark this as an early evaluation.",
+      422,
+      "SPRINT_EVALUATION_EARLY_REQUIRED",
+    );
+  }
+}
+
+function assertCanUpdateOwnEvaluation(actor, sprint) {
+  const evaluatorRole = getActorEvaluationRole(actor, sprint.team);
+  if (!evaluatorRole) {
+    throw new AppError("Only the assigned TA can evaluate this sprint.", 403, "SPRINT_EVALUATION_FORBIDDEN");
+  }
+  return evaluatorRole;
+}
+
+function assertCanReviewSprintEvaluation(actor, sprint) {
+  if (actor.role === ROLES.ADMIN) return;
+  throw new AppError("Only admins can review or finalize sprint evaluations.", 403, "SPRINT_EVALUATION_REVIEW_FORBIDDEN");
+}
+
+function evaluationSelectWithSprint() {
+  return {
+    ...sprintEvaluationSelect,
+    sprint: {
+      select: {
+        ...sprintSelect,
+        team: {
+          select: {
+            id: true,
+            name: true,
+            leader: { select: teamUserSelect },
+            doctor: { select: teamUserSelect },
+            ta: { select: teamUserSelect },
+            members: {
+              select: {
+                id: true,
+                joinedAt: true,
+                user: { select: teamUserSelect },
+              },
+            },
+          },
+        },
+      },
+    },
   };
 }
 
 export async function listSprintsBoardService(actor, filters = {}) {
   const { team, teamRole, canManage } = await resolveActorTeamContext(actor, filters.teamId);
+  const context = { actor, team, teamRole };
   const [sprints, backlogTasks] = await Promise.all([
     prisma.sprint.findMany({
       where: { teamId: team.id },
@@ -659,17 +975,152 @@ export async function listSprintsBoardService(actor, filters = {}) {
       name: team.name,
       teamRole,
     },
-    sprints: sortedSprints.map(toSprintResponse),
+    sprints: sortedSprints.map((sprint) => toSprintResponse(sprint, context)),
     backlogTasks: sortedBacklog.map(toSprintTaskResponse),
-    metrics: buildBoardMetrics(sortedSprints, sortedBacklog),
+    metrics: buildBoardMetrics(sortedSprints, sortedBacklog, context),
     permissions: {
       canManage,
+      canEvaluate: teamRole === ROLES.TA,
+      canReviewEvaluations: actor.role === ROLES.ADMIN,
     },
   };
 }
 
+export async function listAssignedSprintTeamsService(actor) {
+  if (actor.role === ROLES.DOCTOR || actor.role === ROLES.TA) {
+    const where = actor.role === ROLES.DOCTOR ? { doctorId: actor.id } : { taId: actor.id };
+    const teams = await prisma.team.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { name: "asc" }],
+      select: teamSummarySelect,
+    });
+
+    return teams.map(toAssignedTeamSummary);
+  }
+
+  if (actor.role === ROLES.ADMIN) {
+    const teams = await prisma.team.findMany({
+      orderBy: [{ createdAt: "desc" }, { name: "asc" }],
+      take: 100,
+      select: teamSummarySelect,
+    });
+
+    return teams.map(toAssignedTeamSummary);
+  }
+
+  return [];
+}
+
+export async function upsertMySprintEvaluationService(actor, sprintId, payload) {
+  const sprint = await resolveSprintForActor(actor, sprintId);
+  const evaluatorRole = assertCanUpdateOwnEvaluation(actor, sprint);
+  const existing = await prisma.sprintEvaluation.findUnique({
+    where: {
+      sprintId_evaluatorUserId_evaluatorRole: {
+        sprintId: sprint.id,
+        evaluatorUserId: actor.id,
+        evaluatorRole,
+      },
+    },
+    select: sprintEvaluationSelect,
+  });
+
+  if (existing?.status === EVALUATION_STATUS.APPROVED && evaluatorRole === ROLES.TA) {
+    throw new AppError("This TA evaluation has already been finalized.", 409, "SPRINT_EVALUATION_FINALIZED");
+  }
+
+  const nextStatus = payload.status ?? existing?.status ?? EVALUATION_STATUS.DRAFT;
+  if (evaluatorRole === ROLES.TA && ![EVALUATION_STATUS.DRAFT, EVALUATION_STATUS.SUBMITTED].includes(nextStatus)) {
+    throw new AppError("TAs can save drafts or submit sprint evaluations.", 422, "SPRINT_EVALUATION_STATUS_INVALID");
+  }
+
+  const data = normalizeEvaluationData({ ...payload, status: nextStatus }, existing);
+  assertEvaluationCanBeFinalized(sprint, data);
+
+  const evaluatedAt =
+    [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.APPROVED].includes(data.status)
+      ? new Date()
+      : data.status === EVALUATION_STATUS.DRAFT
+        ? null
+        : existing?.evaluatedAt ?? null;
+
+  const saved = existing
+    ? await prisma.sprintEvaluation.update({
+        where: { id: existing.id },
+        data: {
+          ...data,
+          evaluatedAt,
+          reviewedByUserId: data.status === EVALUATION_STATUS.APPROVED ? actor.id : existing.reviewedByUserId,
+          reviewedAt: data.status === EVALUATION_STATUS.APPROVED ? new Date() : existing.reviewedAt,
+          finalizedAt: data.status === EVALUATION_STATUS.APPROVED ? new Date() : null,
+        },
+        select: sprintEvaluationSelect,
+      })
+    : await prisma.sprintEvaluation.create({
+        data: {
+          sprintId: sprint.id,
+          evaluatorUserId: actor.id,
+          evaluatorRole,
+          ...data,
+          evaluatedAt,
+          reviewedByUserId: data.status === EVALUATION_STATUS.APPROVED ? actor.id : null,
+          reviewedAt: data.status === EVALUATION_STATUS.APPROVED ? new Date() : null,
+          finalizedAt: data.status === EVALUATION_STATUS.APPROVED ? new Date() : null,
+        },
+        select: sprintEvaluationSelect,
+      });
+
+  return toSprintEvaluationResponse(saved, { actor, teamRole: evaluatorRole });
+}
+
+export async function reviewSprintEvaluationService(actor, sprintId, evaluationId, payload) {
+  const evaluation = await prisma.sprintEvaluation.findUnique({
+    where: { id: evaluationId },
+    select: evaluationSelectWithSprint(),
+  });
+
+  if (!evaluation || evaluation.sprintId !== sprintId) {
+    throw new AppError("Sprint evaluation not found.", 404, "SPRINT_EVALUATION_NOT_FOUND");
+  }
+
+  if (!canViewTeam(actor, evaluation.sprint.team)) {
+    throw new AppError("You are not allowed to access this sprint evaluation.", 403, "SPRINT_EVALUATION_FORBIDDEN");
+  }
+
+  assertCanReviewSprintEvaluation(actor, evaluation.sprint);
+
+  if (evaluation.evaluatorRole !== ROLES.TA) {
+    throw new AppError("Review actions apply only to TA evaluations.", 422, "SPRINT_EVALUATION_REVIEW_TARGET_INVALID");
+  }
+
+  if (evaluation.status === EVALUATION_STATUS.DRAFT) {
+    throw new AppError("The TA evaluation must be submitted before it can be reviewed.", 409, "SPRINT_EVALUATION_DRAFT");
+  }
+
+  const nextStatus = payload.status;
+  const earlyEvaluation =
+    payload.earlyEvaluation !== undefined ? Boolean(payload.earlyEvaluation) : Boolean(evaluation.earlyEvaluation);
+  assertEvaluationCanBeFinalized(evaluation.sprint, { status: nextStatus, earlyEvaluation });
+
+  const reviewedAt = new Date();
+  const updated = await prisma.sprintEvaluation.update({
+    where: { id: evaluation.id },
+    data: {
+      status: nextStatus,
+      earlyEvaluation,
+      reviewedByUserId: actor.id,
+      reviewedAt,
+      reviewComment: normalizeOptionalText(payload.reviewComment),
+      finalizedAt: nextStatus === EVALUATION_STATUS.APPROVED ? reviewedAt : null,
+    },
+    select: sprintEvaluationSelect,
+  });
+
+  return toSprintEvaluationResponse(updated, { actor, teamRole: "ADMIN" });
+}
+
 export async function createSprintService(actor, payload) {
-  const { team } = await resolveActorTeamContext(actor, payload.teamId);
+  const { team, teamRole } = await resolveActorTeamContext(actor, payload.teamId);
   assertCanManage(actor, team);
 
   if (payload.status === "COMPLETED") {
@@ -679,6 +1130,8 @@ export async function createSprintService(actor, payload) {
   const startDate = parseDateBoundary(payload.startDate, "start");
   const endDate = parseDateBoundary(payload.endDate, "end");
   assertDateRange(startDate, endDate);
+  assertSprintEndIsNotPast(endDate);
+  await assertNoSprintOverlap(team.id, startDate, endDate);
 
   if (payload.status === "ACTIVE") {
     const activeSprint = await prisma.sprint.findFirst({
@@ -704,7 +1157,7 @@ export async function createSprintService(actor, payload) {
       select: sprintSelect,
     });
 
-    return toSprintResponse(sprint);
+    return toSprintResponse(sprint, { actor, team, teamRole });
   } catch (error) {
     mapSprintPersistenceError(error);
   }
@@ -719,6 +1172,8 @@ export async function updateSprintService(actor, sprintId, payload) {
   assertDateRange(startDate, endDate);
 
   if (payload.startDate !== undefined || payload.endDate !== undefined) {
+    if (sprint.status !== "COMPLETED") assertSprintEndIsNotPast(endDate);
+    await assertNoSprintOverlap(sprint.teamId, startDate, endDate, sprint.id);
     assertSprintTasksFitWindow(sprint, startDate, endDate);
   }
 
@@ -759,7 +1214,7 @@ export async function updateSprintService(actor, sprintId, payload) {
       emitSprintCompletedGamificationEvent(updated, actor);
     }
 
-    return toSprintResponse(updated);
+    return toSprintResponse(updated, { actor, team: sprint.team, teamRole: getTeamRoleForActor(actor, sprint.team) });
   } catch (error) {
     mapSprintPersistenceError(error);
   }
@@ -787,7 +1242,7 @@ export async function startSprintService(actor, sprintId) {
     select: sprintSelect,
   });
 
-  return toSprintResponse(updated);
+  return toSprintResponse(updated, { actor, team: sprint.team, teamRole: getTeamRoleForActor(actor, sprint.team) });
 }
 
 export async function completeSprintService(actor, sprintId) {
@@ -810,7 +1265,7 @@ export async function completeSprintService(actor, sprintId) {
 
   emitSprintCompletedGamificationEvent(updated, actor);
 
-  return toSprintResponse(updated);
+  return toSprintResponse(updated, { actor, team: sprint.team, teamRole: getTeamRoleForActor(actor, sprint.team) });
 }
 
 export async function deleteSprintService(actor, sprintId) {

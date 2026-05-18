@@ -177,8 +177,8 @@ function canManageTaskTeam(actor, team) {
  * ADMIN). When the same user holds multiple roles (e.g. admin is also leader),
  * we prefer the most specific team-level role.
  */
-function canReviewTaskTeam(actor, team) {
-  if (!team) return { canReview: false, reviewerRole: null };
+export function canReviewTaskTeam(actor, team) {
+  if (!actor || !team) return { canReview: false, reviewerRole: null };
   if (team.leader?.id === actor.id) return { canReview: true, reviewerRole: "LEADER" };
   if (team.ta?.id === actor.id) return { canReview: true, reviewerRole: "TA" };
   if (actor.role === ROLES.ADMIN) return { canReview: true, reviewerRole: "ADMIN" };
@@ -243,8 +243,8 @@ function assertTaskManager(task, actor) {
   }
 }
 
-function assertTaskReviewer(task, actor) {
-  const { canReview, reviewerRole } = canReviewTaskTeam(actor, task.team);
+export function assertTaskReviewer(task, actor) {
+  const { canReview, reviewerRole } = canReviewTaskTeam(actor, task?.team);
   if (!canReview) {
     throw new AppError("Only an assigned reviewer can review this task.", 403, "TASK_REVIEWER_ONLY");
   }
@@ -689,7 +689,20 @@ export function shouldMergeApprovedTaskPullRequest(payload = {}) {
 
 export const RESUBMISSION_COMMENT_MIN_LENGTH = 10;
 
+/**
+ * Last gate before a reviewer's text hits the DB. Throws 422 with one of:
+ *   - TASK_REVIEW_COMMENT_REQUIRED  (empty / whitespace / non-string)
+ *   - TASK_REVIEW_COMMENT_TOO_SHORT (under RESUBMISSION_COMMENT_MIN_LENGTH)
+ *
+ * Defence in depth: Zod at the route layer enforces `string`. But if a non-
+ * string somehow slips through (object → "[object Object]" coerces to a
+ * 15-char string and would silently pass the length gate), we reject it
+ * here as REQUIRED rather than treating it as valid feedback.
+ */
 export function assertReviewCommentMeetsMinimum(reviewComment) {
+  if (reviewComment !== null && reviewComment !== undefined && typeof reviewComment !== "string") {
+    throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");
+  }
   const normalized = normalizeText(reviewComment);
   if (!normalized) {
     throw new AppError("Add review comments before requesting changes.", 422, "TASK_REVIEW_COMMENT_REQUIRED");

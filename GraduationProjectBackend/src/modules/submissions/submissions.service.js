@@ -561,7 +561,17 @@ export async function getSubmissionService(actor, submissionId) {
   return toSubmissionResponse(submission);
 }
 
-async function assertSupervisorForTeam(actor, teamId) {
+/**
+ * Asserts the actor is either an admin OR the team's assigned doctor / TA.
+ * Throws SUBMISSION_SUPERVISOR_FORBIDDEN (403) otherwise.
+ *
+ * This is the cross-team guard: a TA can have role=TA but still hit this if
+ * they try to grade a submission belonging to a team they don't supervise.
+ */
+export async function assertSupervisorForTeam(actor, teamId) {
+  if (!actor || !teamId) {
+    throw new AppError("You are not a supervisor for this team.", 403, "SUBMISSION_SUPERVISOR_FORBIDDEN");
+  }
   if (actor.role === ROLES.ADMIN) return;
   const team = await prisma.team.findFirst({
     where: { id: teamId, OR: [{ doctorId: actor.id }, { taId: actor.id }] },

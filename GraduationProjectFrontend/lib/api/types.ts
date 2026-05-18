@@ -359,6 +359,10 @@ export type ApiSprintTaskGamificationImpact = {
   eligible: boolean
 }
 
+export type ApiSprintEvaluationStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "NEEDS_CHANGES"
+
+export type ApiSprintEvaluationEvaluatorRole = "TA" | "DOCTOR"
+
 export type ApiSprintTask = {
   id: string
   teamId: string
@@ -410,6 +414,37 @@ export type ApiSprintGamificationImpact = {
   eligible: boolean
 }
 
+export type ApiSprintEvaluationCriteria = {
+  planningQuality: number | null
+  taskCompletion: number | null
+  progressConsistency: number | null
+  teamCollaboration: number | null
+  deadlineCommitment: number | null
+}
+
+export type ApiSprintEvaluation = {
+  id: string
+  sprintId: string
+  evaluatorRole: ApiSprintEvaluationEvaluatorRole
+  status: ApiSprintEvaluationStatus
+  score: number | null
+  feedback: string
+  criteria: ApiSprintEvaluationCriteria
+  earlyEvaluation: boolean
+  evaluatedAt: string | null
+  reviewedAt: string | null
+  reviewComment: string
+  finalizedAt: string | null
+  createdAt: string
+  updatedAt: string
+  evaluator: ApiTeamUser | null
+  reviewedBy: ApiTeamUser | null
+  permissions: {
+    canEdit: boolean
+    canReview: boolean
+  }
+}
+
 export type ApiSprint = {
   id: string
   teamId: string
@@ -423,6 +458,7 @@ export type ApiSprint = {
   updatedAt: string
   createdBy: ApiTeamUser | null
   tasks: ApiSprintTask[]
+  evaluations: ApiSprintEvaluation[]
   stats: ApiSprintStats
   gamificationImpact: ApiSprintGamificationImpact
 }
@@ -455,9 +491,20 @@ export type ApiSprintBoard = {
     }>
     plannedVsUnplanned: Array<{ sprintId: string; name: string; planned: number; unplanned: number }>
     burndown: Array<{ date: string; label: string; ideal: number; remaining: number }>
+    evaluations: {
+      total: number
+      draft: number
+      submitted: number
+      approved: number
+      rejected: number
+      needsChanges: number
+      averageScore: number | null
+    }
   }
   permissions: {
     canManage: boolean
+    canEvaluate: boolean
+    canReviewEvaluations: boolean
   }
 }
 

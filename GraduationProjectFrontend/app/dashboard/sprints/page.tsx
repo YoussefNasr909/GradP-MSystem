@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   AlertCircle,
+  Award,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -44,9 +45,20 @@ import {
 } from "recharts"
 import { toast } from "sonner"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
+import { useAuthStore } from "@/lib/stores/auth-store"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { sprintsApi } from "@/lib/api/sprints"
-import type { ApiSprint, ApiSprintBoard, ApiSprintStatus, ApiSprintTask, ApiTaskStatus } from "@/lib/api/types"
+import type {
+  ApiSprint,
+  ApiSprintBoard,
+  ApiSprintEvaluation,
+  ApiSprintEvaluationCriteria,
+  ApiSprintEvaluationStatus,
+  ApiSprintStatus,
+  ApiSprintTask,
+  ApiTaskStatus,
+  ApiTeamSummary,
+} from "@/lib/api/types"
 import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -89,6 +101,14 @@ type SprintDialogMode = "create" | "edit"
 
 type SprintFormErrors = Partial<Record<keyof SprintFormState | "form", string>>
 
+type EvaluationFormState = {
+  feedback: string
+  earlyEvaluation: boolean
+  criteria: Record<keyof ApiSprintEvaluationCriteria, string>
+}
+
+type EvaluationFormErrors = Partial<Record<keyof ApiSprintEvaluationCriteria | "feedback" | "form", string>>
+
 const DEFAULT_SPRINT_FORM: SprintFormState = {
   name: "",
   goal: "",
@@ -97,7 +117,20 @@ const DEFAULT_SPRINT_FORM: SprintFormState = {
   status: "PLANNED",
 }
 
+const DEFAULT_EVALUATION_FORM: EvaluationFormState = {
+  feedback: "",
+  earlyEvaluation: false,
+  criteria: {
+    planningQuality: "",
+    taskCompletion: "",
+    progressConsistency: "",
+    teamCollaboration: "",
+    deadlineCommitment: "",
+  },
+}
+
 const EASE_OUT_QUINT = [0.22, 1, 0.36, 1] as const
+const SPRINTS_PER_PAGE = 1
 
 const STATUS_COLUMNS: Array<{ status: ApiTaskStatus; label: string; icon: typeof ListTodo; color: string }> = [
   { status: "TODO", label: "Ready", icon: ListTodo, color: "bg-slate-500" },
@@ -114,6 +147,14 @@ const STATUS_COLORS: Record<ApiTaskStatus, string> = {
   APPROVED: "#d97706",
   DONE: "#059669",
 }
+
+const EVALUATION_CRITERIA: Array<{ key: keyof ApiSprintEvaluationCriteria; label: string }> = [
+  { key: "planningQuality", label: "Planning quality" },
+  { key: "taskCompletion", label: "Task completion" },
+  { key: "progressConsistency", label: "Progress consistency" },
+  { key: "teamCollaboration", label: "Team collaboration" },
+  { key: "deadlineCommitment", label: "Deadline commitment" },
+]
 
 function toInputDate(value?: string | null) {
   if (!value) return ""
@@ -193,6 +234,87 @@ function getSprintBadgeClass(status: ApiSprintStatus) {
   return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
 }
 
+function formatEvaluationStatus(status: ApiSprintEvaluationStatus) {
+  if (status === "NEEDS_CHANGES") return "Needs changes"
+  return status.toLowerCase().replace(/^\w/, (value) => value.toUpperCase())
+}
+
+function getEvaluationBadgeClass(status: ApiSprintEvaluationStatus) {
+  if (status === "APPROVED") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+  if (status === "SUBMITTED") return "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+  if (status === "NEEDS_CHANGES") return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  if (status === "REJECTED") return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+  return "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300"
+}
+
+function getEvaluationRoleLabel(role: ApiSprintEvaluation["evaluatorRole"]) {
+  return role === "DOCTOR" ? "Historical doctor evaluation" : "TA evaluation"
+}
+
+function getEvaluationFormFromEvaluation(evaluation?: ApiSprintEvaluation | null): EvaluationFormState {
+  if (!evaluation) return DEFAULT_EVALUATION_FORM
+  return {
+    feedback: evaluation.feedback ?? "",
+    earlyEvaluation: evaluation.earlyEvaluation,
+    criteria: {
+      planningQuality: evaluation.criteria.planningQuality === null ? "" : String(evaluation.criteria.planningQuality),
+      taskCompletion: evaluation.criteria.taskCompletion === null ? "" : String(evaluation.criteria.taskCompletion),
+      progressConsistency: evaluation.criteria.progressConsistency === null ? "" : String(evaluation.criteria.progressConsistency),
+      teamCollaboration: evaluation.criteria.teamCollaboration === null ? "" : String(evaluation.criteria.teamCollaboration),
+      deadlineCommitment: evaluation.criteria.deadlineCommitment === null ? "" : String(evaluation.criteria.deadlineCommitment),
+    },
+  }
+}
+
+function parseCriterionValue(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 20) return undefined
+  return parsed
+}
+
+function getCriterionFieldError(value: string, required: boolean) {
+  const parsed = parseCriterionValue(value)
+  if (parsed === null) return required ? "Enter a score from 0 to 20." : ""
+  if (parsed === undefined) return "Use a whole number from 0 to 20."
+  return ""
+}
+
+function getFeedbackFieldError(value: string, required: boolean) {
+  const trimmed = value.trim()
+  if (!required) return ""
+  if (trimmed.length === 0) return "Add feedback before submitting."
+  if (trimmed.length < 10) return "Feedback must be at least 10 characters."
+  return ""
+}
+
+function calculateEvaluationScore(form: EvaluationFormState) {
+  const values = EVALUATION_CRITERIA.map((criterion) => parseCriterionValue(form.criteria[criterion.key]))
+  if (values.some((value) => value === null || value === undefined)) return null
+  return values.reduce<number>((sum, value) => sum + Number(value), 0)
+}
+
+function validateEvaluationForm(form: EvaluationFormState, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) {
+  const isSubmitting = status === "SUBMITTED"
+  const errors: EvaluationFormErrors = {}
+  const criteriaEntries = EVALUATION_CRITERIA.map((criterion) => {
+    const value = parseCriterionValue(form.criteria[criterion.key])
+    const error = getCriterionFieldError(form.criteria[criterion.key], isSubmitting)
+    if (error) errors[criterion.key] = error
+    return [criterion.key, value] as const
+  })
+
+  const feedbackError = getFeedbackFieldError(form.feedback, isSubmitting)
+  if (feedbackError) errors.feedback = feedbackError
+
+  return {
+    errors,
+    criteriaEntries,
+    isValid: Object.keys(errors).length === 0,
+  }
+}
+
 function getPriorityClass(priority: ApiSprintTask["priority"]) {
   if (priority === "CRITICAL") return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300"
   if (priority === "HIGH") return "border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300"
@@ -213,6 +335,12 @@ function buildDefaultSprintDates() {
     startDate: toInputDate(start.toISOString()),
     endDate: toInputDate(end.toISOString()),
   }
+}
+
+function todayInputDate() {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return toInputDate(today.toISOString())
 }
 
 function buildNextSprintName(sprints: ApiSprint[] = []) {
@@ -238,8 +366,18 @@ function validateSprintForm(form: SprintFormState, sprints: ApiSprint[] = [], ed
 
   if (!form.startDate) errors.startDate = "Choose a start date."
   if (!form.endDate) errors.endDate = "Choose an end date."
-  if (form.startDate && form.endDate && form.endDate < form.startDate) {
-    errors.endDate = "End date must be on or after the start date."
+  if (form.startDate && form.endDate && form.endDate <= form.startDate) {
+    errors.endDate = "End date must be after the start date."
+  } else if (!editingSprintId && form.endDate && form.endDate < todayInputDate()) {
+    errors.endDate = "End date cannot be in the past."
+  } else if (form.startDate && form.endDate) {
+    const overlap = sprints.find((sprint) => {
+      if (sprint.id === editingSprintId) return false
+      const sprintStart = toInputDate(sprint.startDate)
+      const sprintEnd = toInputDate(sprint.endDate)
+      return form.startDate <= sprintEnd && form.endDate >= sprintStart
+    })
+    if (overlap) errors.endDate = `Dates overlap with ${overlap.name}. Team sprints are sequential.`
   }
 
   if (!editingSprintId && form.status === "COMPLETED") {
@@ -259,15 +397,6 @@ function validateSprintForm(form: SprintFormState, sprints: ApiSprint[] = [], ed
 
 function getFirstSprintFormError(errors: SprintFormErrors) {
   return errors.name ?? errors.goal ?? errors.startDate ?? errors.endDate ?? errors.status ?? errors.form ?? ""
-}
-
-function readPointsInput(value: string) {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-
-  const points = Number(trimmed)
-  if (!Number.isInteger(points) || points < 0 || points > 99) return undefined
-  return points
 }
 
 function ChartEmptyState({ message }: { message: string }) {
@@ -296,6 +425,67 @@ function FieldError({ message }: { message?: string }) {
   )
 }
 
+function SprintPagination({
+  page,
+  totalPages,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  page: number
+  totalPages: number
+  totalItems: number
+  pageSize: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  const start = (page - 1) * pageSize + 1
+  const end = Math.min(totalItems, page * pageSize)
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-background/70 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm text-muted-foreground">
+        Showing {start}-{end} of {totalItems} sprints
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-lg bg-transparent"
+          disabled={page <= 1}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+        >
+          Previous
+        </Button>
+        {Array.from({ length: totalPages }, (_, index) => index + 1).map((item) => (
+          <Button
+            key={item}
+            type="button"
+            variant={item === page ? "default" : "outline"}
+            size="sm"
+            className="h-8 min-w-8 rounded-lg px-2"
+            onClick={() => onPageChange(item)}
+          >
+            {item}
+          </Button>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 rounded-lg bg-transparent"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function SprintTaskCard({
   task,
   board,
@@ -303,7 +493,6 @@ function SprintTaskCard({
   isBusy,
   reduceMotion,
   onMove,
-  onMetaChange,
 }: {
   task: ApiSprintTask
   board: ApiSprintBoard
@@ -311,7 +500,6 @@ function SprintTaskCard({
   isBusy: boolean
   reduceMotion: boolean
   onMove: (task: ApiSprintTask, sprintId: string) => void
-  onMetaChange: (task: ApiSprintTask, payload: { storyPoints?: number; actualPoints?: number | null; unplanned?: boolean }) => void
 }) {
   const sprintOptions = board.sprints
     .filter((sprint) => sprint.status !== "COMPLETED" || sprint.id === task.sprintId)
@@ -352,6 +540,8 @@ function SprintTaskCard({
         </span>
         <span className="truncate">{task.assignee?.fullName ?? "Unassigned"}</span>
         <span>{formatTaskRange(task)}</span>
+        <span>{task.storyPoints} SP estimate</span>
+        {task.actualPoints !== null ? <span>{task.actualPoints} SP completed</span> : null}
         {task.githubIssueNumber ? <span>#{task.githubIssueNumber}</span> : null}
       </div>
 
@@ -491,9 +681,288 @@ function SprintTaskCard({
         <Badge variant="outline" className="rounded-md px-2 text-[10px] capitalize">
           {task.taskType.toLowerCase()}
         </Badge>
-        <span className="font-medium text-foreground">{task.actualPoints === null ? "Using estimate" : "Using completed effort"}</span>
+        <span className="font-medium text-foreground">{task.actualPoints === null ? `${task.storyPoints} planned SP` : `${task.actualPoints}/${task.storyPoints} SP`}</span>
       </div>
     </motion.article>
+  )
+}
+
+function SprintEvaluationPanel({
+  sprint,
+  currentUserId,
+  currentUserRole,
+  canEvaluate,
+  canReviewEvaluations,
+  actionInFlight,
+  evaluationDrafts,
+  evaluationErrors,
+  reviewComments,
+  onDraftChange,
+  onReviewCommentChange,
+  onSaveEvaluation,
+  onReviewEvaluation,
+}: {
+  sprint: ApiSprint
+  currentUserId?: string
+  currentUserRole?: string
+  canEvaluate: boolean
+  canReviewEvaluations: boolean
+  actionInFlight: string
+  evaluationDrafts: Record<string, EvaluationFormState>
+  evaluationErrors: Record<string, EvaluationFormErrors>
+  reviewComments: Record<string, string>
+  onDraftChange: (sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) => void
+  onReviewCommentChange: (evaluationId: string, value: string) => void
+  onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
+  onReviewEvaluation: (sprint: ApiSprint, evaluation: ApiSprintEvaluation, status: Extract<ApiSprintEvaluationStatus, "APPROVED" | "REJECTED" | "NEEDS_CHANGES">) => void
+}) {
+  const ownEvaluationRole = currentUserRole === "ta" ? "TA" : null
+  const ownEvaluation = ownEvaluationRole
+    ? sprint.evaluations.find((evaluation) => evaluation.evaluatorRole === ownEvaluationRole && evaluation.evaluator?.id === currentUserId) ?? null
+    : null
+  const canEditOwnEvaluation = Boolean(canEvaluate && ownEvaluationRole && (!ownEvaluation || ownEvaluation.permissions.canEdit))
+  const draft = evaluationDrafts[sprint.id] ?? getEvaluationFormFromEvaluation(ownEvaluation)
+  const formErrors = evaluationErrors[sprint.id] ?? {}
+  const calculatedScore = calculateEvaluationScore(draft)
+  const isSaving = actionInFlight === `evaluation-${sprint.id}`
+  const isEarlyFinal = sprint.status !== "COMPLETED"
+  const isDoctorReadOnly = currentUserRole === "doctor"
+
+  return (
+    <div className={cn("mt-4 rounded-lg border p-4", isDoctorReadOnly ? "border-blue-500/20 bg-blue-500/[0.04]" : "border-border/70 bg-muted/15")}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Award className="h-4 w-4 text-primary" />
+            <h4 className="font-semibold">Sprint evaluation</h4>
+            {isDoctorReadOnly ? (
+              <Badge variant="outline" className="rounded-md border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                Read-only doctor view
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isDoctorReadOnly
+              ? "Doctors can inspect TA evaluation records for their assigned teams without changing them."
+              : "Assigned TAs can save drafts and submit structured sprint evaluations."}
+          </p>
+        </div>
+        {sprint.evaluations.length > 0 ? (
+          <Badge variant="outline" className="w-fit rounded-md">
+            {sprint.evaluations.length} record{sprint.evaluations.length === 1 ? "" : "s"}
+          </Badge>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        {sprint.evaluations.length > 0 ? (
+          sprint.evaluations.map((evaluation) => (
+            <div key={evaluation.id} className="rounded-lg border border-border/70 bg-background/85 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">{getEvaluationRoleLabel(evaluation.evaluatorRole)}</p>
+                    <Badge variant="outline" className={cn("rounded-md", getEvaluationBadgeClass(evaluation.status))}>
+                      {formatEvaluationStatus(evaluation.status)}
+                    </Badge>
+                    {evaluation.earlyEvaluation ? (
+                      <Badge variant="outline" className="rounded-md border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                        Early
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {evaluation.evaluator?.fullName ?? "Unknown evaluator"}
+                    {evaluation.evaluatedAt ? ` - ${formatShortDate(evaluation.evaluatedAt)}` : ""}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold">{evaluation.score ?? "-"}</p>
+                  <p className="text-[11px] uppercase text-muted-foreground">Score</p>
+                </div>
+              </div>
+
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                {evaluation.feedback || "No written feedback yet."}
+              </p>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {EVALUATION_CRITERIA.map((criterion) => (
+                  <div key={criterion.key} className="rounded-lg bg-muted/35 px-3 py-2 text-sm">
+                    <span className="block text-[11px] font-medium uppercase text-muted-foreground">{criterion.label}</span>
+                    <span className="font-semibold">{evaluation.criteria[criterion.key] ?? "-"}/20</span>
+                  </div>
+                ))}
+              </div>
+
+              {evaluation.reviewedBy || evaluation.reviewComment ? (
+                <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 p-3 text-sm">
+                  <p className="font-medium">Review note</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {evaluation.reviewComment || "No review note."}
+                    {evaluation.reviewedBy ? ` - ${evaluation.reviewedBy.fullName}` : ""}
+                  </p>
+                </div>
+              ) : null}
+
+              {canReviewEvaluations && evaluation.permissions.canReview ? (
+                <div className="mt-3 space-y-2">
+                  <Textarea
+                    value={reviewComments[evaluation.id] ?? ""}
+                    onChange={(event) => onReviewCommentChange(evaluation.id, event.target.value)}
+                    placeholder="Optional review note"
+                    className="min-h-[76px] resize-none rounded-lg"
+                    disabled={Boolean(actionInFlight)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      className="rounded-lg"
+                      disabled={Boolean(actionInFlight)}
+                      onClick={() => onReviewEvaluation(sprint, evaluation, "APPROVED")}
+                    >
+                      {actionInFlight === `review-${evaluation.id}-APPROVED` ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
+                      {sprint.status === "COMPLETED" ? "Approve" : "Approve early"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg bg-transparent"
+                      disabled={Boolean(actionInFlight)}
+                      onClick={() => onReviewEvaluation(sprint, evaluation, "NEEDS_CHANGES")}
+                    >
+                      Needs changes
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg border-destructive/30 bg-transparent text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      disabled={Boolean(actionInFlight)}
+                      onClick={() => onReviewEvaluation(sprint, evaluation, "REJECTED")}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-border/80 p-5 text-sm text-muted-foreground lg:col-span-2">
+            No evaluations recorded for this sprint yet.
+          </div>
+        )}
+      </div>
+
+      {canEvaluate && ownEvaluationRole ? (
+        <div className="mt-4 rounded-lg border border-border/70 bg-background/90 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h5 className="font-semibold">Your TA evaluation</h5>
+              <p className="text-sm text-muted-foreground">
+                {canEditOwnEvaluation ? "Save a draft or submit the evaluation when it is ready." : "This evaluation has been finalized and cannot be edited here."}
+              </p>
+            </div>
+            {ownEvaluation ? (
+              <Badge variant="outline" className={cn("w-fit rounded-md", getEvaluationBadgeClass(ownEvaluation.status))}>
+                {formatEvaluationStatus(ownEvaluation.status)}
+              </Badge>
+            ) : null}
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
+            <div className="rounded-lg border border-border/70 bg-muted/25 p-3">
+              <p className="text-xs font-medium uppercase text-muted-foreground">Total score</p>
+              <p className="mt-1 text-3xl font-bold">{calculatedScore ?? "-"}/100</p>
+              <p className="mt-1 text-xs text-muted-foreground">Calculated from the five criteria.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`evaluation-feedback-${sprint.id}`}>Feedback</Label>
+              <Textarea
+                id={`evaluation-feedback-${sprint.id}`}
+                value={draft.feedback}
+                disabled={!canEditOwnEvaluation || isSaving}
+                onChange={(event) =>
+                  onDraftChange(sprint.id, (current) => ({ ...current, feedback: event.target.value }))
+                }
+                className="min-h-[92px] resize-none rounded-lg"
+                placeholder="Comment on execution quality, blockers, and next sprint focus."
+              />
+              <FieldError message={formErrors.feedback} />
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {EVALUATION_CRITERIA.map((criterion) => {
+              const liveError = getCriterionFieldError(draft.criteria[criterion.key], false)
+              const message = liveError || (draft.criteria[criterion.key].trim() === "" ? formErrors[criterion.key] : "")
+
+              return (
+                <label key={criterion.key} className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">{criterion.label}</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={20}
+                    value={draft.criteria[criterion.key]}
+                    disabled={!canEditOwnEvaluation || isSaving}
+                    onChange={(event) =>
+                      onDraftChange(sprint.id, (current) => ({
+                        ...current,
+                        criteria: { ...current.criteria, [criterion.key]: event.target.value },
+                      }))
+                    }
+                    className={cn("h-10 rounded-lg", message && "border-destructive focus-visible:ring-destructive/20")}
+                    placeholder="/20"
+                  />
+                  <FieldError message={message} />
+                </label>
+              )
+            })}
+          </div>
+
+          {isEarlyFinal ? (
+            <label className="mt-3 flex min-w-0 items-start gap-3 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-sm">
+              <Checkbox
+                checked={draft.earlyEvaluation}
+                disabled={!canEditOwnEvaluation || isSaving}
+                onCheckedChange={(checked) =>
+                  onDraftChange(sprint.id, (current) => ({ ...current, earlyEvaluation: checked === true }))
+                }
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block font-medium text-amber-800 dark:text-amber-200">Mark as early evaluation</span>
+                <span className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                  Use this when the evaluation is prepared before the sprint is completed.
+                </span>
+              </span>
+            </label>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <FieldError message={formErrors.form} />
+            <Button
+              variant="outline"
+              className="rounded-lg bg-transparent"
+              disabled={!canEditOwnEvaluation || isSaving}
+              onClick={() => onSaveEvaluation(sprint, "DRAFT")}
+            >
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save draft
+            </Button>
+            <Button
+              variant="default"
+              className="rounded-lg"
+              disabled={!canEditOwnEvaluation || isSaving}
+              onClick={() => onSaveEvaluation(sprint, "SUBMITTED")}
+            >
+              Submit
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -501,8 +970,15 @@ function SprintGroup({
   sprint,
   board,
   canManage,
+  currentUserId,
+  currentUserRole,
+  canEvaluate,
+  canReviewEvaluations,
   isSelected,
   actionInFlight,
+  evaluationDrafts,
+  evaluationErrors,
+  reviewComments,
   reduceMotion,
   onSelect,
   onEdit,
@@ -510,13 +986,23 @@ function SprintGroup({
   onStart,
   onComplete,
   onMove,
-  onMetaChange,
+  onEvaluationDraftChange,
+  onReviewCommentChange,
+  onSaveEvaluation,
+  onReviewEvaluation,
 }: {
   sprint: ApiSprint
   board: ApiSprintBoard
   canManage: boolean
+  currentUserId?: string
+  currentUserRole?: string
+  canEvaluate: boolean
+  canReviewEvaluations: boolean
   isSelected: boolean
   actionInFlight: string
+  evaluationDrafts: Record<string, EvaluationFormState>
+  evaluationErrors: Record<string, EvaluationFormErrors>
+  reviewComments: Record<string, string>
   reduceMotion: boolean
   onSelect: (id: string) => void
   onEdit: (sprint: ApiSprint) => void
@@ -524,7 +1010,10 @@ function SprintGroup({
   onStart: (id: string) => void
   onComplete: (id: string) => void
   onMove: (task: ApiSprintTask, sprintId: string) => void
-  onMetaChange: (task: ApiSprintTask, payload: { storyPoints?: number; actualPoints?: number | null; unplanned?: boolean }) => void
+  onEvaluationDraftChange: (sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) => void
+  onReviewCommentChange: (evaluationId: string, value: string) => void
+  onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
+  onReviewEvaluation: (sprint: ApiSprint, evaluation: ApiSprintEvaluation, status: Extract<ApiSprintEvaluationStatus, "APPROVED" | "REJECTED" | "NEEDS_CHANGES">) => void
 }) {
   const isStarting = actionInFlight === `start-${sprint.id}`
   const isCompleting = actionInFlight === `complete-${sprint.id}`
@@ -628,7 +1117,6 @@ function SprintGroup({
                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                 reduceMotion={reduceMotion}
                 onMove={onMove}
-                onMetaChange={onMetaChange}
               />
             ))
           ) : (
@@ -637,6 +1125,22 @@ function SprintGroup({
             </div>
           )}
         </div>
+
+        <SprintEvaluationPanel
+          sprint={sprint}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
+          canEvaluate={canEvaluate}
+          canReviewEvaluations={canReviewEvaluations}
+          actionInFlight={actionInFlight}
+          evaluationDrafts={evaluationDrafts}
+          evaluationErrors={evaluationErrors}
+          reviewComments={reviewComments}
+          onDraftChange={onEvaluationDraftChange}
+          onReviewCommentChange={onReviewCommentChange}
+          onSaveEvaluation={onSaveEvaluation}
+          onReviewEvaluation={onReviewEvaluation}
+        />
       </div>
     </motion.section>
   )
@@ -646,11 +1150,20 @@ export default function SprintsPage() {
   const shouldReduceMotion = useReducedMotion()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { currentUser } = useAuthStore()
   const { data: myTeamState, isLoading: isTeamLoading } = useMyTeamState()
+  const isSupportView = currentUser?.role === "doctor" || currentUser?.role === "ta" || currentUser?.role === "admin"
+  const isSupervisorView = currentUser?.role === "doctor" || currentUser?.role === "ta"
+  const requestedTeamId = searchParams.get("teamId")
+  const [assignedTeams, setAssignedTeams] = useState<ApiTeamSummary[]>([])
+  const [isAssignedTeamsLoading, setIsAssignedTeamsLoading] = useState(false)
+  const [assignedTeamsError, setAssignedTeamsError] = useState("")
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [board, setBoard] = useState<ApiSprintBoard | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null)
+  const [sprintPage, setSprintPage] = useState(1)
   const [activeTab, setActiveTab] = useState("board")
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [sprintDialogMode, setSprintDialogMode] = useState<SprintDialogMode>("create")
@@ -658,15 +1171,57 @@ export default function SprintsPage() {
   const [sprintPendingDelete, setSprintPendingDelete] = useState<ApiSprint | null>(null)
   const [sprintForm, setSprintForm] = useState<SprintFormState>(DEFAULT_SPRINT_FORM)
   const [hasSubmittedSprintForm, setHasSubmittedSprintForm] = useState(false)
+  const [evaluationDrafts, setEvaluationDrafts] = useState<Record<string, EvaluationFormState>>({})
+  const [evaluationErrors, setEvaluationErrors] = useState<Record<string, EvaluationFormErrors>>({})
+  const [reviewComments, setReviewComments] = useState<Record<string, string>>({})
   const [actionInFlight, setActionInFlight] = useState("")
 
-  const requestedTeamId = searchParams.get("teamId")
-  const supportTeamOptions = myTeamState?.supervisedTeams ?? []
-  const teamId = requestedTeamId ?? myTeamState?.team?.id ?? null
+  const activeTeamId = isSupportView ? selectedTeamId : myTeamState?.team?.id
+  const selectedTeam = useMemo(() => {
+    if (!isSupportView || !selectedTeamId) return null
+    return assignedTeams.find((team) => team.id === selectedTeamId) ?? null
+  }, [assignedTeams, isSupportView, selectedTeamId])
+
+  useEffect(() => {
+    if (!isSupportView) {
+      setAssignedTeams([])
+      setSelectedTeamId(null)
+      return
+    }
+
+    let cancelled = false
+    setIsAssignedTeamsLoading(true)
+    setAssignedTeamsError("")
+
+    sprintsApi
+      .assignedTeams()
+      .then((teams) => {
+        if (cancelled) return
+        setAssignedTeams(teams)
+        setSelectedTeamId((current) => {
+          if (requestedTeamId && teams.some((team) => team.id === requestedTeamId)) return requestedTeamId
+          if (current && teams.some((team) => team.id === current)) return current
+          return teams[0]?.id ?? null
+        })
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setAssignedTeams([])
+        setSelectedTeamId(null)
+        setAssignedTeamsError(error instanceof Error ? error.message : "Couldn't load assigned teams.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsAssignedTeamsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isSupportView, requestedTeamId])
 
   const loadBoard = useCallback(async () => {
-    if (!teamId) {
-      if (!isTeamLoading) {
+    if (!activeTeamId) {
+      if (!isTeamLoading && !isAssignedTeamsLoading) {
         setBoard(null)
         setIsLoading(false)
       }
@@ -676,18 +1231,21 @@ export default function SprintsPage() {
     setIsLoading(true)
     setLoadError("")
     try {
-      const result = await sprintsApi.board({ teamId })
+      const result = await sprintsApi.board({ teamId: activeTeamId })
       setBoard(result)
       setSelectedSprintId((current) => {
         if (current && result.sprints.some((sprint) => sprint.id === current)) return current
         return result.metrics.activeSprintId ?? result.sprints[0]?.id ?? null
       })
+      setEvaluationDrafts({})
+      setEvaluationErrors({})
+      setReviewComments({})
     } catch (error: unknown) {
       setLoadError(error instanceof Error ? error.message : "Couldn't load sprints right now.")
     } finally {
       setIsLoading(false)
     }
-  }, [isTeamLoading, teamId])
+  }, [activeTeamId, isAssignedTeamsLoading, isTeamLoading])
 
   function handleSupportTeamSelection(nextTeamId: string) {
     if (!nextTeamId) return
@@ -704,6 +1262,21 @@ export default function SprintsPage() {
   }, [board, selectedSprintId])
 
   const canManage = Boolean(board?.permissions.canManage)
+  const canEvaluate = Boolean(board?.permissions.canEvaluate)
+  const canReviewEvaluations = Boolean(board?.permissions.canReviewEvaluations)
+  const sprintTotalPages = Math.max(1, Math.ceil((board?.sprints.length ?? 0) / SPRINTS_PER_PAGE))
+  const paginatedSprints = useMemo(() => {
+    const sprints = board?.sprints ?? []
+    return sprints.slice((sprintPage - 1) * SPRINTS_PER_PAGE, sprintPage * SPRINTS_PER_PAGE)
+  }, [board?.sprints, sprintPage])
+
+  useEffect(() => {
+    setSprintPage(1)
+  }, [activeTeamId])
+
+  useEffect(() => {
+    setSprintPage((current) => Math.min(current, sprintTotalPages))
+  }, [sprintTotalPages])
 
   const kanbanTasksByStatus = useMemo(() => {
     const tasks = selectedSprint?.tasks ?? []
@@ -734,6 +1307,19 @@ export default function SprintsPage() {
     status: item.status,
   })) ?? []
   const hasStatusChartData = statusChartData.some((item) => item.value > 0)
+
+  function selectSprintAndPage(sprintId: string) {
+    setSelectedSprintId(sprintId)
+    const index = board?.sprints.findIndex((sprint) => sprint.id === sprintId) ?? -1
+    if (index >= 0) setSprintPage(Math.floor(index / SPRINTS_PER_PAGE) + 1)
+  }
+
+  function handleSprintPageChange(page: number) {
+    setSprintPage(page)
+    const sprint = board?.sprints[(page - 1) * SPRINTS_PER_PAGE]
+    if (sprint) setSelectedSprintId(sprint.id)
+  }
+
   const isSavingSprint = actionInFlight === "create" || (editingSprintId ? actionInFlight === `edit-${editingSprintId}` : false)
   const isDeletingSprint = sprintPendingDelete ? actionInFlight === `delete-${sprintPendingDelete.id}` : false
   const sprintStatusOptions = useMemo(() => {
@@ -798,7 +1384,7 @@ export default function SprintsPage() {
 
   async function handleSaveSprint() {
     if (actionInFlight) return
-    if (!teamId) return
+    if (!activeTeamId) return
     setHasSubmittedSprintForm(true)
     const nextErrors = validateSprintForm(sprintForm, board?.sprints ?? [], editingSprintId)
     const validationError = getFirstSprintFormError(nextErrors)
@@ -822,7 +1408,7 @@ export default function SprintsPage() {
         toast.success("Sprint updated")
       } else {
         const created = await sprintsApi.create({
-          teamId,
+          teamId: activeTeamId,
           name: sprintForm.name.trim(),
           goal: sprintForm.goal.trim(),
           startDate: sprintForm.startDate,
@@ -916,13 +1502,91 @@ export default function SprintsPage() {
     }
   }
 
-  async function handleTaskMetaChange(task: ApiSprintTask, payload: { storyPoints?: number; actualPoints?: number | null; unplanned?: boolean }) {
-    setActionInFlight(`meta-${task.id}`)
+  function handleEvaluationDraftChange(sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) {
+    setEvaluationErrors((current) => {
+      if (!current[sprintId]) return current
+      const next = { ...current }
+      delete next[sprintId]
+      return next
+    })
+    setEvaluationDrafts((current) => {
+      const sprint = board?.sprints.find((item) => item.id === sprintId)
+      const ownRole = currentUser?.role === "ta" ? "TA" : null
+      const ownEvaluation = ownRole
+        ? sprint?.evaluations.find((evaluation) => evaluation.evaluatorRole === ownRole && evaluation.evaluator?.id === currentUser?.id)
+        : null
+      const base = current[sprintId] ?? getEvaluationFormFromEvaluation(ownEvaluation)
+      return { ...current, [sprintId]: updater(base) }
+    })
+  }
+
+  function handleReviewCommentChange(evaluationId: string, value: string) {
+    setReviewComments((current) => ({ ...current, [evaluationId]: value }))
+  }
+
+  async function handleSaveEvaluation(
+    sprint: ApiSprint,
+    status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">,
+  ) {
+    if (actionInFlight) return
+    if (currentUser?.role !== "ta") {
+      toast.error("Only assigned TAs can edit sprint evaluations.")
+      return
+    }
+
+    const ownRole = currentUser?.role === "ta" ? "TA" : null
+    const ownEvaluation = ownRole
+      ? sprint.evaluations.find((evaluation) => evaluation.evaluatorRole === ownRole && evaluation.evaluator?.id === currentUser?.id)
+      : null
+    const draft = evaluationDrafts[sprint.id] ?? getEvaluationFormFromEvaluation(ownEvaluation)
+    const validation = validateEvaluationForm(draft, status)
+    if (!validation.isValid) {
+      setEvaluationErrors((current) => ({ ...current, [sprint.id]: validation.errors }))
+      toast.error(status === "SUBMITTED" ? "Complete the highlighted evaluation fields before submitting." : "Fix the highlighted criteria scores before saving.")
+      return
+    }
+
+    setActionInFlight(`evaluation-${sprint.id}`)
     try {
-      await sprintsApi.updateTask(task.id, payload)
+      await sprintsApi.saveEvaluation(sprint.id, {
+        status,
+        feedback: draft.feedback.trim(),
+        earlyEvaluation: draft.earlyEvaluation,
+        criteria: Object.fromEntries(validation.criteriaEntries) as Partial<ApiSprintEvaluationCriteria>,
+      })
+      setEvaluationErrors((current) => {
+        const next = { ...current }
+        delete next[sprint.id]
+        return next
+      })
+      toast.success(status === "DRAFT" ? "Evaluation draft saved" : "Evaluation submitted")
       await loadBoard()
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Couldn't update task")
+      const message = error instanceof Error ? error.message : "Couldn't save sprint evaluation"
+      setEvaluationErrors((current) => ({ ...current, [sprint.id]: { ...(current[sprint.id] ?? {}), form: message } }))
+      toast.error(message)
+    } finally {
+      setActionInFlight("")
+    }
+  }
+
+  async function handleReviewEvaluation(
+    sprint: ApiSprint,
+    evaluation: ApiSprintEvaluation,
+    status: Extract<ApiSprintEvaluationStatus, "APPROVED" | "REJECTED" | "NEEDS_CHANGES">,
+  ) {
+    if (actionInFlight) return
+    setActionInFlight(`review-${evaluation.id}-${status}`)
+    try {
+      await sprintsApi.reviewEvaluation(sprint.id, evaluation.id, {
+        status,
+        reviewComment: reviewComments[evaluation.id]?.trim() || undefined,
+        earlyEvaluation: status === "APPROVED" && sprint.status !== "COMPLETED" ? true : undefined,
+      })
+      toast.success(status === "APPROVED" ? "Evaluation approved" : status === "NEEDS_CHANGES" ? "Changes requested" : "Evaluation rejected")
+      await loadBoard()
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't review sprint evaluation")
     } finally {
       setActionInFlight("")
     }
@@ -951,10 +1615,17 @@ export default function SprintsPage() {
                   Active: {board.metrics.activeSprintName}
                 </Badge>
               ) : null}
+              {isSupportView && selectedTeam ? (
+                <Badge variant="outline" className="rounded-md border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                  Viewing: {selectedTeam.name}
+                </Badge>
+              ) : null}
             </div>
             <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Sprints</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
-              Plan sprint goals, pull tasks from your team backlog, and watch progress through burndown, velocity, and workload charts.
+              {isSupervisorView
+                ? "Review assigned team sprints, inspect progress, and evaluate sprint outcomes without changing student planning work."
+                : "Plan sprint goals, pull tasks from your team backlog, and watch progress through burndown, velocity, and workload charts."}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -971,8 +1642,64 @@ export default function SprintsPage() {
           </div>
         </motion.div>
 
+        {isSupportView ? (
+          <Card className="rounded-lg border-border/70 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Team supervision filter</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Select one assigned team to load its sprints, tasks, progress, and evaluation records.
+                </p>
+              </div>
+              <div className="w-full lg:max-w-sm">
+                <Label htmlFor="sprint-team-filter" className="mb-2 block">
+                  Current team
+                </Label>
+                <Select
+                  value={selectedTeamId ?? ""}
+                  onValueChange={(value) => {
+                    setSelectedTeamId(value)
+                    setSelectedSprintId(null)
+                    setSprintPage(1)
+                    setBoard(null)
+                    router.replace(`/dashboard/sprints?teamId=${value}`, { scroll: false })
+                  }}
+                  disabled={isAssignedTeamsLoading || assignedTeams.length === 0}
+                >
+                  <SelectTrigger id="sprint-team-filter" className="h-11 rounded-lg">
+                    <SelectValue placeholder={isAssignedTeamsLoading ? "Loading teams..." : "Select a team"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignedTeams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {selectedTeam ? (
+              <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                  <span className="block text-xs font-medium uppercase text-muted-foreground">Leader</span>
+                  <span className="font-semibold">{selectedTeam.leader.fullName}</span>
+                </div>
+                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                  <span className="block text-xs font-medium uppercase text-muted-foreground">Doctor</span>
+                  <span className="font-semibold">{selectedTeam.doctor?.fullName ?? "Not assigned"}</span>
+                </div>
+                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                  <span className="block text-xs font-medium uppercase text-muted-foreground">TA</span>
+                  <span className="font-semibold">{selectedTeam.ta?.fullName ?? "Not assigned"}</span>
+                </div>
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
         <AnimatePresence>
-          {loadError ? (
+          {loadError || assignedTeamsError ? (
             <motion.div
               initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -982,18 +1709,28 @@ export default function SprintsPage() {
               <Card className="border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4" />
-                  {loadError}
+                  {loadError || assignedTeamsError}
                 </div>
               </Card>
             </motion.div>
           ) : null}
         </AnimatePresence>
 
-        {isLoading ? (
+        {isLoading || isAssignedTeamsLoading ? (
           <Card className="flex min-h-[360px] items-center justify-center rounded-lg p-8">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
-              Loading sprints
+              {isAssignedTeamsLoading ? "Loading assigned teams" : "Loading sprints"}
+            </div>
+          </Card>
+        ) : isSupportView && assignedTeams.length === 0 ? (
+          <Card className="flex min-h-[360px] items-center justify-center rounded-lg border-dashed p-8 text-center">
+            <div className="max-w-md">
+              <Award className="mx-auto h-10 w-10 text-muted-foreground" />
+              <h2 className="mt-4 text-xl font-semibold">No assigned teams</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You will see sprint boards here after a team assigns you as its {currentUser?.role === "doctor" ? "doctor" : "TA"}.
+              </p>
             </div>
           </Card>
         ) : !teamId ? (
@@ -1032,7 +1769,7 @@ export default function SprintsPage() {
                 hidden: { opacity: 0 },
                 show: { opacity: 1, transition: { staggerChildren: 0.06 } },
               }}
-              className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+              className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
             >
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
@@ -1048,6 +1785,26 @@ export default function SprintsPage() {
                   <Gauge className="h-8 w-8 text-emerald-600" />
                 </div>
                 <Progress value={board.metrics.activeProgress} className="mt-4 h-2" />
+              </Card>
+              </motion.div>
+              <motion.div
+                variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
+                transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
+                whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+              >
+              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium uppercase text-muted-foreground">Evaluations</p>
+                    <p className="mt-2 text-3xl font-bold">{board.metrics.evaluations.averageScore ?? "-"}</p>
+                  </div>
+                  <Award className="h-8 w-8 text-amber-600" />
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {currentUser?.role === "doctor"
+                    ? `${board.metrics.evaluations.submitted} submitted, ${board.metrics.evaluations.approved} approved`
+                    : `${board.metrics.evaluations.approved} approved, ${board.metrics.evaluations.submitted} pending review`}
+                </p>
               </Card>
               </motion.div>
               <motion.div
@@ -1110,6 +1867,10 @@ export default function SprintsPage() {
                   <ListTodo className="h-4 w-4" />
                   Sprint Kanban
                 </TabsTrigger>
+                <TabsTrigger value="evaluations" className="gap-2 rounded-md">
+                  <Award className="h-4 w-4" />
+                  Evaluations
+                </TabsTrigger>
                 <TabsTrigger value="insights" className="gap-2 rounded-md">
                   <BarChart3 className="h-4 w-4" />
                   Insights
@@ -1138,7 +1899,6 @@ export default function SprintsPage() {
                           isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                           reduceMotion={Boolean(shouldReduceMotion)}
                           onMove={handleMoveTask}
-                          onMetaChange={handleTaskMetaChange}
                         />
                       ))
                     ) : (
@@ -1151,29 +1911,50 @@ export default function SprintsPage() {
 
                 <div className="space-y-4">
                   {board.sprints.length > 0 ? (
-                    board.sprints.map((sprint) => (
-                      <SprintGroup
-                        key={sprint.id}
-                        sprint={sprint}
-                        board={board}
-                        canManage={canManage}
-                        isSelected={selectedSprint?.id === sprint.id}
-                        actionInFlight={actionInFlight}
-                        reduceMotion={Boolean(shouldReduceMotion)}
-                        onSelect={setSelectedSprintId}
-                        onEdit={openEditDialog}
-                        onDeleteRequest={setSprintPendingDelete}
-                        onStart={handleStartSprint}
-                        onComplete={handleCompleteSprint}
-                        onMove={handleMoveTask}
-                        onMetaChange={handleTaskMetaChange}
+                    <>
+                      {paginatedSprints.map((sprint) => (
+                        <SprintGroup
+                          key={sprint.id}
+                          sprint={sprint}
+                          board={board}
+                          canManage={canManage}
+                          currentUserId={currentUser?.id}
+                          currentUserRole={currentUser?.role}
+                          canEvaluate={canEvaluate}
+                          canReviewEvaluations={canReviewEvaluations}
+                          isSelected={selectedSprint?.id === sprint.id}
+                          actionInFlight={actionInFlight}
+                          evaluationDrafts={evaluationDrafts}
+                          evaluationErrors={evaluationErrors}
+                          reviewComments={reviewComments}
+                          reduceMotion={Boolean(shouldReduceMotion)}
+                          onSelect={selectSprintAndPage}
+                          onEdit={openEditDialog}
+                          onDeleteRequest={setSprintPendingDelete}
+                          onStart={handleStartSprint}
+                          onComplete={handleCompleteSprint}
+                          onMove={handleMoveTask}
+                          onEvaluationDraftChange={handleEvaluationDraftChange}
+                          onReviewCommentChange={handleReviewCommentChange}
+                          onSaveEvaluation={handleSaveEvaluation}
+                          onReviewEvaluation={handleReviewEvaluation}
+                        />
+                      ))}
+                      <SprintPagination
+                        page={sprintPage}
+                        totalPages={sprintTotalPages}
+                        totalItems={board.sprints.length}
+                        pageSize={SPRINTS_PER_PAGE}
+                        onPageChange={handleSprintPageChange}
                       />
-                    ))
+                    </>
                   ) : (
                     <Card className="rounded-lg p-8 text-center">
                       <Target className="mx-auto h-10 w-10 text-muted-foreground" />
-                      <h3 className="mt-4 text-lg font-semibold">No sprints yet</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">Create your first sprint to group backlog tasks into an iteration.</p>
+                      <h3 className="mt-4 text-lg font-semibold">{isSupportView ? "No sprints found for this team" : "No sprints yet"}</h3>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {isSupportView ? "When students create sprints, they will appear here for supervision." : "Create your first sprint to group backlog tasks into an iteration."}
+                      </p>
                       {canManage ? (
                         <Button className="mx-auto mt-5 rounded-lg" onClick={openCreateDialog} disabled={Boolean(actionInFlight)}>
                           <Plus className="mr-2 h-4 w-4" />
@@ -1193,7 +1974,7 @@ export default function SprintsPage() {
                       <p className="text-sm text-muted-foreground">{selectedSprint ? formatSprintRange(selectedSprint) : "Create or select a sprint first."}</p>
                     </div>
                     {selectedSprint ? (
-                      <Select value={selectedSprint.id} onValueChange={setSelectedSprintId}>
+                      <Select value={selectedSprint.id} onValueChange={selectSprintAndPage}>
                         <SelectTrigger className="w-full rounded-lg sm:w-[260px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -1236,7 +2017,6 @@ export default function SprintsPage() {
                                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                                 reduceMotion={Boolean(shouldReduceMotion)}
                                 onMove={handleMoveTask}
-                                onMetaChange={handleTaskMetaChange}
                               />
                             ))
                           ) : (
@@ -1249,10 +2029,72 @@ export default function SprintsPage() {
                 </div>
               </TabsContent>
 
+              <TabsContent value="evaluations" className="space-y-4">
+                {board.sprints.length > 0 ? (
+                  <>
+                    {paginatedSprints.map((sprint) => (
+                      <Card key={sprint.id} className="rounded-lg border-border/70 p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-lg font-semibold">{sprint.name}</h2>
+                              <Badge variant="outline" className={cn("rounded-md", getSprintBadgeClass(sprint.status))}>
+                                {formatSprintStatus(sprint.status)}
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {formatSprintRange(sprint)} - {sprint.stats.progress}% complete - {sprint.stats.completedTasks}/{sprint.stats.totalTasks} tasks done
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            className="w-fit rounded-lg bg-transparent"
+                            onClick={() => {
+                              selectSprintAndPage(sprint.id)
+                              setActiveTab("board")
+                            }}
+                          >
+                            View on board
+                          </Button>
+                        </div>
+                        <SprintEvaluationPanel
+                          sprint={sprint}
+                          currentUserId={currentUser?.id}
+                          currentUserRole={currentUser?.role}
+                          canEvaluate={canEvaluate}
+                          canReviewEvaluations={canReviewEvaluations}
+                          actionInFlight={actionInFlight}
+                          evaluationDrafts={evaluationDrafts}
+                          evaluationErrors={evaluationErrors}
+                          reviewComments={reviewComments}
+                          onDraftChange={handleEvaluationDraftChange}
+                          onReviewCommentChange={handleReviewCommentChange}
+                          onSaveEvaluation={handleSaveEvaluation}
+                          onReviewEvaluation={handleReviewEvaluation}
+                        />
+                      </Card>
+                    ))}
+                    <SprintPagination
+                      page={sprintPage}
+                      totalPages={sprintTotalPages}
+                      totalItems={board.sprints.length}
+                      pageSize={SPRINTS_PER_PAGE}
+                      onPageChange={handleSprintPageChange}
+                    />
+                  </>
+                ) : (
+                  <Card className="rounded-lg p-8 text-center">
+                    <Award className="mx-auto h-10 w-10 text-muted-foreground" />
+                    <h3 className="mt-4 text-lg font-semibold">No sprints found for this team</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">Evaluation records appear after the team creates sprints.</p>
+                  </Card>
+                )}
+              </TabsContent>
+
               <TabsContent value="insights" className="space-y-4">
                 {activeTab === "insights" ? (
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="rounded-lg p-4">
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                  <Card className="min-w-0 rounded-lg p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold">Burndown</h2>
@@ -1260,9 +2102,9 @@ export default function SprintsPage() {
                       </div>
                       <TrendingDown className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="h-[280px] min-h-[280px] min-w-0">
+                    <div className="relative h-[280px] min-h-[280px] min-w-0 overflow-hidden">
                       {board.metrics.burndown.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
                           <LineChart data={board.metrics.burndown}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis dataKey="label" tick={{ fontSize: 12 }} />
@@ -1279,7 +2121,7 @@ export default function SprintsPage() {
                     </div>
                   </Card>
 
-                  <Card className="rounded-lg p-4">
+                  <Card className="min-w-0 rounded-lg p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold">Velocity</h2>
@@ -1287,9 +2129,9 @@ export default function SprintsPage() {
                       </div>
                       <BarChart3 className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="h-[280px] min-h-[280px] min-w-0">
+                    <div className="relative h-[280px] min-h-[280px] min-w-0 overflow-hidden">
                       {board.metrics.velocity.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
                           <BarChart data={board.metrics.velocity}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={60} />
@@ -1306,7 +2148,7 @@ export default function SprintsPage() {
                     </div>
                   </Card>
 
-                  <Card className="rounded-lg p-4">
+                  <Card className="min-w-0 rounded-lg p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold">Planned vs unplanned</h2>
@@ -1314,9 +2156,9 @@ export default function SprintsPage() {
                       </div>
                       <RotateCcw className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="h-[280px] min-h-[280px] min-w-0">
+                    <div className="relative h-[280px] min-h-[280px] min-w-0 overflow-hidden">
                       {board.metrics.plannedVsUnplanned.some((item) => item.planned > 0 || item.unplanned > 0) ? (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
                           <BarChart data={board.metrics.plannedVsUnplanned}>
                             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                             <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-12} textAnchor="end" height={60} />
@@ -1333,7 +2175,7 @@ export default function SprintsPage() {
                     </div>
                   </Card>
 
-                  <Card className="rounded-lg p-4">
+                  <Card className="min-w-0 rounded-lg p-4">
                     <div className="mb-4 flex items-center justify-between">
                       <div>
                         <h2 className="text-lg font-semibold">Task status mix</h2>
@@ -1341,9 +2183,9 @@ export default function SprintsPage() {
                       </div>
                       <CalendarDays className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="h-[280px] min-h-[280px] min-w-0">
+                    <div className="relative h-[280px] min-h-[280px] min-w-0 overflow-hidden">
                       {hasStatusChartData ? (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height={280} minWidth={1} minHeight={1}>
                           <PieChart>
                             <Pie data={statusChartData} dataKey="value" nameKey="name" innerRadius={68} outerRadius={105} paddingAngle={3}>
                               {statusChartData.map((entry) => (

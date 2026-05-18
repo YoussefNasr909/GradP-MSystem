@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import multer from "multer";
 import { auth } from "../../middlewares/auth.middleware.js";
+import { allowRoles } from "../../middlewares/role.middleware.js";
+import { ROLES } from "../../common/constants/roles.js";
 import { AppError } from "../../common/errors/AppError.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import {
@@ -134,8 +136,22 @@ router.post("/:id/evidence/link", validate(taskEvidenceLinkSchema), addTaskEvide
 router.delete("/:id/evidence/:evidenceId", validate(taskEvidenceDeleteSchema), deleteTaskEvidence);
 router.post("/:id/accept", validate(taskActionSchema), acceptTask);
 router.post("/:id/submit-review", validate(taskActionSchema), submitTaskForReview);
-router.post("/:id/approve", validate(approveTaskSchema), approveTask);
-router.post("/:id/reject", validate(rejectTaskSchema), rejectTask);
+// Defence-in-depth: only the reviewer roles can hit approve/reject. The service
+// also re-checks team membership via canReviewTaskTeam, but rejecting at the
+// route level returns a clearer 403 and avoids loading the task for a request
+// that was never going to succeed.
+router.post(
+  "/:id/approve",
+  allowRoles(ROLES.LEADER, ROLES.TA, ROLES.ADMIN),
+  validate(approveTaskSchema),
+  approveTask,
+);
+router.post(
+  "/:id/reject",
+  allowRoles(ROLES.LEADER, ROLES.TA, ROLES.ADMIN),
+  validate(rejectTaskSchema),
+  rejectTask,
+);
 router.get("/:id/reviews", validate(taskActionSchema), listTaskReviews);
 router.post("/:id/github/bootstrap", validate(bootstrapTaskGithubSchema), bootstrapTaskGithub);
 router.post("/:id/github/open-pr", validate(openTaskPullRequestSchema), openTaskPullRequest);

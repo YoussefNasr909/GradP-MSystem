@@ -163,6 +163,10 @@ function StudentMemberDashboard() {
     return () => clearInterval(timer)
   }, [])
 
+  // GamificationOverview API shape: { balance, badges, recentTransactions }.
+  // The balance object holds lifetime XP + level. We don't currently surface a
+  // "streak" or "gold" count from the backend; default to 0 here so the
+  // dashboard cards render even when those metrics arrive later.
   const { data: gamification } = useGamificationOverview()
   const { data: economy } = useEconomyOverview()
   const xp = gamification?.balance?.lifetimeXp ?? 0
