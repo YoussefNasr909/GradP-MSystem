@@ -1,5 +1,6 @@
 import { prisma } from "../../loaders/dbLoader.js";
 import { evaluateBadgesForTeam, evaluateBadgesForUser } from "./gamification.badges.js";
+import { computeLevel } from "./gamification.math.js";
 
 // ─── Select shapes (safe DTOs — no sensitive anti-cheat internals) ───
 
@@ -569,10 +570,6 @@ export function buildTeamFrozenResolutionBalanceData({ teamId, balance, amount, 
     create,
     update,
   };
-}
-
-function computeLevel(lifetimeXp) {
-  return Math.floor(Math.sqrt(Math.max(0, lifetimeXp) / 100)) + 1;
 }
 
 export async function listAdjustmentRequests({ page, limit, status }) {

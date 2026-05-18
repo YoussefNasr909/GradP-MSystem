@@ -348,6 +348,17 @@ export type ApiTask = {
 
 export type ApiSprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED"
 
+export type ApiSprintTaskGamificationImpact = {
+  eventType: "TASK_APPROVED"
+  baseXp: number
+  estimatedXp: number
+  effortPoints: number
+  effortMultiplier: number
+  priorityMultiplier: number
+  evidenceMultiplier: number
+  eligible: boolean
+}
+
 export type ApiSprintEvaluationStatus = "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "NEEDS_CHANGES"
 
 export type ApiSprintEvaluationEvaluatorRole = "TA" | "DOCTOR"
@@ -382,6 +393,7 @@ export type ApiSprintTask = {
   assignee: ApiTeamUser | null
   createdBy: ApiTeamUser | null
   isPastEndDate: boolean
+  gamificationImpact: ApiSprintTaskGamificationImpact
 }
 
 export type ApiSprintStats = {
@@ -392,6 +404,14 @@ export type ApiSprintStats = {
   unplannedTasks: number
   unplannedStoryPoints: number
   progress: number
+}
+
+export type ApiSprintGamificationImpact = {
+  eventType: "SPRINT_COMPLETED"
+  baseTeamXp: number
+  completionMultiplier: number
+  estimatedTeamXp: number
+  eligible: boolean
 }
 
 export type ApiSprintEvaluationCriteria = {
@@ -440,6 +460,7 @@ export type ApiSprint = {
   tasks: ApiSprintTask[]
   evaluations: ApiSprintEvaluation[]
   stats: ApiSprintStats
+  gamificationImpact: ApiSprintGamificationImpact
 }
 
 export type ApiSprintBoard = {

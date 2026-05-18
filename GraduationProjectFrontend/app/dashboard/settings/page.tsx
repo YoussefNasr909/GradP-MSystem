@@ -27,6 +27,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -46,6 +47,7 @@ import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useSettingsStore } from "@/lib/stores/settings-store"
 import { useUIStore } from "@/lib/stores/ui-store"
+import { useEconomyOverview } from "@/lib/hooks/use-economy"
 
 type SettingsTab = "profile" | "notifications" | "appearance" | "privacy" | "security"
 type ProfileVisibility = UserSettings["privacy"]["profileVisibility"]
@@ -227,6 +229,7 @@ export default function SettingsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentUser, accessToken, rememberSession, setAuth, logout } = useAuthStore()
+  const { data: economy } = useEconomyOverview()
   const { settings, isLoading, isSaving, error, loadSettings, saveSettings } = useSettingsStore()
   // Theme is owned by next-themes (driven by the topbar toggle). The settings
   // page intentionally doesn't read or write it — see SettingsProvider for
@@ -320,6 +323,9 @@ export default function SettingsPage() {
   const canDisableTwoFactor = disablePassword.trim().length > 0 && (disableCode.trim().length > 0 || disableRecoveryCode.trim().length > 0)
   const currentAvatarUrl = currentUser?.avatar || currentUser?.avatarUrl
   const hasProfilePhoto = Boolean(currentAvatarUrl)
+  const equippedTitle = economy?.equippedRewards.find((purchase) => purchase.rewardItem.type === "TITLE")
+  const equippedFrame = economy?.equippedRewards.find((purchase) => purchase.rewardItem.type === "AVATAR_FRAME")
+  const equippedBadgeSkin = economy?.equippedRewards.find((purchase) => purchase.rewardItem.type === "BADGE_SKIN")
   const linkedinUrl = profileForm.linkedinUrl.trim()
   const githubUsername = profileForm.githubUsername.trim().replace(/^@/, "")
   const githubProfileUrl = getGithubProfileUrl(githubUsername)
@@ -686,7 +692,10 @@ export default function SettingsPage() {
                 <CardContent className="space-y-5 p-6">
                   <input ref={profilePhotoInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={uploadProfilePhoto} />
                   <div className="flex flex-col items-center text-center">
-                    <div className="relative">
+                    <div className={cn(
+                      "relative rounded-full p-1",
+                      equippedFrame ? "border-2 border-amber-500 bg-amber-500/10 shadow-sm shadow-amber-500/20" : "",
+                    )}>
                       <Avatar className="h-32 w-32 border-4 border-background shadow-sm">
                         <AvatarImage src={currentAvatarUrl || undefined} alt={currentUser.name} />
                         <AvatarFallback className="bg-primary/10 text-3xl font-semibold text-primary">
@@ -718,8 +727,17 @@ export default function SettingsPage() {
                       </Button>
                     </div>
                     <div className="mt-4">
-                      <p className="text-lg font-semibold">{currentUser.name}</p>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <p className="text-lg font-semibold">{currentUser.name}</p>
+                        {equippedTitle && <Badge variant="secondary">{equippedTitle.rewardItem.name}</Badge>}
+                      </div>
                       <p className="text-sm text-muted-foreground">{currentUser.email}</p>
+                      {(equippedFrame || equippedBadgeSkin) && (
+                        <div className="mt-2 flex flex-wrap justify-center gap-2">
+                          {equippedFrame && <Badge variant="outline">{equippedFrame.rewardItem.name}</Badge>}
+                          {equippedBadgeSkin && <Badge variant="outline">{equippedBadgeSkin.rewardItem.name}</Badge>}
+                        </div>
+                      )}
                     </div>
                   </div>
 

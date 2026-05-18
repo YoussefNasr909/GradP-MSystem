@@ -32,9 +32,9 @@ function matchConditions(conditions, payload) {
   if (!payload || typeof payload !== "object") return false;
 
   for (const [key, expected] of Object.entries(conditions)) {
-    // Boolean flags like requireTaskLink are checked for truthiness in payload
+    // Boolean flags must explicitly match the payload's boolean intent.
     if (typeof expected === "boolean") {
-      if (expected && !payload[key]) return false;
+      if (payload[key] !== expected) return false;
       continue;
     }
     // Direct value comparison
@@ -63,6 +63,9 @@ export function calculateXp(rule, payload = {}) {
   const multipliers = rule.multipliers ?? {};
   const breakdown = { baseXp: base };
 
+  const effortMult = resolveEffortMultiplier(payload);
+  breakdown.effortMultiplier = effortMult;
+
   // Difficulty multiplier
   const diffMult = resolveMultiplier(multipliers.difficulty, payload.priority ?? payload.difficulty);
   breakdown.difficultyMultiplier = diffMult;
@@ -79,7 +82,7 @@ export function calculateXp(rule, payload = {}) {
   const qualMult = resolveQualityMultiplier(multipliers.quality, payload.grade);
   breakdown.qualityMultiplier = qualMult;
 
-  const rawAmount = Math.round(base * diffMult * timeMult * evidMult * qualMult);
+  const rawAmount = Math.round(base * effortMult * diffMult * timeMult * evidMult * qualMult);
   const amount = Math.max(0, rawAmount); // XP can never go negative from multipliers
 
   return { amount, breakdown };
@@ -93,6 +96,15 @@ export function calculateXp(rule, payload = {}) {
 function resolveMultiplier(multiplierMap, value) {
   if (!multiplierMap || typeof multiplierMap !== "object" || !value) return 1.0;
   return multiplierMap[value] ?? 1.0;
+}
+
+function resolveEffortMultiplier(payload) {
+  if (!payload || payload.taskType === undefined) return 1.0;
+
+  const points = Number(payload.actualPoints ?? payload.storyPoints);
+  if (!Number.isFinite(points) || points <= 0) return 0;
+
+  return Math.min(2.0, Math.max(0.35, points / 3));
 }
 
 /**

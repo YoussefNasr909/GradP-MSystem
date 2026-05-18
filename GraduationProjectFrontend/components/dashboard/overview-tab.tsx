@@ -41,10 +41,8 @@ export function OverviewTab() {
   const [showAllTasks, setShowAllTasks] = useState(false)
 
   const { data: gamification } = useGamificationOverview()
-  // GamificationOverview = { balance, badges, recentTransactions }. Streak is
-  // not surfaced by the backend yet; default to 0 so the card still renders.
-  const xp = gamification?.balance.lifetimeXp ?? 0
-  const level = gamification?.balance.level ?? 1
+  const xp = gamification?.balance?.lifetimeXp ?? 0
+  const level = gamification?.balance?.level ?? 1
   const streak = 0
 
   const myTeams = teams.filter((t) => currentUser?.id && t.memberIds?.includes(currentUser.id))

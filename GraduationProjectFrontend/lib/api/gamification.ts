@@ -124,6 +124,7 @@ export type GamificationCase = {
   score: number
   status: string
   reason: string
+  signals?: Record<string, unknown> | null
   resolution: string | null
   studentVisibleReason: string | null
   assignedReviewerId: string | null

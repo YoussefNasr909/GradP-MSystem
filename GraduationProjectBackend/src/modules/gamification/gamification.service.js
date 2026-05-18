@@ -2,7 +2,7 @@ import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { notify } from "../../common/utils/notify.js";
 import * as repo from "./gamification.repository.js";
-import { generateLeaderboardSnapshots } from "./gamification.leaderboards.js";
+import { LEADERBOARD_TYPES, generateLeaderboardSnapshots } from "./gamification.leaderboards.js";
 
 const STAFF_ROLES = new Set([ROLES.TA, ROLES.DOCTOR, ROLES.ADMIN]);
 const RESOLVABLE_CASE_STATUSES = new Set(["OPEN", "UNDER_REVIEW", "ESCALATED"]);
@@ -259,6 +259,16 @@ async function notifyAdjustmentReview({ request, decision }) {
   }
 }
 
+export function getXpMutationLeaderboardRefreshTypes() {
+  return LEADERBOARD_TYPES;
+}
+
+function refreshLeaderboardsAfterXpMutation(errorLabel) {
+  generateLeaderboardSnapshots({ types: getXpMutationLeaderboardRefreshTypes() }).catch((err) =>
+    console.error(`Failed to regenerate leaderboards after ${errorLabel}:`, err),
+  );
+}
+
 export async function getMyOverviewService(actor) {
   const balance = await repo.findUserXpBalance(actor.id);
   const badges = await repo.listUserBadges(actor.id);
@@ -414,6 +424,8 @@ export async function resolveAdminCaseService(actor, caseId, payload) {
     resolvedCase: resolutionResult.case,
   });
 
+  refreshLeaderboardsAfterXpMutation("case resolution");
+
   return sanitizeCasesForRole([resolutionResult.case], actor.role)[0];
 }
 
@@ -491,6 +503,8 @@ export async function reviewAdminAdjustmentService(actor, adjustmentId, payload)
     request: result.request,
     decision: payload.decision,
   });
+
+  refreshLeaderboardsAfterXpMutation("adjustment review");
 
   return result.request;
 }

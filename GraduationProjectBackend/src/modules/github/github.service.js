@@ -872,6 +872,178 @@ function serializePullRequest(pr) {
   };
 }
 
+export function classifyPullRequestEvidence(pr = {}) {
+  const additions = Number(pr.additions ?? 0);
+  const deletions = Number(pr.deletions ?? 0);
+  const changedFiles = Number(pr.changed_files ?? pr.changedFiles ?? 0);
+  const commits = Number(pr.commits ?? 0);
+  const files = normalizePullRequestFiles(pr.files);
+  const fileSignals = analyzePullRequestFiles(files);
+  const totalChangedLines = Math.max(0, additions) + Math.max(0, deletions);
+  const stats = {
+    additions: Math.max(0, additions),
+    deletions: Math.max(0, deletions),
+    changedFiles: files.length > 0 ? files.length : Math.max(0, changedFiles),
+    commits: Math.max(0, commits),
+    totalChangedLines,
+    generatedFiles: fileSignals.generatedFiles,
+    vendorFiles: fileSignals.vendorFiles,
+    lockfiles: fileSignals.lockfiles,
+    whitespaceOnlyFiles: fileSignals.whitespaceOnlyFiles,
+  };
+
+  if (fileSignals.hasFiles && fileSignals.lowSignalOnly) {
+    return {
+      level: "trivialDiff",
+      stats,
+      signals: fileSignals.signals,
+    };
+  }
+
+  if (stats.changedFiles <= 1 && stats.totalChangedLines <= 8) {
+    return {
+      level: "trivialDiff",
+      stats,
+      signals: fileSignals.signals,
+    };
+  }
+
+  if (stats.changedFiles >= 8 || stats.totalChangedLines >= 300 || stats.commits >= 5) {
+    return {
+      level: "highValueDiff",
+      stats,
+      signals: fileSignals.signals,
+    };
+  }
+
+  return {
+    level: "normalDiff",
+    stats,
+    signals: fileSignals.signals,
+  };
+}
+
+function normalizePullRequestFiles(files) {
+  if (!Array.isArray(files)) return [];
+  return files
+    .map((file) => ({
+      filename: String(file.filename ?? file.previous_filename ?? "").replaceAll("\\", "/"),
+      additions: Number(file.additions ?? 0),
+      deletions: Number(file.deletions ?? 0),
+      changes: Number(file.changes ?? 0),
+      status: file.status ?? null,
+      patch: typeof file.patch === "string" ? file.patch : "",
+    }))
+    .filter((file) => file.filename);
+}
+
+function analyzePullRequestFiles(files) {
+  const signals = [];
+  let generatedFiles = 0;
+  let vendorFiles = 0;
+  let lockfiles = 0;
+  let whitespaceOnlyFiles = 0;
+  let lowSignalFiles = 0;
+
+  for (const file of files) {
+    const generated = isGeneratedFile(file.filename);
+    const vendor = isVendorFile(file.filename);
+    const lockfile = isLockfile(file.filename);
+    const whitespaceOnly = isWhitespaceOnlyPatch(file.patch);
+
+    if (generated) generatedFiles += 1;
+    if (vendor) vendorFiles += 1;
+    if (lockfile) lockfiles += 1;
+    if (whitespaceOnly) whitespaceOnlyFiles += 1;
+
+    if (generated || vendor || lockfile || whitespaceOnly) {
+      lowSignalFiles += 1;
+    }
+  }
+
+  if (generatedFiles > 0) signals.push({ type: "GENERATED_FILES", count: generatedFiles });
+  if (vendorFiles > 0) signals.push({ type: "VENDOR_FILES", count: vendorFiles });
+  if (lockfiles > 0) signals.push({ type: "LOCKFILES", count: lockfiles });
+  if (whitespaceOnlyFiles > 0) signals.push({ type: "WHITESPACE_ONLY_FILES", count: whitespaceOnlyFiles });
+
+  return {
+    hasFiles: files.length > 0,
+    generatedFiles,
+    vendorFiles,
+    lockfiles,
+    whitespaceOnlyFiles,
+    lowSignalOnly: files.length > 0 && lowSignalFiles === files.length,
+    signals,
+  };
+}
+
+function isGeneratedFile(filename) {
+  const lower = filename.toLowerCase();
+  return (
+    lower.includes("/generated/") ||
+    lower.includes("/__generated__/") ||
+    lower.endsWith(".generated.js") ||
+    lower.endsWith(".generated.ts") ||
+    lower.endsWith(".generated.tsx") ||
+    lower.endsWith(".generated.css") ||
+    lower.endsWith(".min.js") ||
+    lower.endsWith(".min.css") ||
+    lower.endsWith(".map")
+  );
+}
+
+function isVendorFile(filename) {
+  const lower = filename.toLowerCase();
+  return (
+    lower.startsWith("vendor/") ||
+    lower.includes("/vendor/") ||
+    lower.startsWith("third_party/") ||
+    lower.includes("/third_party/") ||
+    lower.startsWith("node_modules/") ||
+    lower.includes("/node_modules/") ||
+    lower.startsWith("dist/") ||
+    lower.includes("/dist/") ||
+    lower.startsWith("build/") ||
+    lower.includes("/build/")
+  );
+}
+
+function isLockfile(filename) {
+  const lower = filename.toLowerCase();
+  const basename = lower.split("/").pop();
+  return [
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "bun.lockb",
+    "poetry.lock",
+    "pipfile.lock",
+    "composer.lock",
+    "gemfile.lock",
+    "cargo.lock",
+  ].includes(basename);
+}
+
+function isWhitespaceOnlyPatch(patch) {
+  if (!patch) return false;
+
+  const added = [];
+  const removed = [];
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) added.push(line.slice(1));
+    if (line.startsWith("-")) removed.push(line.slice(1));
+  }
+
+  if (added.length === 0 && removed.length === 0) return false;
+
+  return normalizePatchContent(added) === normalizePatchContent(removed);
+}
+
+function normalizePatchContent(lines) {
+  return lines.join("\n").replace(/\s+/g, "");
+}
+
 function serializeCommit(commit) {
   return {
     sha: commit.sha,
@@ -1621,9 +1793,11 @@ async function syncReleasesIntoSubmissions(team, repositoryRecord, readOctokit) 
 
     try {
       await emitGamificationEvent({
-        type: "GITHUB_RELEASE_CREATED",
-        userId: team.leaderId || actor?.id, // Release isn't necessarily tied to one user, but we provide someone.
+        eventType: "GITHUB_RELEASE_CREATED",
+        sourceType: "GitHubTeamRepository",
+        sourceId: `${repositoryRecord.id}:release:${release.id}`,
         teamId: team.id,
+        actorUserId: team.leaderId || actor?.id || null,
         idempotencyKey: buildGamificationIdempotencyKey(
           "GITHUB_RELEASE_CREATED",
           "GitHubTeamRepository",
@@ -1635,6 +1809,8 @@ async function syncReleasesIntoSubmissions(team, repositoryRecord, readOctokit) 
           tagName: release.tag_name,
           repositoryId: repositoryRecord.id,
           teamId: team.id,
+          requireSubmissionOrMilestone: Boolean(submission?.id),
+          submissionId: submission?.id ?? null,
         },
       });
     } catch (error) {
@@ -3547,16 +3723,17 @@ export async function reviewPullRequestService(actor, pullNumber, payload) {
     });
     const authorLogin = prResponse.data?.user?.login;
     if (actor.githubUsername && authorLogin && authorLogin.toLowerCase() !== actor.githubUsername.toLowerCase()) {
-      const iso = new Date().toISOString();
       await emitGamificationEvent({
-        type: "GITHUB_PR_REVIEWED",
-        userId: actor.id,
+        eventType: "GITHUB_PR_REVIEWED",
+        sourceType: "GitHubTeamRepository",
+        sourceId: `${repositoryRecord.id}:PR:${pullNumber}:review:${data.id}`,
         teamId: repositoryRecord.teamId,
+        actorUserId: actor.id,
         idempotencyKey: buildGamificationIdempotencyKey(
           "GITHUB_PR_REVIEWED",
           "GitHubTeamRepository",
           repositoryRecord.id,
-          `PR:${pullNumber}:reviewer:${actor.id}:at:${iso}`
+          `PR:${pullNumber}:review:${data.id}`
         ),
         payload: {
           pullNumber,
@@ -3564,6 +3741,8 @@ export async function reviewPullRequestService(actor, pullNumber, payload) {
           teamId: repositoryRecord.teamId,
           reviewerUserId: actor.id,
           event: payload.event,
+          excludeSelfReview: true,
+          requireBody: Boolean(String(payload.body ?? "").trim()),
         },
       });
     }
@@ -3612,18 +3791,21 @@ export async function mergePullRequestService(actor, pullNumber, payload) {
     }
 
     const task = await findTaskByGitHubPullRequestNumber(repositoryRecord.teamId, pullNumber);
-    const iso = new Date().toISOString();
+    const mergedAt = prResponse.data?.merged_at ?? new Date().toISOString();
+    const files = await loadPullRequestFilesForEvidence(writeOctokit, repositoryRecord, pullNumber);
+    const evidence = classifyPullRequestEvidence({ ...prResponse.data, files });
     
     await emitGamificationEvent({
-      type: "GITHUB_PR_MERGED",
-      userId: authorUserId,
+      eventType: "GITHUB_PR_MERGED",
+      sourceType: task?.id ? "Task" : "GitHubTeamRepository",
+      sourceId: task?.id ?? `${repositoryRecord.id}:PR:${pullNumber}`,
       teamId: repositoryRecord.teamId,
-      taskId: task?.id || null,
+      actorUserId: authorUserId,
       idempotencyKey: buildGamificationIdempotencyKey(
         "GITHUB_PR_MERGED",
         "GitHubTeamRepository",
         repositoryRecord.id,
-        `PR:${pullNumber}:mergedAt:${iso}`
+        `PR:${pullNumber}`
       ),
       payload: {
         pullNumber,
@@ -3631,7 +3813,11 @@ export async function mergePullRequestService(actor, pullNumber, payload) {
         teamId: repositoryRecord.teamId,
         userId: authorUserId,
         taskId: task?.id || null,
-        mergedAt: iso,
+        requireTaskLink: Boolean(task?.id),
+        evidenceLevel: evidence.level,
+        diffStats: evidence.stats,
+        diffSignals: evidence.signals,
+        mergedAt,
       },
     });
   } catch (error) {
@@ -3639,6 +3825,20 @@ export async function mergePullRequestService(actor, pullNumber, payload) {
   }
 
   return data;
+}
+
+async function loadPullRequestFilesForEvidence(octokit, repositoryRecord, pullNumber) {
+  try {
+    return await octokit.paginate(octokit.rest.pulls.listFiles, {
+      owner: repositoryRecord.ownerLogin,
+      repo: repositoryRecord.repoName,
+      pull_number: pullNumber,
+      per_page: 100,
+    });
+  } catch (error) {
+    console.warn(`[GITHUB] Failed to load PR #${pullNumber} files for gamification evidence:`, error.message);
+    return [];
+  }
 }
 
 async function requireTaskGitHubContext(actor, taskId) {

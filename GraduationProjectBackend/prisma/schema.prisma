@@ -152,6 +152,13 @@ enum SprintStatus {
   COMPLETED
 }
 
+enum WeeklyReportStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  CHANGES_REQUESTED
+}
+
 enum SprintEvaluationStatus {
   DRAFT
   SUBMITTED
@@ -419,6 +426,7 @@ model User {
   authoredSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationEvaluator")
   reviewedSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationReviewer")
   submittedWeeklyReports     WeeklyReport[]                     @relation("WeeklyReportSubmitter")
+  reviewedWeeklyReports      WeeklyReport[]                     @relation("WeeklyReportReviewer")
   submittedSubmissions       Submission[]                       @relation("SubmissionSubmitter")
   reviewedSubmissions        Submission[]                       @relation("SubmissionReviewer")
   taReviewedSubmissions      Submission[]                       @relation("SubmissionTAReviewer")
@@ -467,6 +475,10 @@ model User {
   xpAdjustmentRequestsAsTarget   XpAdjustmentRequest[]      @relation("XpAdjustmentTargetUser")
   xpAdjustmentRequestsApproved   XpAdjustmentRequest[]      @relation("XpAdjustmentApprover")
   gamificationAuditLogs          GamificationAuditLog[]     @relation("GamificationAuditActor")
+  coinBalance                    UserCoinBalance?           @relation("UserCoinBalanceOwner")
+  coinTransactions               CoinTransaction[]          @relation("CoinTransactionUser")
+  questProgress                  UserQuestProgress[]        @relation("UserQuestProgressOwner")
+  rewardPurchases                RewardPurchase[]           @relation("RewardPurchaseUser")
 }
 
 model UserSettings {
@@ -929,26 +941,33 @@ model SprintEvaluation {
 }
 
 model WeeklyReport {
-  id             String    @id @default(cuid())
-  teamId         String
-  submittedById  String?
-  weekLabel      String
-  periodStart    DateTime?
-  periodEnd      DateTime?
-  summaryDraft   String?
-  summaryFinal   String?
-  githubActivity Json?
-  isSubmitted    Boolean   @default(false)
-  submittedAt    DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String             @id @default(cuid())
+  teamId          String
+  submittedById   String?
+  reviewedById    String?
+  weekLabel       String
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  summaryDraft    String?
+  summaryFinal    String?
+  githubActivity  Json?
+  status          WeeklyReportStatus @default(DRAFT)
+  reviewComment   String?
+  isSubmitted     Boolean            @default(false)
+  submittedAt     DateTime?
+  reviewedAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   submittedBy User? @relation("WeeklyReportSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  reviewedBy  User? @relation("WeeklyReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@unique([teamId, weekLabel])
   @@index([teamId, createdAt])
+  @@index([teamId, status])
   @@index([submittedById])
+  @@index([reviewedById])
 }
 
 model Submission {
@@ -1513,6 +1532,7 @@ enum GamificationEventType {
   GITHUB_PR_MERGED
   GITHUB_PR_REVIEWED
   GITHUB_RELEASE_CREATED
+  SPRINT_COMPLETED
   MANUAL_XP_ADJUSTMENT_APPROVED
   BADGE_UNLOCKED
 }
@@ -1609,6 +1629,59 @@ enum GamificationAuditAction {
 // ─────────────────────────────────────────────────────────────
 // Gamification Models
 // ─────────────────────────────────────────────────────────────
+
+enum CoinTransactionDirection {
+  CREDIT
+  DEBIT
+}
+
+enum CoinTransactionStatus {
+  POSTED
+  VOIDED
+}
+
+enum CoinTransactionSourceType {
+  QUEST
+  REWARD_PURCHASE
+  XP_AWARD
+  MANUAL
+  SEED
+}
+
+enum QuestType {
+  DAILY
+  WEEKLY
+  MILESTONE
+}
+
+enum QuestMetric {
+  XP_EARNED
+  TASKS_DONE
+  SUBMISSIONS_APPROVED
+  PRS_MERGED
+  REVIEWS_GIVEN
+  SPRINTS_COMPLETED
+  WEEKLY_REPORTS_APPROVED
+  LOGIN_STREAK
+}
+
+enum RewardItemType {
+  AVATAR_FRAME
+  PROFILE_THEME
+  TITLE
+  BADGE_SKIN
+}
+
+enum RewardItemStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum RewardRedemptionStatus {
+  ACTIVE
+  REVOKED
+}
 
 // Configurable scoring rules used by the rule engine.
 model GamificationRule {
@@ -1952,6 +2025,132 @@ model XpAdjustmentRequest {
   @@index([targetUserId, createdAt])
   @@index([targetTeamId, createdAt])
   @@index([approvedByUserId, reviewedAt])
+}
+
+// Coin economy read model. Coin totals are separate from XP and never write to XP ledgers.
+model UserCoinBalance {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  balance        Int      @default(0)
+  lifetimeEarned Int      @default(0)
+  lifetimeSpent  Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation("UserCoinBalanceOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([balance])
+}
+
+// Immutable coin ledger for quest claims, purchases, and future manual grants.
+model CoinTransaction {
+  id             String                    @id @default(cuid())
+  idempotencyKey String                    @unique
+  userId         String
+  amount         Int
+  direction      CoinTransactionDirection
+  status         CoinTransactionStatus     @default(POSTED)
+  sourceType     CoinTransactionSourceType
+  sourceId       String?
+  reason         String
+  metadata       Json?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  user          User               @relation("CoinTransactionUser", fields: [userId], references: [id], onDelete: Cascade)
+  questProgress UserQuestProgress? @relation("QuestRewardCoinTransaction")
+  purchase      RewardPurchase?    @relation("RewardPurchaseCoinTransaction")
+
+  @@index([userId, createdAt])
+  @@index([sourceType, sourceId])
+  @@index([status, createdAt])
+}
+
+model Quest {
+  id          String      @id @default(cuid())
+  code        String      @unique
+  title       String
+  description String
+  type        QuestType
+  metric      QuestMetric
+  targetValue Int
+  coinReward  Int         @default(0)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean     @default(true)
+  sortOrder   Int         @default(0)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  progress UserQuestProgress[]
+
+  @@index([isActive, type])
+  @@index([metric])
+}
+
+model UserQuestProgress {
+  id                String    @id @default(cuid())
+  questId           String
+  userId            String
+  windowKey         String    @default("lifetime")
+  currentValue      Int       @default(0)
+  completedAt       DateTime?
+  claimedAt         DateTime?
+  coinTransactionId String?   @unique
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  quest           Quest            @relation(fields: [questId], references: [id], onDelete: Cascade)
+  user            User             @relation("UserQuestProgressOwner", fields: [userId], references: [id], onDelete: Cascade)
+  coinTransaction CoinTransaction? @relation("QuestRewardCoinTransaction", fields: [coinTransactionId], references: [id], onDelete: SetNull)
+
+  @@unique([questId, userId, windowKey])
+  @@index([userId, completedAt])
+  @@index([userId, claimedAt])
+}
+
+model RewardItem {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String
+  type        RewardItemType
+  cost        Int
+  status      RewardItemStatus @default(ACTIVE)
+  inventory   Int?
+  imageUrl    String?
+  metadata    Json?
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  purchases RewardPurchase[]
+
+  @@index([status, type])
+  @@index([cost])
+}
+
+model RewardPurchase {
+  id                String                 @id @default(cuid())
+  userId            String
+  rewardItemId      String
+  coinTransactionId String                 @unique
+  status            RewardRedemptionStatus @default(ACTIVE)
+  isEquipped        Boolean                @default(false)
+  equippedAt        DateTime?
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  user            User            @relation("RewardPurchaseUser", fields: [userId], references: [id], onDelete: Cascade)
+  rewardItem      RewardItem      @relation(fields: [rewardItemId], references: [id], onDelete: Restrict)
+  coinTransaction CoinTransaction @relation("RewardPurchaseCoinTransaction", fields: [coinTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, rewardItemId])
+  @@index([userId, createdAt])
+  @@index([rewardItemId, status])
+  @@index([userId, isEquipped])
 }
 
 // Append-only audit trail for gamification actions.

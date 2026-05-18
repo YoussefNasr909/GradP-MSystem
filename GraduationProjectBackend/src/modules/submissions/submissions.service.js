@@ -103,14 +103,56 @@ export function normalizeSubmissionText(text) {
     .trim();
 }
 
+function getSubmissionFileKind(file) {
+  const name = String(file?.originalname ?? "").toLowerCase();
+  const mimetype = String(file?.mimetype ?? "").toLowerCase();
+
+  if (mimetype === "text/plain" || name.endsWith(".txt")) return "TEXT";
+  if (mimetype === "application/pdf" || name.endsWith(".pdf")) return "PDF";
+  if (
+    mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    name.endsWith(".docx")
+  ) {
+    return "DOCX";
+  }
+
+  return "UNSUPPORTED";
+}
+
+export async function extractSubmissionText(file) {
+  if (!file?.path) return null;
+
+  const kind = getSubmissionFileKind(file);
+  if (kind === "TEXT") {
+    return fs.readFile(file.path, "utf8");
+  }
+
+  const buffer = await fs.readFile(file.path);
+
+  if (kind === "PDF") {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const result = await parser.getText();
+      return result.text ?? null;
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  if (kind === "DOCX") {
+    const mammoth = await import("mammoth");
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value ?? null;
+  }
+
+  return null;
+}
+
 export async function hashUploadedSubmissionText(file) {
   if (!file?.path) return null;
 
-  const name = String(file.originalname ?? "").toLowerCase();
-  const isTextFile = file.mimetype === "text/plain" || name.endsWith(".txt");
-  if (!isTextFile) return null;
-
-  const text = await fs.readFile(file.path, "utf8");
+  const text = await extractSubmissionText(file);
   const normalized = normalizeSubmissionText(text);
   if (!normalized) return null;
   return crypto.createHash("sha256").update(normalized).digest("hex");
@@ -123,6 +165,58 @@ export function buildContentFingerprint({ fileHash, deliverableType, sdlcPhase, 
     .createHash("sha256")
     .update([fileHash, deliverableType, sdlcPhase, fileSize ?? ""].join(":"))
     .digest("hex");
+}
+
+export function buildSubmissionGamificationEvent({ submission, updatedSubmission, actor, grade, wasReGrade }) {
+  const reviewedAt = updatedSubmission.reviewedAt ?? new Date();
+  const version = submission.version ?? 1;
+  const submittedByUserId = submission.submittedByUserId ?? submission.submittedBy?.id ?? null;
+
+  if (wasReGrade) {
+    return {
+      eventType: "SUBMISSION_GRADE_UPDATED",
+      sourceType: "Submission",
+      sourceId: submission.id,
+      idempotencyKey: buildGamificationIdempotencyKey(
+        "SUBMISSION_GRADE_UPDATED",
+        "Submission",
+        submission.id,
+        reviewedAt.toISOString(),
+      ),
+      teamId: submission.teamId,
+      actorUserId: actor.id,
+      payload: {
+        deliverableType: submission.deliverableType,
+        sdlcPhase: submission.sdlcPhase,
+        previousGrade: submission.grade ?? null,
+        grade,
+        gradeDelta: submission.grade === null || submission.grade === undefined ? null : grade - submission.grade,
+        version,
+        submittedByUserId,
+      },
+    };
+  }
+
+  return {
+    eventType: "SUBMISSION_APPROVED",
+    sourceType: "Submission",
+    sourceId: submission.id,
+    idempotencyKey: buildGamificationIdempotencyKey(
+      "SUBMISSION_APPROVED",
+      "Submission",
+      submission.id,
+      `v${version}`,
+    ),
+    teamId: submission.teamId,
+    actorUserId: actor.id,
+    payload: {
+      deliverableType: submission.deliverableType,
+      sdlcPhase: submission.sdlcPhase,
+      grade,
+      version,
+      submittedByUserId,
+    },
+  };
 }
 
 function toSubmissionResponse(submission) {
@@ -682,27 +776,17 @@ export async function gradeSubmissionService(actor, submissionId, { grade, feedb
   // deliverable for the team's current phase, nudge the leader.
   await maybeNudgeStageAdvance(submission.teamId, submission.sdlcPhase);
 
-  // Gamification: emit SUBMISSION_APPROVED event
-  emitGamificationEvent({
-    eventType: "SUBMISSION_APPROVED",
-    sourceType: "Submission",
-    sourceId: submissionId,
-    idempotencyKey: buildGamificationIdempotencyKey(
-      "SUBMISSION_APPROVED",
-      submissionId,
-      `v${submission.version ?? 1}`,
-      updated.reviewedAt.toISOString(),
-    ),
-    teamId: submission.teamId,
-    actorUserId: actor.id,
-    payload: {
-      deliverableType: submission.deliverableType,
-      sdlcPhase: submission.sdlcPhase,
+  // Gamification: first approval awards XP; re-grades emit an audit event so
+  // the original approval is not paid a second time.
+  emitGamificationEvent(
+    buildSubmissionGamificationEvent({
+      submission,
+      updatedSubmission: updated,
+      actor,
       grade,
-      version: submission.version ?? 1,
-      submittedByUserId: submission.submittedByUserId ?? submission.submittedBy?.id ?? null,
-    },
-  });
+      wasReGrade,
+    }),
+  );
 
   return toSubmissionResponse(updated);
 }

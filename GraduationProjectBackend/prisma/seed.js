@@ -429,6 +429,12 @@ async function main() {
   }
 
   console.log("Cleaning up existing team data...");
+  await prisma.rewardPurchase.deleteMany();
+  await prisma.userQuestProgress.deleteMany();
+  await prisma.coinTransaction.deleteMany();
+  await prisma.userCoinBalance.deleteMany();
+  await prisma.rewardItem.deleteMany();
+  await prisma.quest.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.weeklyReport.deleteMany();
   await prisma.task.deleteMany();
@@ -713,31 +719,55 @@ async function main() {
   });
 
   console.log("Seeding tasks...");
+  const now = new Date();
+  const day = 24 * 60 * 60 * 1000;
+  const smartCampusSprint = await prisma.sprint.create({
+    data: {
+      teamId: smartCampus.id,
+      name: "Sprint 1 - Core Workspace",
+      goal: "Ship the first usable student workspace with authentication, UI foundations, and map planning.",
+      startDate: new Date(now.getTime() - 3 * day),
+      endDate: new Date(now.getTime() + 11 * day),
+      status: "ACTIVE",
+      createdByUserId: users["mariam.salah@student.edu"].id,
+    },
+  });
+
   const tasks = [
     {
       teamId: smartCampus.id,
+      sprintId: smartCampusSprint.id,
       title: "Design System Implementation",
       description: "Establish core UI components using Tailwind CSS and Radix UI.",
       status: "DONE",
       priority: "HIGH",
+      taskType: "DESIGN",
+      storyPoints: 5,
+      actualPoints: 5,
       assigneeUserId: users["mariam.salah@student.edu"].id,
       labels: ["UI/UX", "Frontend"],
     },
     {
       teamId: smartCampus.id,
+      sprintId: smartCampusSprint.id,
       title: "Authentication Flow",
       description: "Implement JWT-based auth with refresh tokens and protected routes.",
       status: "IN_PROGRESS",
       priority: "CRITICAL",
+      taskType: "CODE",
+      storyPoints: 8,
       assigneeUserId: users["ali.mahmoud@student.edu"].id,
       labels: ["Security", "Backend"],
     },
     {
       teamId: smartCampus.id,
+      sprintId: smartCampusSprint.id,
       title: "Interactive Campus Map",
       description: "Integrate Mapbox API to show facility locations and real-time navigation.",
       status: "TODO",
       priority: "MEDIUM",
+      taskType: "CODE",
+      storyPoints: 5,
       assigneeUserId: users["salma.youssef@student.edu"].id,
       labels: ["Feature", "API"],
     },
@@ -774,13 +804,13 @@ async function main() {
       periodStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
       periodEnd: new Date(),
       summaryFinal: "Successfully initialized the repository, set up the development environment, and finalized the core requirements document. Team roles have been assigned and the initial design system is under development.",
+      status: "SUBMITTED",
       isSubmitted: true,
       submittedAt: new Date(),
     },
   });
 
   console.log("Seeding submissions...");
-  const day = 24 * 60 * 60 * 1000;
   const submissionDefinitions = [
     {
       teamKey: "smartCampus",
@@ -904,6 +934,7 @@ async function main() {
   // ─── Gamification: Seed Rules & Badges ───────────────────────
   await seedGamificationRules();
   await seedBadgeDefinitions();
+  await seedGamificationEconomy(users);
 
   console.log("Seed completed successfully!");
 }
@@ -914,6 +945,9 @@ async function main() {
 async function seedGamificationRules() {
   console.log("Seeding gamification rules...");
 
+  // WARNING: The rule configuration here for TASK_APPROVED_* events is mirrored
+  // in TASK_XP_RULE_ESTIMATES in src/modules/sprints/sprints.service.js.
+  // If you update rules here, make sure to update the estimates there as well!
   const rules = [
     // ── Task XP rules ──
     {
@@ -929,7 +963,7 @@ async function seedGamificationRules() {
         timeliness: { onTime: 1.0, lt24h: 0.8, lt3d: 0.6, lt7d: 0.4, gt7d: 0 },
         evidence: { repoBackedWithPR: 1.15, repoBackedNoPR: 1.0, manual: 0.5 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 300, maxXpPerUserPerWeek: 900 },
     },
     {
       code: "TASK_APPROVED_DOCUMENTATION",
@@ -943,7 +977,7 @@ async function seedGamificationRules() {
         difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
         timeliness: { onTime: 1.0, lt24h: 0.8, lt3d: 0.6, lt7d: 0.4, gt7d: 0 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 300, maxXpPerUserPerWeek: 900 },
     },
     {
       code: "TASK_APPROVED_DESIGN",
@@ -957,7 +991,7 @@ async function seedGamificationRules() {
         difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
         timeliness: { onTime: 1.0, lt24h: 0.8, lt3d: 0.6, lt7d: 0.4, gt7d: 0 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 300, maxXpPerUserPerWeek: 900 },
     },
     {
       code: "TASK_APPROVED_RESEARCH",
@@ -971,7 +1005,7 @@ async function seedGamificationRules() {
         difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
         timeliness: { onTime: 1.0, lt24h: 0.8, lt3d: 0.6, lt7d: 0.4, gt7d: 0 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 300, maxXpPerUserPerWeek: 900 },
     },
     {
       code: "TASK_APPROVED_MEETING",
@@ -982,7 +1016,7 @@ async function seedGamificationRules() {
       baseXp: 20,
       conditions: { taskType: "MEETING" },
       multipliers: {},
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 120, maxXpPerUserPerWeek: 300 },
     },
     {
       code: "TASK_APPROVED_PRESENTATION",
@@ -996,7 +1030,7 @@ async function seedGamificationRules() {
         difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
         timeliness: { onTime: 1.0, lt24h: 0.8, lt3d: 0.6, lt7d: 0.4, gt7d: 0 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 300, maxXpPerUserPerWeek: 900 },
     },
     {
       code: "TASK_APPROVED_OTHER",
@@ -1009,9 +1043,34 @@ async function seedGamificationRules() {
       multipliers: {
         difficulty: { LOW: 0.8, MEDIUM: 1.0, HIGH: 1.25, CRITICAL: 1.5 },
       },
-      caps: { maxPerTask: 1 },
+      caps: { maxPerTask: 1, maxXpPerUserPerDay: 180, maxXpPerUserPerWeek: 500 },
     },
     // ── Submission / Deliverable XP rules ──
+    // Sprint/team XP rules
+    {
+      code: "SPRINT_COMPLETED_TEAM",
+      name: "Sprint Completed (Team)",
+      description: "Team XP awarded when an active sprint is completed, scaled by completion percentage.",
+      eventType: "SPRINT_COMPLETED",
+      targetType: "TEAM",
+      baseXp: 120,
+      conditions: {},
+      multipliers: {
+        quality: { "90-100": 1.25, "80-89": 1.0, "70-79": 0.7, "60-69": 0.4, below60: 0 },
+      },
+      caps: { maxPerSprint: 1 },
+    },
+    {
+      code: "WEEKLY_REPORT_APPROVED_TEAM",
+      name: "Weekly Report Approved (Team)",
+      description: "Team XP for submitting a weekly progress report that is approved by staff.",
+      eventType: "WEEKLY_REPORT_APPROVED",
+      targetType: "TEAM",
+      baseXp: 75,
+      conditions: {},
+      multipliers: {},
+      caps: { maxPerWeeklyReport: 1 },
+    },
     {
       code: "SUBMISSION_APPROVED_SRS_TEAM",
       name: "SRS Submission Approved (Team)",
@@ -1497,6 +1556,228 @@ async function seedBadgeDefinitions() {
   }
 
   console.log(`  → ${badges.length} badge definitions seeded.`);
+}
+
+async function seedGamificationEconomy(users) {
+  console.log("Seeding gamification economy...");
+  const quests = [
+    {
+      code: "DAILY_TASK_CLOSER",
+      title: "Task closer",
+      description: "Complete two approved tasks today.",
+      type: "DAILY",
+      metric: "TASKS_DONE",
+      targetValue: 2,
+      coinReward: 25,
+      sortOrder: 10,
+      metadata: { icon: "check-square", tone: "green" },
+    },
+    {
+      code: "DAILY_REVIEW_HELPER",
+      title: "Review helper",
+      description: "Complete one GitHub pull request review today.",
+      type: "DAILY",
+      metric: "REVIEWS_GIVEN",
+      targetValue: 1,
+      coinReward: 20,
+      sortOrder: 20,
+      metadata: { icon: "git-pull-request", tone: "blue" },
+    },
+    {
+      code: "WEEKLY_XP_PUSH",
+      title: "XP push",
+      description: "Earn 300 awarded XP this week.",
+      type: "WEEKLY",
+      metric: "XP_EARNED",
+      targetValue: 300,
+      coinReward: 80,
+      sortOrder: 30,
+      metadata: { icon: "zap", tone: "yellow" },
+    },
+    {
+      code: "WEEKLY_SUBMISSION_READY",
+      title: "Submission ready",
+      description: "Get one deliverable submission approved this week.",
+      type: "WEEKLY",
+      metric: "SUBMISSIONS_APPROVED",
+      targetValue: 1,
+      coinReward: 60,
+      sortOrder: 40,
+      metadata: { icon: "file-check", tone: "purple" },
+    },
+    {
+      code: "MILESTONE_RELEASE_SHIPPER",
+      title: "Release shipper",
+      description: "Merge three GitHub pull requests over the project lifetime.",
+      type: "MILESTONE",
+      metric: "PRS_MERGED",
+      targetValue: 3,
+      coinReward: 120,
+      sortOrder: 50,
+      metadata: { icon: "rocket", tone: "orange" },
+    },
+    {
+      code: "MILESTONE_SPRINT_FINISHER",
+      title: "Sprint finisher",
+      description: "Contribute to two completed sprints.",
+      type: "MILESTONE",
+      metric: "SPRINTS_COMPLETED",
+      targetValue: 2,
+      coinReward: 100,
+      sortOrder: 60,
+      metadata: { icon: "target", tone: "emerald" },
+    },
+  ];
+
+  for (const quest of quests) {
+    await prisma.quest.upsert({
+      where: { code: quest.code },
+      update: {
+        title: quest.title,
+        description: quest.description,
+        type: quest.type,
+        metric: quest.metric,
+        targetValue: quest.targetValue,
+        coinReward: quest.coinReward,
+        sortOrder: quest.sortOrder,
+        metadata: quest.metadata,
+        isActive: true,
+      },
+      create: {
+        code: quest.code,
+        title: quest.title,
+        description: quest.description,
+        type: quest.type,
+        metric: quest.metric,
+        targetValue: quest.targetValue,
+        coinReward: quest.coinReward,
+        sortOrder: quest.sortOrder,
+        metadata: quest.metadata,
+        isActive: true,
+      },
+    });
+  }
+
+  const rewardItems = [
+    {
+      code: "TITLE_SPRINT_CAPTAIN",
+      name: "Sprint Captain",
+      description: "A profile title for students who keep team delivery moving.",
+      type: "TITLE",
+      cost: 80,
+      sortOrder: 10,
+      metadata: { accent: "emerald", previewText: "Sprint Captain" },
+    },
+    {
+      code: "TITLE_RELEASE_READY",
+      name: "Release Ready",
+      description: "A profile title for consistent shippers.",
+      type: "TITLE",
+      cost: 120,
+      sortOrder: 20,
+      metadata: { accent: "orange", previewText: "Release Ready" },
+    },
+    {
+      code: "FRAME_BLUEPRINT",
+      name: "Blueprint Frame",
+      description: "A subtle profile avatar frame with project-planning styling.",
+      type: "AVATAR_FRAME",
+      cost: 150,
+      sortOrder: 30,
+      metadata: { accent: "blue", borderStyle: "blueprint" },
+    },
+    {
+      code: "THEME_FOCUS_GRID",
+      name: "Focus Grid Theme",
+      description: "A dashboard theme accent for students who prefer quieter visuals.",
+      type: "PROFILE_THEME",
+      cost: 200,
+      sortOrder: 40,
+      metadata: { accent: "slate", density: "compact" },
+    },
+    {
+      code: "BADGE_SKIN_GOLD_TRIM",
+      name: "Gold Trim Badge Skin",
+      description: "Adds a gold trim to earned badge displays.",
+      type: "BADGE_SKIN",
+      cost: 260,
+      inventory: 20,
+      sortOrder: 50,
+      metadata: { accent: "gold", limited: true },
+    },
+  ];
+
+  for (const item of rewardItems) {
+    await prisma.rewardItem.upsert({
+      where: { code: item.code },
+      update: {
+        name: item.name,
+        description: item.description,
+        type: item.type,
+        cost: item.cost,
+        inventory: item.inventory ?? null,
+        sortOrder: item.sortOrder,
+        metadata: item.metadata,
+        status: "ACTIVE",
+      },
+      create: {
+        code: item.code,
+        name: item.name,
+        description: item.description,
+        type: item.type,
+        cost: item.cost,
+        inventory: item.inventory ?? null,
+        sortOrder: item.sortOrder,
+        metadata: item.metadata,
+        status: "ACTIVE",
+      },
+    });
+  }
+
+  const starterCoinEmails = [
+    "mariam.salah@student.edu",
+    "ali.mahmoud@student.edu",
+    "salma.youssef@student.edu",
+    "nour.hassan@student.edu",
+    "hassan.omar@student.edu",
+    "amira.khalil@student.edu",
+  ];
+
+  for (const email of starterCoinEmails) {
+    const user = users[email];
+    if (!user) continue;
+
+    const amount = user.role === "LEADER" ? 180 : 120;
+    await prisma.coinTransaction.upsert({
+      where: { idempotencyKey: `SEED_STARTER_COINS:${user.id}` },
+      update: {},
+      create: {
+        idempotencyKey: `SEED_STARTER_COINS:${user.id}`,
+        userId: user.id,
+        amount,
+        direction: "CREDIT",
+        status: "POSTED",
+        sourceType: "SEED",
+        reason: "Starter coins for gamification economy demo data.",
+      },
+    });
+
+    await prisma.userCoinBalance.upsert({
+      where: { userId: user.id },
+      update: {
+        balance: amount,
+        lifetimeEarned: amount,
+        lifetimeSpent: 0,
+      },
+      create: {
+        userId: user.id,
+        balance: amount,
+        lifetimeEarned: amount,
+      },
+    });
+  }
+
+  console.log(`  -> ${quests.length} quests, ${rewardItems.length} rewards, and ${starterCoinEmails.length} starter wallets seeded.`);
 }
 
 main()

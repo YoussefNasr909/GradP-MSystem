@@ -7,6 +7,7 @@ import {
   assertSuspiciousCaseCanBeResolved,
   buildAdjustmentReviewedNotification,
   buildCaseResolutionNotification,
+  getXpMutationLeaderboardRefreshTypes,
 } from "./gamification.service.js";
 
 const openFrozenCase = {
@@ -16,6 +17,16 @@ const openFrozenCase = {
   team: { doctorId: "doctor-1" },
   transaction: { status: "FROZEN" },
 };
+
+test("getXpMutationLeaderboardRefreshTypes returns valid leaderboard snapshot types", () => {
+  assert.deepEqual(getXpMutationLeaderboardRefreshTypes(), [
+    "INDIVIDUAL_WEEKLY",
+    "INDIVIDUAL_SEMESTER",
+    "INDIVIDUAL_LIFETIME",
+    "TEAM_WEEKLY",
+    "TEAM_SEMESTER",
+  ]);
+});
 
 test("assertSuspiciousCaseCanBeResolved rejects already resolved cases with conflict", () => {
   assert.throws(

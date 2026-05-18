@@ -48,6 +48,7 @@ import { TeamRequiredGuard } from "@/components/team-required-guard"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { sprintsApi } from "@/lib/api/sprints"
+import { tasksApi } from "@/lib/api/tasks"
 import type {
   ApiSprint,
   ApiSprintBoard,
@@ -264,6 +265,14 @@ function getEvaluationFormFromEvaluation(evaluation?: ApiSprintEvaluation | null
       deadlineCommitment: evaluation.criteria.deadlineCommitment === null ? "" : String(evaluation.criteria.deadlineCommitment),
     },
   }
+}
+
+function readPointsInput(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 99) return undefined
+  return parsed
 }
 
 function parseCriterionValue(value: string) {
@@ -493,6 +502,7 @@ function SprintTaskCard({
   isBusy,
   reduceMotion,
   onMove,
+  onMetaChange,
 }: {
   task: ApiSprintTask
   board: ApiSprintBoard
@@ -500,6 +510,7 @@ function SprintTaskCard({
   isBusy: boolean
   reduceMotion: boolean
   onMove: (task: ApiSprintTask, sprintId: string) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
 }) {
   const sprintOptions = board.sprints
     .filter((sprint) => sprint.status !== "COMPLETED" || sprint.id === task.sprintId)
@@ -575,6 +586,106 @@ function SprintTaskCard({
           </SelectContent>
         </Select>
 
+        <div className="rounded-lg border border-border/70 bg-muted/20 p-3 transition-colors hover:bg-muted/30">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase text-muted-foreground">Sprint planning</span>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <Badge variant="outline" className="rounded-md px-2 text-[10px]">
+                {task.actualPoints === null ? `Estimate ${task.storyPoints} SP` : `Actual ${task.actualPoints} SP`}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "rounded-md px-2 text-[10px] cursor-help",
+                  task.gamificationImpact.eligible
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "text-muted-foreground"
+                )}
+                title={`Base XP: ${task.gamificationImpact.baseXp}\nEffort multiplier: x${task.gamificationImpact.effortMultiplier}\nPriority multiplier: x${task.gamificationImpact.priorityMultiplier}\nEvidence multiplier: x${task.gamificationImpact.evidenceMultiplier}`}
+              >
+                Est. +{task.gamificationImpact.estimatedXp} XP
+              </Badge>
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-foreground">Estimate</span>
+              <div className="relative">
+                <Input
+                  key={`story-${task.id}-${task.storyPoints}`}
+                  type="number"
+                  min={0}
+                  max={99}
+                  defaultValue={task.storyPoints}
+                  disabled={!canManage || isBusy}
+                  className="h-10 rounded-lg pr-10 text-sm transition-[border-color,box-shadow] hover:border-primary/35 focus-visible:ring-primary/20"
+                  aria-label="Estimated story points"
+                  title="Estimated story points"
+                  onBlur={(event) => {
+                    const next = readPointsInput(event.currentTarget.value)
+                    if (next === null) {
+                      event.currentTarget.value = String(task.storyPoints)
+                      return
+                    }
+                    if (next === undefined) {
+                      event.currentTarget.value = String(task.storyPoints)
+                      toast.error("Estimate must be a whole number between 0 and 99.")
+                      return
+                    }
+                    if (next !== task.storyPoints) onMetaChange(task, { storyPoints: next })
+                  }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-muted-foreground">SP</span>
+              </div>
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium text-foreground">Completed effort</span>
+              <div className="relative">
+                <Input
+                  key={`actual-${task.id}-${task.actualPoints ?? "actual-empty"}`}
+                  type="number"
+                  min={0}
+                  max={99}
+                  defaultValue={task.actualPoints ?? ""}
+                  disabled={!canManage || isBusy}
+                  className="h-10 rounded-lg pr-10 text-sm transition-[border-color,box-shadow] hover:border-primary/35 focus-visible:ring-primary/20"
+                  aria-label="Actual completed story points"
+                  title="Actual completed story points"
+                  placeholder="Optional"
+                  onBlur={(event) => {
+                    const next = readPointsInput(event.currentTarget.value)
+                    if (next === undefined) {
+                      event.currentTarget.value = task.actualPoints === null ? "" : String(task.actualPoints)
+                      toast.error("Completed effort must be a whole number between 0 and 99.")
+                      return
+                    }
+                    if (next === null) {
+                      if (task.actualPoints !== null) onMetaChange(task, { actualPoints: null })
+                      return
+                    }
+                    if (next !== task.actualPoints) onMetaChange(task, { actualPoints: next })
+                  }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs font-semibold text-muted-foreground">SP</span>
+              </div>
+            </label>
+          </div>
+
+          <label className="mt-3 flex min-w-0 items-start gap-3 rounded-lg border border-border/70 bg-background/70 p-3 text-sm transition-[border-color,background-color] hover:border-primary/30 hover:bg-background">
+            <Checkbox
+              checked={task.unplanned}
+              disabled={!canManage || !task.sprintId || isBusy}
+              onCheckedChange={(checked) => onMetaChange(task, { unplanned: checked === true })}
+              className="mt-0.5"
+            />
+            <span className="grid min-w-0 gap-0.5">
+              <span className="font-medium text-foreground">Unplanned work</span>
+              <span className="text-xs text-muted-foreground">Mark this only if the task was added after the sprint started.</span>
+            </span>
+          </label>
+        </div>
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
@@ -886,6 +997,7 @@ function SprintGroup({
   onStart,
   onComplete,
   onMove,
+  onMetaChange,
   onEvaluationDraftChange,
   onReviewCommentChange,
   onSaveEvaluation,
@@ -910,6 +1022,7 @@ function SprintGroup({
   onStart: (id: string) => void
   onComplete: (id: string) => void
   onMove: (task: ApiSprintTask, sprintId: string) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
   onEvaluationDraftChange: (sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) => void
   onReviewCommentChange: (evaluationId: string, value: string) => void
   onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
@@ -960,6 +1073,13 @@ function SprintGroup({
             <span>{sprint.stats.totalTasks} tasks</span>
             <span>{sprint.stats.unplannedTasks} unplanned</span>
             <span>{sprint.stats.progress}% complete</span>
+            <span
+              className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-300 cursor-help"
+              title={`Base XP: ${sprint.gamificationImpact.baseTeamXp}\nCompletion multiplier: x${sprint.gamificationImpact.completionMultiplier}`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Est. +{sprint.gamificationImpact.estimatedTeamXp} team XP
+            </span>
           </div>
           {canManage ? (
             <div className="flex flex-wrap gap-2">
@@ -1010,6 +1130,7 @@ function SprintGroup({
                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                 reduceMotion={reduceMotion}
                 onMove={onMove}
+                onMetaChange={onMetaChange}
               />
             ))
           ) : (
@@ -1139,6 +1260,11 @@ export default function SprintsPage() {
       setIsLoading(false)
     }
   }, [activeTeamId, isAssignedTeamsLoading, isTeamLoading])
+
+  function handleSupportTeamSelection(nextTeamId: string) {
+    if (!nextTeamId) return
+    router.push(`/dashboard/sprints?teamId=${encodeURIComponent(nextTeamId)}`)
+  }
 
   useEffect(() => {
     void loadBoard()
@@ -1358,6 +1484,21 @@ export default function SprintsPage() {
       setActionInFlight("")
     }
   }
+
+  const handleTaskMetaChange = useCallback(async (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => {
+    if (actionInFlight) return
+    setActionInFlight(`meta-${task.id}`)
+
+    try {
+      await tasksApi.update(task.id, meta as any)
+      await loadBoard()
+      toast.success("Task updated.")
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update task.")
+    } finally {
+      setActionInFlight("")
+    }
+  }, [actionInFlight, loadBoard])
 
   async function handleMoveTask(task: ApiSprintTask, sprintId: string) {
     if ((sprintId === "backlog" && !task.sprintId) || sprintId === task.sprintId) return
@@ -1621,6 +1762,33 @@ export default function SprintsPage() {
               </p>
             </div>
           </Card>
+        ) : !activeTeamId ? (
+          <Card className="rounded-lg border-dashed p-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Select a team workspace</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose a supervised or managed team to review its sprint board.
+                </p>
+              </div>
+              {assignedTeams.length ? (
+                <Select value={requestedTeamId ?? undefined} onValueChange={(value) => router.replace(`/dashboard/sprints?teamId=${value}`, { scroll: false })}>
+                  <SelectTrigger className="w-full rounded-lg lg:w-[320px]">
+                    <SelectValue placeholder="Choose team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignedTeams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-sm text-muted-foreground">No teams are available for this account.</p>
+              )}
+            </div>
+          </Card>
         ) : board ? (
           <>
             <motion.div
@@ -1760,6 +1928,7 @@ export default function SprintsPage() {
                           isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                           reduceMotion={Boolean(shouldReduceMotion)}
                           onMove={handleMoveTask}
+                          onMetaChange={handleTaskMetaChange}
                         />
                       ))
                     ) : (
@@ -1795,6 +1964,7 @@ export default function SprintsPage() {
                           onStart={handleStartSprint}
                           onComplete={handleCompleteSprint}
                           onMove={handleMoveTask}
+                          onMetaChange={handleTaskMetaChange}
                           onEvaluationDraftChange={handleEvaluationDraftChange}
                           onReviewCommentChange={handleReviewCommentChange}
                           onSaveEvaluation={handleSaveEvaluation}
@@ -1878,6 +2048,7 @@ export default function SprintsPage() {
                                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                                 reduceMotion={Boolean(shouldReduceMotion)}
                                 onMove={handleMoveTask}
+                                onMetaChange={handleTaskMetaChange}
                               />
                             ))
                           ) : (

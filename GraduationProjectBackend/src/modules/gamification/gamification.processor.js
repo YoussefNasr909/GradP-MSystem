@@ -1,11 +1,15 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../loaders/dbLoader.js";
 import { env } from "../../config/env.js";
 import { notify } from "../../common/utils/notify.js";
 import { matchRules, calculateXp } from "./gamification.rules-engine.js";
 import { evaluateBadgesForTeam, evaluateBadgesForUser } from "./gamification.badges.js";
+import { computeLevel } from "./gamification.math.js";
+import { awardCoinsForXpTransaction } from "../economy/economy.repository.js";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 3;
+const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
 export async function processPendingEvents() {
   if (!env.gamificationEnabled) {
@@ -28,10 +32,21 @@ export async function processPendingEvents() {
     };
   }
 
+  const staleProcessingBefore = new Date(Date.now() - PROCESSING_STALE_MS);
+  const claimableEventWhere = {
+    attempts: { lt: MAX_ATTEMPTS },
+    OR: [
+      { status: "PENDING" },
+      {
+        status: "PROCESSING",
+        updatedAt: { lt: staleProcessingBefore },
+      },
+    ],
+  };
+
   const events = await prisma.gamificationEvent.findMany({
     where: {
-      status: "PENDING",
-      attempts: { lt: MAX_ATTEMPTS },
+      ...claimableEventWhere,
     },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
@@ -56,8 +71,7 @@ export async function processPendingEvents() {
       const claimResult = await prisma.gamificationEvent.updateMany({
         where: {
           id: event.id,
-          status: "PENDING",
-          attempts: { lt: MAX_ATTEMPTS },
+          ...claimableEventWhere,
         },
         data: {
           status: "PROCESSING",
@@ -119,10 +133,11 @@ export async function processPendingEvents() {
 
       if (claimed) {
         try {
+          const nextAttempts = (event.attempts ?? 0) + 1;
           await prisma.gamificationEvent.update({
             where: { id: event.id },
             data: {
-              status: "FAILED",
+              status: nextAttempts >= MAX_ATTEMPTS ? "FAILED" : "PENDING",
               lastError: String(err?.message ?? "Unknown error").slice(0, 500),
             },
           });
@@ -143,6 +158,27 @@ export async function processRuleForEvent(event, rule) {
   const { amount, breakdown } = calculateXp(rule, payload);
 
   if (amount === 0) return;
+  if (
+    event.eventType === "TASK_APPROVED" &&
+    payload.storyPoints !== undefined &&
+    Number(payload.storyPoints) < 1
+  ) {
+    console.warn(
+      `[gamification] Skipping task XP for event ${event.id}: storyPoints must be at least 1.`,
+    );
+    return;
+  }
+  if (
+    event.eventType === "TASK_APPROVED" &&
+    payload.assigneeUserId &&
+    event.actorUserId &&
+    payload.assigneeUserId === event.actorUserId
+  ) {
+    console.warn(
+      `[gamification] Skipping task XP for event ${event.id}: self-approved tasks are not XP eligible.`,
+    );
+    return;
+  }
 
   const isTeamTarget = rule.targetType === "TEAM";
   const recipientUserId = isTeamTarget
@@ -163,16 +199,7 @@ export async function processRuleForEvent(event, rule) {
     return;
   }
 
-  const capped = await isAwardBlockedByCaps({
-    event,
-    rule,
-    recipientUserId,
-    recipientTeamId,
-    amount,
-  });
-  if (capped) return;
-
-  const suspicion = await evaluateSubmissionDuplicateSuspicion(event);
+  const suspicion = await evaluateAwardSuspicion(event);
   const transactionIdempotencyKey = buildAwardTransactionKey({
     event,
     rule,
@@ -180,116 +207,153 @@ export async function processRuleForEvent(event, rule) {
     recipientTeamId,
   });
 
-  await prisma.$transaction(async (tx) => {
-    const existingTransaction = await tx.xpTransaction.findUnique({
-      where: { idempotencyKey: transactionIdempotencyKey },
-      select: { id: true },
-    });
+  const MAX_SERIALIZATION_RETRIES = 3;
+  let attempt = 0;
 
-    if (existingTransaction) {
-      return;
-    }
+  while (attempt < MAX_SERIALIZATION_RETRIES) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const existingTransaction = await tx.xpTransaction.findUnique({
+          where: { idempotencyKey: transactionIdempotencyKey },
+          select: { id: true },
+        });
 
-    const transaction = await tx.xpTransaction.create({
-      data: {
-        idempotencyKey: transactionIdempotencyKey,
-        recipientType: rule.targetType,
-        userId: recipientUserId,
-        teamId: recipientTeamId,
-        amount,
-        direction: "CREDIT",
-        status: suspicion ? "FROZEN" : "AWARDED",
-        reason: `${rule.name} - ${event.eventType}`,
-        eventId: event.id,
-        sourceType: event.sourceType,
-        sourceId: event.sourceId,
-        ruleCode: rule.code,
-        ruleVersion: rule.version,
-        baseXp: rule.baseXp,
-        qualityMultiplier: breakdown.qualityMultiplier ?? null,
-        timelinessMultiplier: breakdown.timelinessMultiplier ?? null,
-        evidenceMultiplier: breakdown.evidenceMultiplier ?? null,
-        difficultyMultiplier: breakdown.difficultyMultiplier ?? null,
-        createdByType: "SYSTEM",
-        metadata: { breakdown, eventPayload: payload },
-      },
-    });
+        if (existingTransaction) {
+          return;
+        }
 
-    if (suspicion) {
-      if (isTeamTarget) {
-        await upsertTeamFrozenBalance(tx, recipientTeamId, amount);
-      } else {
-        await upsertUserFrozenBalance(tx, recipientUserId, amount);
-      }
-
-      await tx.suspiciousActivityCase.create({
-        data: {
-          userId: recipientUserId,
-          teamId: event.teamId ?? recipientTeamId,
-          eventId: event.id,
-          transactionId: transaction.id,
-          score: suspicion.score,
-          reason: suspicion.reason,
-          signals: suspicion.signals,
-          studentVisibleReason: "This XP is pending staff review because a similar submission was detected.",
-        },
-      });
-
-      await appendAuditLog(tx, {
-        action: "TRANSACTION_FROZEN",
-        targetType: "XpTransaction",
-        targetId: transaction.id,
-        after: {
-          idempotencyKey: transactionIdempotencyKey,
-          recipientType: rule.targetType,
-          userId: recipientUserId,
-          teamId: recipientTeamId,
+        const capped = await isAwardBlockedByCaps({
+          client: tx,
+          event,
+          rule,
+          recipientUserId,
+          recipientTeamId,
           amount,
-          reason: suspicion.reason,
-          signals: suspicion.signals,
-        },
-        reason: `Frozen while processing ${event.eventType} event ${event.id}.`,
-      });
-      await notifyXpTransaction(tx, { transaction, kind: "FROZEN" });
-      return;
-    }
+        });
+        if (capped) return;
 
-    if (isTeamTarget) {
-      await upsertTeamBalance(tx, recipientTeamId, amount);
-    } else {
-      await upsertUserBalance(tx, recipientUserId, amount);
-    }
+        const transaction = await tx.xpTransaction.create({
+          data: {
+            idempotencyKey: transactionIdempotencyKey,
+            recipientType: rule.targetType,
+            userId: recipientUserId,
+            teamId: recipientTeamId,
+            amount,
+            direction: "CREDIT",
+            status: suspicion ? "FROZEN" : "AWARDED",
+            reason: `${rule.name} - ${event.eventType}`,
+            eventId: event.id,
+            sourceType: event.sourceType,
+            sourceId: event.sourceId,
+            ruleCode: rule.code,
+            ruleVersion: rule.version,
+            baseXp: rule.baseXp,
+            qualityMultiplier: breakdown.qualityMultiplier ?? null,
+            timelinessMultiplier: breakdown.timelinessMultiplier ?? null,
+            evidenceMultiplier: breakdown.evidenceMultiplier ?? null,
+            difficultyMultiplier: breakdown.difficultyMultiplier ?? null,
+            createdByType: "SYSTEM",
+            metadata: { breakdown, eventPayload: payload },
+          },
+        });
 
-    await appendAuditLog(tx, {
-      action: "TRANSACTION_CREATED",
-      targetType: "XpTransaction",
-      targetId: transaction.id,
-      after: {
-        idempotencyKey: transactionIdempotencyKey,
-        recipientType: rule.targetType,
-        userId: recipientUserId,
-        teamId: recipientTeamId,
-        amount,
-        ruleCode: rule.code,
-        ruleVersion: rule.version,
-      },
-      reason: `Processed ${event.eventType} event ${event.id}.`,
-    });
-    await notifyXpTransaction(tx, { transaction, kind: "AWARDED" });
-    if (isTeamTarget) {
-      await evaluateBadgesForTeam(tx, {
-        teamId: recipientTeamId,
-        event,
-        triggeringTransaction: transaction,
+        if (suspicion) {
+          if (isTeamTarget) {
+            await upsertTeamFrozenBalance(tx, recipientTeamId, amount);
+          } else {
+            await upsertUserFrozenBalance(tx, recipientUserId, amount);
+          }
+
+          await tx.suspiciousActivityCase.create({
+            data: {
+              userId: recipientUserId,
+              teamId: event.teamId ?? recipientTeamId,
+              eventId: event.id,
+              transactionId: transaction.id,
+              score: suspicion.score,
+              reason: suspicion.reason,
+              signals: suspicion.signals,
+              studentVisibleReason:
+                suspicion.studentVisibleReason ??
+                "This XP is pending staff review before it can be added to your balance.",
+            },
+          });
+
+          await appendAuditLog(tx, {
+            action: "TRANSACTION_FROZEN",
+            targetType: "XpTransaction",
+            targetId: transaction.id,
+            after: {
+              idempotencyKey: transactionIdempotencyKey,
+              recipientType: rule.targetType,
+              userId: recipientUserId,
+              teamId: recipientTeamId,
+              amount,
+              reason: suspicion.reason,
+              signals: suspicion.signals,
+            },
+            reason: `Frozen while processing ${event.eventType} event ${event.id}.`,
+          });
+          await notifyXpTransaction(tx, { transaction, kind: "FROZEN" });
+          return;
+        }
+
+        if (isTeamTarget) {
+          await upsertTeamBalance(tx, recipientTeamId, amount);
+        } else {
+          await upsertUserBalance(tx, recipientUserId, amount);
+          await awardCoinsForXpTransaction(tx, transaction);
+        }
+
+        await appendAuditLog(tx, {
+          action: "TRANSACTION_CREATED",
+          targetType: "XpTransaction",
+          targetId: transaction.id,
+          after: {
+            idempotencyKey: transactionIdempotencyKey,
+            recipientType: rule.targetType,
+            userId: recipientUserId,
+            teamId: recipientTeamId,
+            amount,
+            ruleCode: rule.code,
+            ruleVersion: rule.version,
+          },
+          reason: `Processed ${event.eventType} event ${event.id}.`,
+        });
+        await notifyXpTransaction(tx, { transaction, kind: "AWARDED" });
+        if (isTeamTarget) {
+          await evaluateBadgesForTeam(tx, {
+            teamId: recipientTeamId,
+            event,
+            triggeringTransaction: transaction,
+          });
+        } else {
+          await evaluateBadgesForUser(tx, {
+            userId: recipientUserId,
+            event,
+            triggeringTransaction: transaction,
+          });
+        }
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       });
-    } else {
-      await evaluateBadgesForUser(tx, {
-        userId: recipientUserId,
-        event,
-        triggeringTransaction: transaction,
-      });
+      break; // Success, exit retry loop
+    } catch (error) {
+      if (error.code === "P2034") {
+        attempt++;
+        if (attempt >= MAX_SERIALIZATION_RETRIES) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+      } else {
+        throw error;
+      }
     }
-  });
+  }
+}
+
+async function evaluateAwardSuspicion(event) {
+  return (await evaluateSubmissionDuplicateSuspicion(event)) ?? evaluateTaskApprovalSuspicion(event);
 }
 
 async function evaluateSubmissionDuplicateSuspicion(event) {
@@ -345,6 +409,7 @@ async function evaluateSubmissionDuplicateSuspicion(event) {
   return {
     score: 85,
     reason: "Duplicate submission content detected.",
+    studentVisibleReason: "This XP is pending staff review because a similar submission was detected.",
     signals: {
       type: "DUPLICATE_SUBMISSION_HASH",
       submissionId: submission.id,
@@ -363,6 +428,62 @@ async function evaluateSubmissionDuplicateSuspicion(event) {
       ),
     },
   };
+}
+
+function evaluateTaskApprovalSuspicion(event) {
+  if (event.eventType !== "TASK_APPROVED" || event.sourceType !== "Task") {
+    return null;
+  }
+
+  const payload = event.payload ?? {};
+  const createdAt = parseEventDate(payload.createdAt);
+  const acceptedAt = parseEventDate(payload.acceptedAt);
+  const submittedAt = parseEventDate(payload.submittedForReviewAt);
+  const reviewedAt = parseEventDate(payload.reviewedAt);
+  if (!reviewedAt) return null;
+
+  const signals = [];
+  if (createdAt && minutesBetween(createdAt, reviewedAt) < 10) {
+    signals.push({
+      type: "RAPID_CREATE_TO_APPROVAL",
+      minutes: minutesBetween(createdAt, reviewedAt),
+      thresholdMinutes: 10,
+    });
+  }
+  if (acceptedAt && submittedAt && minutesBetween(acceptedAt, submittedAt) < 5) {
+    signals.push({
+      type: "RAPID_ACCEPT_TO_SUBMISSION",
+      minutes: minutesBetween(acceptedAt, submittedAt),
+      thresholdMinutes: 5,
+    });
+  }
+
+  if (signals.length === 0) return null;
+
+  return {
+    score: signals.some((signal) => signal.type === "RAPID_CREATE_TO_APPROVAL") ? 65 : 45,
+    reason: "Task was approved unusually quickly.",
+    studentVisibleReason: "This task XP is pending staff review because the task moved through review unusually quickly.",
+    signals: {
+      type: "RAPID_TASK_APPROVAL",
+      taskId: event.sourceId,
+      createdAt: payload.createdAt ?? null,
+      acceptedAt: payload.acceptedAt ?? null,
+      submittedForReviewAt: payload.submittedForReviewAt ?? null,
+      reviewedAt: payload.reviewedAt ?? null,
+      checks: signals,
+    },
+  };
+}
+
+function parseEventDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function minutesBetween(start, end) {
+  return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60));
 }
 
 export async function processTaskReopenedEvent(event) {
@@ -602,21 +723,32 @@ function getAwardFilter({ rule, recipientUserId, recipientTeamId }) {
   };
 }
 
+function getRecipientAwardFilter({ rule, recipientUserId, recipientTeamId }) {
+  return {
+    recipientType: rule.targetType,
+    userId: recipientUserId,
+    teamId: recipientTeamId,
+    direction: "CREDIT",
+    status: "AWARDED",
+  };
+}
+
 function toPositiveCap(value) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return null;
   return parsed;
 }
 
-async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTeamId, amount }) {
+async function isAwardBlockedByCaps({ client = prisma, event, rule, recipientUserId, recipientTeamId, amount }) {
   const caps = rule.caps;
   if (!caps || typeof caps !== "object") return false;
 
   const baseFilter = getAwardFilter({ rule, recipientUserId, recipientTeamId });
+  const recipientAwardFilter = getRecipientAwardFilter({ rule, recipientUserId, recipientTeamId });
 
   const maxPerTask = toPositiveCap(caps.maxPerTask);
   if (maxPerTask) {
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         sourceType: "Task",
@@ -628,7 +760,7 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
 
   const maxPerSubmissionVersion = toPositiveCap(caps.maxPerSubmissionVersion);
   if (maxPerSubmissionVersion) {
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         sourceType: "Submission",
@@ -640,7 +772,7 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
 
   const maxPerRelease = toPositiveCap(caps.maxPerRelease);
   if (maxPerRelease) {
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         sourceType: event.sourceType,
@@ -650,9 +782,33 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
     if (count >= maxPerRelease) return true;
   }
 
+  const maxPerSprint = toPositiveCap(caps.maxPerSprint);
+  if (maxPerSprint) {
+    const count = await client.xpTransaction.count({
+      where: {
+        ...baseFilter,
+        sourceType: "Sprint",
+        sourceId: event.sourceId,
+      },
+    });
+    if (count >= maxPerSprint) return true;
+  }
+
+  const maxPerWeeklyReport = toPositiveCap(caps.maxPerWeeklyReport);
+  if (maxPerWeeklyReport) {
+    const count = await client.xpTransaction.count({
+      where: {
+        ...baseFilter,
+        sourceType: "WeeklyReport",
+        sourceId: event.sourceId,
+      },
+    });
+    if (count >= maxPerWeeklyReport) return true;
+  }
+
   const maxPerBadgePerRecipient = toPositiveCap(caps.maxPerBadgePerRecipient);
   if (maxPerBadgePerRecipient) {
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         sourceType: event.sourceType,
@@ -671,7 +827,7 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
         : null);
 
     if (transitionKey) {
-      const count = await prisma.xpTransaction.count({
+      const count = await client.xpTransaction.count({
         where: {
           ...baseFilter,
           sourceType: "Team",
@@ -690,7 +846,7 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
   if (maxPerUserPerDay && recipientUserId) {
     const since = new Date();
     since.setDate(since.getDate() - 1);
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         createdAt: { gte: since },
@@ -699,11 +855,26 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
     if (count >= maxPerUserPerDay) return true;
   }
 
+  const maxXpPerUserPerDay = toPositiveCap(caps.maxXpPerUserPerDay);
+  if (maxXpPerUserPerDay && recipientUserId) {
+    const since = new Date();
+    since.setDate(since.getDate() - 1);
+    const aggregate = await client.xpTransaction.aggregate({
+      where: {
+        ...recipientAwardFilter,
+        createdAt: { gte: since },
+      },
+      _sum: { amount: true },
+    });
+    const awardedSoFar = aggregate._sum.amount ?? 0;
+    if (awardedSoFar + amount > maxXpPerUserPerDay) return true;
+  }
+
   const maxPerUserPerWeek = toPositiveCap(caps.maxPerUserPerWeek);
   if (maxPerUserPerWeek && recipientUserId) {
     const since = new Date();
     since.setDate(since.getDate() - 7);
-    const count = await prisma.xpTransaction.count({
+    const count = await client.xpTransaction.count({
       where: {
         ...baseFilter,
         createdAt: { gte: since },
@@ -712,9 +883,24 @@ async function isAwardBlockedByCaps({ event, rule, recipientUserId, recipientTea
     if (count >= maxPerUserPerWeek) return true;
   }
 
+  const maxXpPerUserPerWeek = toPositiveCap(caps.maxXpPerUserPerWeek);
+  if (maxXpPerUserPerWeek && recipientUserId) {
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+    const aggregate = await client.xpTransaction.aggregate({
+      where: {
+        ...recipientAwardFilter,
+        createdAt: { gte: since },
+      },
+      _sum: { amount: true },
+    });
+    const awardedSoFar = aggregate._sum.amount ?? 0;
+    if (awardedSoFar + amount > maxXpPerUserPerWeek) return true;
+  }
+
   const maxXpPerPr = toPositiveCap(caps.maxXpPerPR);
   if (maxXpPerPr) {
-    const aggregate = await prisma.xpTransaction.aggregate({
+    const aggregate = await client.xpTransaction.aggregate({
       where: {
         ...baseFilter,
         sourceType: event.sourceType,
@@ -848,8 +1034,4 @@ async function deductTeamBalance(tx, teamId, amount) {
       weeklyTeamXp: Math.max(0, balance.weeklyTeamXp - amount),
     },
   });
-}
-
-function computeLevel(lifetimeXp) {
-  return Math.floor(Math.sqrt(Math.max(0, lifetimeXp) / 100)) + 1;
 }

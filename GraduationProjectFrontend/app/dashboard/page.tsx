@@ -61,21 +61,39 @@ import {
 // (proposals to review, submissions to grade, tasks awaiting PR review, etc.)
 // which fetches them via real API endpoints. Per-dashboard widgets that need
 // more detail wire their own hooks (e.g. useMyTeamState).
-// Placeholder mock arrays for legacy dashboard widgets that haven't been
-// re-typed yet. The consuming code reads ad-hoc fields, so `any[]` is the
-// pragmatic shape until each widget gets refactored onto real API types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const teams: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const users: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const proposals: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const tasks: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const meetings: any[] = []
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getUserById(_id: string): any { return null }
+type DashboardTeamPlaceholder = {
+  id: string
+  name?: string
+  health?: string
+  leaderId?: string
+  memberIds?: string[]
+}
+type DashboardTaskPlaceholder = {
+  id: string
+  title: string
+  status?: string
+  priority?: string
+  dueDate?: string | Date
+  teamId?: string
+  assigneeId?: string
+  assigneeIds?: string[]
+}
+type DashboardMeetingPlaceholder = {
+  id: string
+  title: string
+  date: string | Date
+  time?: string
+  type?: string
+  teamId?: string
+}
+type DashboardUserPlaceholder = { id: string; name?: string }
+
+const teams: DashboardTeamPlaceholder[] = []
+const users: DashboardUserPlaceholder[] = []
+const proposals: unknown[] = []
+const tasks: DashboardTaskPlaceholder[] = []
+const meetings: DashboardMeetingPlaceholder[] = []
+function getUserById(_id: string): DashboardUserPlaceholder | null { return null }
 void users
 void proposals
 import { usersApi } from "@/lib/api/users"
@@ -88,6 +106,7 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
 import { useGamificationOverview } from "@/lib/hooks/use-gamification"
+import { useEconomyOverview } from "@/lib/hooks/use-economy"
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -149,10 +168,11 @@ function StudentMemberDashboard() {
   // "streak" or "gold" count from the backend; default to 0 here so the
   // dashboard cards render even when those metrics arrive later.
   const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.balance.lifetimeXp ?? 0
-  const level = gamification?.balance.level ?? 1
+  const { data: economy } = useEconomyOverview()
+  const xp = gamification?.balance?.lifetimeXp ?? 0
+  const level = gamification?.balance?.level ?? 1
   const streak = 0
-  const gold = 0
+  const coins = economy?.wallet.balance ?? 0
 
   useEffect(() => {
     if (myTeamState?.team) return
@@ -435,7 +455,7 @@ function StudentMemberDashboard() {
                     <Trophy className="h-3 w-3" /> {xp} XP
                   </Badge>
                   <Badge variant="outline" className="gap-1 border-yellow-500/50 text-yellow-600">
-                    <Coins className="h-3 w-3" /> {gold} Gold
+                    <Coins className="h-3 w-3" /> {coins} Coins
                   </Badge>
                 </div>
               </div>
@@ -842,9 +862,7 @@ function TeamLeaderDashboard() {
   }, [])
 
   const { data: gamification } = useGamificationOverview()
-  // See note above: GamificationOverview shape is `{ balance, badges, ... }`.
-  // `streak` is not on the backend response yet; default to 0.
-  const xp = gamification?.balance.lifetimeXp ?? 0
+  const xp = gamification?.balance?.lifetimeXp ?? 0
   const streak = 0
 
   const liveTeam = myTeamState?.team ?? null
