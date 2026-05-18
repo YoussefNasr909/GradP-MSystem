@@ -48,6 +48,7 @@ import { TeamRequiredGuard } from "@/components/team-required-guard"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { sprintsApi } from "@/lib/api/sprints"
+import { tasksApi } from "@/lib/api/tasks"
 import type {
   ApiSprint,
   ApiSprintBoard,
@@ -264,6 +265,14 @@ function getEvaluationFormFromEvaluation(evaluation?: ApiSprintEvaluation | null
       deadlineCommitment: evaluation.criteria.deadlineCommitment === null ? "" : String(evaluation.criteria.deadlineCommitment),
     },
   }
+}
+
+function readPointsInput(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 99) return undefined
+  return parsed
 }
 
 function parseCriterionValue(value: string) {
@@ -493,6 +502,7 @@ function SprintTaskCard({
   isBusy,
   reduceMotion,
   onMove,
+  onMetaChange,
 }: {
   task: ApiSprintTask
   board: ApiSprintBoard
@@ -500,6 +510,7 @@ function SprintTaskCard({
   isBusy: boolean
   reduceMotion: boolean
   onMove: (task: ApiSprintTask, sprintId: string) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
 }) {
   const sprintOptions = board.sprints
     .filter((sprint) => sprint.status !== "COMPLETED" || sprint.id === task.sprintId)
@@ -986,6 +997,7 @@ function SprintGroup({
   onStart,
   onComplete,
   onMove,
+  onMetaChange,
   onEvaluationDraftChange,
   onReviewCommentChange,
   onSaveEvaluation,
@@ -1010,6 +1022,7 @@ function SprintGroup({
   onStart: (id: string) => void
   onComplete: (id: string) => void
   onMove: (task: ApiSprintTask, sprintId: string) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
   onEvaluationDraftChange: (sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) => void
   onReviewCommentChange: (evaluationId: string, value: string) => void
   onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
@@ -1117,6 +1130,7 @@ function SprintGroup({
                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                 reduceMotion={reduceMotion}
                 onMove={onMove}
+                onMetaChange={onMetaChange}
               />
             ))
           ) : (
@@ -1471,6 +1485,21 @@ export default function SprintsPage() {
     }
   }
 
+  const handleTaskMetaChange = useCallback(async (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => {
+    if (actionInFlight) return
+    setActionInFlight(`meta-${task.id}`)
+
+    try {
+      await tasksApi.update(task.id, meta as any)
+      await loadBoard()
+      toast.success("Task updated.")
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update task.")
+    } finally {
+      setActionInFlight("")
+    }
+  }, [actionInFlight, loadBoard])
+
   async function handleMoveTask(task: ApiSprintTask, sprintId: string) {
     if ((sprintId === "backlog" && !task.sprintId) || sprintId === task.sprintId) return
 
@@ -1733,7 +1762,7 @@ export default function SprintsPage() {
               </p>
             </div>
           </Card>
-        ) : !teamId ? (
+        ) : !activeTeamId ? (
           <Card className="rounded-lg border-dashed p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -1742,13 +1771,13 @@ export default function SprintsPage() {
                   Choose a supervised or managed team to review its sprint board.
                 </p>
               </div>
-              {supportTeamOptions.length ? (
-                <Select value={requestedTeamId ?? undefined} onValueChange={handleSupportTeamSelection}>
+              {assignedTeams.length ? (
+                <Select value={requestedTeamId ?? undefined} onValueChange={(value) => router.replace(`/dashboard/sprints?teamId=${value}`, { scroll: false })}>
                   <SelectTrigger className="w-full rounded-lg lg:w-[320px]">
                     <SelectValue placeholder="Choose team" />
                   </SelectTrigger>
                   <SelectContent>
-                    {supportTeamOptions.map((team) => (
+                    {assignedTeams.map((team) => (
                       <SelectItem key={team.id} value={team.id}>
                         {team.name}
                       </SelectItem>
@@ -1899,6 +1928,7 @@ export default function SprintsPage() {
                           isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                           reduceMotion={Boolean(shouldReduceMotion)}
                           onMove={handleMoveTask}
+                          onMetaChange={handleTaskMetaChange}
                         />
                       ))
                     ) : (
@@ -1934,6 +1964,7 @@ export default function SprintsPage() {
                           onStart={handleStartSprint}
                           onComplete={handleCompleteSprint}
                           onMove={handleMoveTask}
+                          onMetaChange={handleTaskMetaChange}
                           onEvaluationDraftChange={handleEvaluationDraftChange}
                           onReviewCommentChange={handleReviewCommentChange}
                           onSaveEvaluation={handleSaveEvaluation}
@@ -2017,6 +2048,7 @@ export default function SprintsPage() {
                                 isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
                                 reduceMotion={Boolean(shouldReduceMotion)}
                                 onMove={handleMoveTask}
+                                onMetaChange={handleTaskMetaChange}
                               />
                             ))
                           ) : (
