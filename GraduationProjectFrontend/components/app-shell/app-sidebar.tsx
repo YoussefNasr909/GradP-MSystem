@@ -177,6 +177,15 @@ export function AppSidebar() {
       .filter((group) => group.items.length > 0)
   }, [currentRole, isStudentRole, myTeamLoading, myTeamState?.team])
 
+  const activeHref = useMemo(() => {
+    const visibleItems = resolvedNavigationGroups.flatMap((group) => group.items)
+    const matchingItems = visibleItems
+      .filter((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)))
+      .sort((left, right) => right.href.length - left.href.length)
+
+    return matchingItems[0]?.href
+  }, [pathname, resolvedNavigationGroups])
+
   return (
     <motion.aside
       initial={{ x: -300, opacity: 0 }}
@@ -257,8 +266,7 @@ export function AppSidebar() {
                 {(isExpanded || sidebarCollapsed || isMainGroup) && (
                   <div className="space-y-0.5">
                     {filteredItems.map((item, index) => {
-                      const isActive =
-                        pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
+                      const isActive = activeHref === item.href
                       const navItem = (
                         <Link
                           href={item.href}

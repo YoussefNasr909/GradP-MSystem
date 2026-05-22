@@ -90,6 +90,16 @@ export function AppTopbar() {
     .charAt(0)
     .toUpperCase()
   const currentAvatarUrl = currentUser?.avatar || currentUser?.avatarUrl
+  const currentRoleLabel =
+    currentUser?.role === "admin"
+      ? "Admin"
+      : currentUser?.role === "doctor"
+        ? "Doctor"
+        : currentUser?.role === "ta"
+          ? "TA"
+          : currentUser?.role === "leader"
+            ? "Team Leader"
+            : "Student"
 
   const queryFromUrl = searchParams.get("q") ?? ""
   const typeFromUrl = searchParams.get("type")
@@ -339,20 +349,6 @@ export function AppTopbar() {
     }, duration)
   }
 
-  const getRoleBadge = (role: string) => {
-    const badges = {
-      admin: { label: "Admin", variant: "default" as const },
-      doctor: { label: "Supervisor", variant: "secondary" as const },
-      ta: { label: "TA", variant: "secondary" as const },
-      leader: { label: "Leader", variant: "outline" as const },
-      member: { label: "Member", variant: "outline" as const },
-    }
-
-    return badges[role as keyof typeof badges] || badges.member
-  }
-
-  const badge = getRoleBadge(currentUser?.role || "member")
-
   return (
     <>
       <Dialog open={showLogoutDialog} onOpenChange={() => {}}>
@@ -553,7 +549,7 @@ export function AppTopbar() {
                 </Avatar>
                 <div className="hidden text-left sm:block">
                   <div className="max-w-[80px] truncate text-sm font-medium lg:max-w-[100px]">{displayName}</div>
-                  <div className="text-xs text-muted-foreground">{badge.label}</div>
+                  <div className="text-xs text-muted-foreground">{currentRoleLabel}</div>
                 </div>
               </motion.button>
             </DropdownMenuTrigger>
@@ -562,9 +558,6 @@ export function AppTopbar() {
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">{currentUser?.email}</p>
-                  <Badge className="mt-1 w-fit text-xs" variant={badge.variant}>
-                    {badge.label}
-                  </Badge>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

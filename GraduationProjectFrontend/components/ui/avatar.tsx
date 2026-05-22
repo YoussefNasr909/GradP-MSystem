@@ -5,6 +5,19 @@ import * as AvatarPrimitive from '@radix-ui/react-avatar'
 
 import { cn } from '@/lib/utils'
 
+const DEFAULT_AVATAR_SRC = '/default-avatar.svg'
+
+function normalizeAvatarSrc(src: React.ComponentProps<typeof AvatarPrimitive.Image>['src']) {
+  if (src == null) return DEFAULT_AVATAR_SRC
+  if (typeof src !== 'string') return src
+
+  if (!src || src === '/placeholder.svg' || src === '/placeholder-user.jpg') {
+    return DEFAULT_AVATAR_SRC
+  }
+
+  return src
+}
+
 function Avatar({
   className,
   ...props
@@ -23,12 +36,14 @@ function Avatar({
 
 function AvatarImage({
   className,
+  src,
   ...props
 }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
-      className={cn('aspect-square size-full', className)}
+      className={cn('aspect-square size-full object-cover', className)}
+      src={normalizeAvatarSrc(src)}
       {...props}
     />
   )

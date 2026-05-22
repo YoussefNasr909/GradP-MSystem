@@ -25,7 +25,6 @@ import {
   CheckCircle,
   Video,
   Sparkles,
-  Flame,
   Clock,
   Activity,
   BarChart3,
@@ -50,7 +49,6 @@ import {
   UserPlus,
   Users2,
   HardDrive,
-  Coins,
   Megaphone,
   MessageCircle,
 } from "lucide-react"
@@ -106,7 +104,6 @@ import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
 import { useGamificationOverview } from "@/lib/hooks/use-gamification"
-import { useEconomyOverview } from "@/lib/hooks/use-economy"
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -164,15 +161,10 @@ function StudentMemberDashboard() {
   }, [])
 
   // GamificationOverview API shape: { balance, badges, recentTransactions }.
-  // The balance object holds lifetime XP + level. We don't currently surface a
-  // "streak" or "gold" count from the backend; default to 0 here so the
-  // dashboard cards render even when those metrics arrive later.
+  // The balance object holds lifetime XP + level for the progress card below.
   const { data: gamification } = useGamificationOverview()
-  const { data: economy } = useEconomyOverview()
   const xp = gamification?.balance?.lifetimeXp ?? 0
   const level = gamification?.balance?.level ?? 1
-  const streak = 0
-  const coins = economy?.wallet.balance ?? 0
 
   useEffect(() => {
     if (myTeamState?.team) return
@@ -411,12 +403,12 @@ function StudentMemberDashboard() {
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-purple-500/20 to-transparent rounded-full blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 items-center justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="relative">
-                <Avatar className="h-20 w-20 border-4 border-primary/20 shadow-xl">
+                <Avatar className="h-16 w-16 border-4 border-primary/20 shadow-xl">
                   <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-primary to-secondary text-white">
+                  <AvatarFallback className="text-xl bg-gradient-to-br from-primary to-secondary text-white">
                     {currentUser?.name?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
@@ -425,12 +417,12 @@ function StudentMemberDashboard() {
                 </div>
               </motion.div>
 
-              <div>
+              <div className="min-w-0">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground mb-1"
+                  className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <Clock className="h-4 w-4" />
                   <span>
@@ -439,51 +431,10 @@ function StudentMemberDashboard() {
                   <span className="font-mono text-primary">{currentTime.toLocaleTimeString()}</span>
                 </motion.div>
 
-                <h1 className="text-2xl md:text-3xl font-bold mb-1">
+                <h1 className="text-xl md:text-2xl font-semibold leading-tight">
                   {greeting}, <span className="text-primary">{currentUser?.name}</span>!
                 </h1>
-                <p className="text-muted-foreground">Ready to continue your learning journey today?</p>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge variant="outline" className="gap-1 border-orange-500/50 text-orange-600">
-                    <Flame className="h-3 w-3" /> {streak} Day Streak
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
-                    <Sparkles className="h-3 w-3" /> Level {level}
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-600">
-                    <Trophy className="h-3 w-3" /> {xp} XP
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-yellow-500/50 text-yellow-600">
-                    <Coins className="h-3 w-3" /> {coins} Coins
-                  </Badge>
-                </div>
               </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 xs:gap-3">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-blue-500/20"
-              >
-                <div className="text-3xl font-bold text-blue-500">{activeTasks.length}</div>
-                <div className="text-xs text-muted-foreground">Active Tasks</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-green-500/20"
-              >
-                <div className="text-3xl font-bold text-green-500">{completedTasks.length}</div>
-                <div className="text-xs text-muted-foreground">Completed</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-purple-500/20"
-              >
-                <div className="text-3xl font-bold text-purple-500">{myTeam?.progress || 0}%</div>
-                <div className="text-xs text-muted-foreground">Progress</div>
-              </motion.div>
             </div>
           </div>
         </div>
@@ -861,10 +812,6 @@ function TeamLeaderDashboard() {
     return () => clearInterval(timer)
   }, [])
 
-  const { data: gamification } = useGamificationOverview()
-  const xp = gamification?.balance?.lifetimeXp ?? 0
-  const streak = 0
-
   const liveTeam = myTeamState?.team ?? null
   const myTeam = liveTeam
     ? {
@@ -989,12 +936,12 @@ function TeamLeaderDashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-purple-500/20 to-transparent rounded-full blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 items-center justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="relative">
-                <Avatar className="h-20 w-20 border-4 border-purple-500/20 shadow-xl">
+                <Avatar className="h-16 w-16 border-4 border-purple-500/20 shadow-xl">
                   <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                  <AvatarFallback className="text-xl bg-gradient-to-br from-purple-500 to-pink-500 text-white">
                     {currentUser?.name?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
@@ -1003,12 +950,12 @@ function TeamLeaderDashboard() {
                 </div>
               </motion.div>
 
-              <div>
+              <div className="min-w-0">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground mb-1"
+                  className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <Clock className="h-4 w-4" />
                   <span>
@@ -1017,55 +964,10 @@ function TeamLeaderDashboard() {
                   <span className="font-mono text-primary">{currentTime.toLocaleTimeString()}</span>
                 </motion.div>
 
-                <h1 className="text-2xl md:text-3xl font-bold mb-1">
+                <h1 className="text-xl md:text-2xl font-semibold leading-tight">
                   {greeting}, <span className="text-primary">{currentUser?.name}</span>!
                 </h1>
-                <p className="text-muted-foreground">Lead your team to success and track progress</p>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge className="gap-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
-                    <Crown className="h-3 w-3" /> Team Leader
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-orange-500/50 text-orange-600">
-                    <Flame className="h-3 w-3" /> {streak} Day Streak
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-600">
-                    <Trophy className="h-3 w-3" /> {xp} XP
-                  </Badge>
-                </div>
               </div>
-            </div>
-
-            {/* Team Stats */}
-            <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 xs:gap-3">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-purple-500/20"
-              >
-                <div className="text-2xl font-bold text-purple-500">{teamMembers.length}</div>
-                <div className="text-xs text-muted-foreground">Members</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-blue-500/20"
-              >
-                <div className="text-2xl font-bold text-blue-500">{activeTasks.length}</div>
-                <div className="text-xs text-muted-foreground">Active</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-green-500/20"
-              >
-                <div className="text-2xl font-bold text-green-500">{completedTasks.length}</div>
-                <div className="text-xs text-muted-foreground">Done</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-orange-500/20"
-              >
-                <div className="text-2xl font-bold text-orange-500">{myTeam?.progress || 0}%</div>
-                <div className="text-xs text-muted-foreground">Progress</div>
-              </motion.div>
             </div>
           </div>
 
@@ -1385,8 +1287,6 @@ function DoctorDashboard() {
   const healthyTeams = supervisedTeams.filter((t) => !t.isFull).length // Fallback heuristic
   const atRiskTeams = supervisedTeams.filter((t) => t.isFull && t.stage === "REQUIREMENTS").length
   const criticalTeams = 0
-  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberCount, 0)
-  const avgProgress = supervisedTeams.reduce((sum, t) => sum + getTeamProgressFallback(t), 0) / (supervisedTeams.length || 1)
 
   const pendingProposals = (myTeamState?.supervisorRequestsReceived || []).filter(
     (r) => r.status === "PENDING"
@@ -1477,12 +1377,12 @@ function DoctorDashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-blue-500/20 to-transparent rounded-full blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 items-center justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="relative">
-                <Avatar className="h-20 w-20 border-4 border-blue-500/20 shadow-xl">
+                <Avatar className="h-16 w-16 border-4 border-blue-500/20 shadow-xl">
                   <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+                  <AvatarFallback className="text-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
                     {currentUser?.name?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
@@ -1491,12 +1391,12 @@ function DoctorDashboard() {
                 </div>
               </motion.div>
 
-              <div>
+              <div className="min-w-0">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground mb-1"
+                  className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <Clock className="h-4 w-4" />
                   <span>
@@ -1505,57 +1405,10 @@ function DoctorDashboard() {
                   <span className="font-mono text-primary">{currentTime.toLocaleTimeString()}</span>
                 </motion.div>
 
-                <h1 className="text-2xl md:text-3xl font-bold mb-1">
+                <h1 className="text-xl md:text-2xl font-semibold leading-tight">
                   {greeting}, <span className="text-primary">{currentUser?.name}</span>!
                 </h1>
-                <p className="text-muted-foreground">Monitor and guide your supervised teams to excellence</p>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge className="gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0">
-                    <GraduationCap className="h-3 w-3" /> Professor
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    {currentUser?.department}
-                  </Badge>
-                  {currentUser?.expertise?.slice(0, 2).map((exp) => (
-                    <Badge key={exp} variant="secondary" className="text-xs">
-                      {exp}
-                    </Badge>
-                  ))}
-                </div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 xs:gap-3">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-blue-500/20"
-              >
-                <div className="text-2xl font-bold text-blue-500">{supervisedTeams.length}</div>
-                <div className="text-xs text-muted-foreground">Teams</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-purple-500/20"
-              >
-                <div className="text-2xl font-bold text-purple-500">{totalStudents}</div>
-                <div className="text-xs text-muted-foreground">Students</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-orange-500/20"
-              >
-                <div className="text-2xl font-bold text-orange-500">{pendingProposals.length}</div>
-                <div className="text-xs text-muted-foreground">Pending</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-green-500/20"
-              >
-                <div className="text-2xl font-bold text-green-500">{Math.round(avgProgress)}%</div>
-                <div className="text-xs text-muted-foreground">Avg Progress</div>
-              </motion.div>
             </div>
           </div>
 
@@ -1820,10 +1673,6 @@ function TADashboard() {
   const { data: myTeamState } = useMyTeamState()
   const supervisedTeams = myTeamState?.supervisedTeams || []
   
-  const totalStudents = supervisedTeams.reduce((sum, t) => sum + t.memberCount, 0)
-  const healthyTeams = supervisedTeams.filter((t) => !t.isFull).length // Fallback heuristic
-  const avgProgress = supervisedTeams.reduce((sum, t) => sum + getTeamProgressFallback(t), 0) / (supervisedTeams.length || 1)
-  
   // Fake meetings using empty array context
   const upcomingMeetings = meetings
     .filter((m) => supervisedTeams.some((t) => t.id === m.teamId) && new Date(m.date) > new Date())
@@ -1908,12 +1757,12 @@ function TADashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-teal-500/20 to-transparent rounded-full blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 items-center justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="relative">
-                <Avatar className="h-20 w-20 border-4 border-teal-500/20 shadow-xl">
+                <Avatar className="h-16 w-16 border-4 border-teal-500/20 shadow-xl">
                   <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-teal-500 to-cyan-500 text-white">
+                  <AvatarFallback className="text-xl bg-gradient-to-br from-teal-500 to-cyan-500 text-white">
                     {currentUser?.name?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
@@ -1922,12 +1771,12 @@ function TADashboard() {
                 </div>
               </motion.div>
 
-              <div>
+              <div className="min-w-0">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground mb-1"
+                  className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <Clock className="h-4 w-4" />
                   <span>
@@ -1936,55 +1785,10 @@ function TADashboard() {
                   <span className="font-mono text-primary">{currentTime.toLocaleTimeString()}</span>
                 </motion.div>
 
-                <h1 className="text-2xl md:text-3xl font-bold mb-1">
+                <h1 className="text-xl md:text-2xl font-semibold leading-tight">
                   {greeting}, <span className="text-primary">{currentUser?.name}</span>!
                 </h1>
-                <p className="text-muted-foreground">Support your teams and help students succeed</p>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge className="gap-1 bg-gradient-to-r from-teal-500 to-cyan-500 text-white border-0">
-                    <BookOpen className="h-3 w-3" /> Teaching Assistant
-                  </Badge>
-                  <Badge variant="outline" className="gap-1">
-                    {currentUser?.department}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    {currentUser?.officeHours}
-                  </Badge>
-                </div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 xs:gap-3">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-teal-500/20"
-              >
-                <div className="text-2xl font-bold text-teal-500">{supervisedTeams.length}</div>
-                <div className="text-xs text-muted-foreground">Teams</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-blue-500/20"
-              >
-                <div className="text-2xl font-bold text-blue-500">{totalStudents}</div>
-                <div className="text-xs text-muted-foreground">Students</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-green-500/20"
-              >
-                <div className="text-2xl font-bold text-green-500">{healthyTeams}</div>
-                <div className="text-xs text-muted-foreground">Healthy</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-purple-500/20"
-              >
-                <div className="text-2xl font-bold text-purple-500">{Math.round(avgProgress)}%</div>
-                <div className="text-xs text-muted-foreground">Progress</div>
-              </motion.div>
             </div>
           </div>
         </div>
@@ -2230,14 +2034,6 @@ function AdminDashboard() {
   const totalStudents = usersSummary?.byRole.students
   const totalLeaders = usersSummary?.byRole.leaders
   const totalAdmins = usersSummary?.byRole.admins
-  const healthyTeams = teams.filter((t) => t.health === "healthy").length
-  const atRiskTeams = teams.filter((t) => t.health === "at-risk").length
-  const criticalTeams = teams.filter((t) => t.health === "critical").length
-  const userSummaryStatus = isSummaryLoading
-    ? "Syncing users..."
-    : summaryError
-      ? "User counters unavailable"
-      : "User counters live from database"
 
   const formatSummaryValue = (value?: number) => {
     if (isSummaryLoading) return "..."
@@ -2339,12 +2135,12 @@ function AdminDashboard() {
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-rose-500/20 to-transparent rounded-full blur-3xl" />
 
         <div className="relative z-10">
-          <div className="flex flex-col gap-4 lg:flex-row lg:gap-6 items-center justify-between">
-            <div className="flex items-start gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
               <motion.div whileHover={{ scale: 1.05, rotate: 5 }} className="relative">
-                <Avatar className="h-20 w-20 border-4 border-rose-500/20 shadow-xl">
+                <Avatar className="h-16 w-16 border-4 border-rose-500/20 shadow-xl">
                   <AvatarImage src={currentUser?.avatar || "/placeholder.svg"} />
-                  <AvatarFallback className="text-2xl bg-gradient-to-br from-rose-500 to-orange-500 text-white">
+                  <AvatarFallback className="text-xl bg-gradient-to-br from-rose-500 to-orange-500 text-white">
                     {currentUser?.name?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
@@ -2353,12 +2149,12 @@ function AdminDashboard() {
                 </div>
               </motion.div>
 
-              <div>
+              <div className="min-w-0">
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="flex items-center gap-2 text-sm text-muted-foreground mb-1"
+                  className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
                 >
                   <Clock className="h-4 w-4" />
                   <span>
@@ -2367,65 +2163,10 @@ function AdminDashboard() {
                   <span className="font-mono text-primary">{currentTime.toLocaleTimeString()}</span>
                 </motion.div>
 
-                <h1 className="text-2xl md:text-3xl font-bold mb-1">
+                <h1 className="text-xl md:text-2xl font-semibold leading-tight">
                   {greeting}, <span className="text-primary">{currentUser?.name}</span>!
                 </h1>
-                <p className="text-muted-foreground">System administration and monitoring dashboard</p>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <Badge className="gap-1 bg-gradient-to-r from-rose-500 to-orange-500 text-white border-0">
-                    <Shield className="h-3 w-3" /> System Administrator
-                  </Badge>
-                  <Badge variant="outline" className="gap-1 text-green-600 border-green-500/50">
-                    <CheckCircle className="h-3 w-3" /> All Systems Online
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "gap-1",
-                      isSummaryLoading
-                        ? "text-blue-600 border-blue-500/40"
-                        : summaryError
-                          ? "text-red-600 border-red-500/40"
-                          : "text-sky-600 border-sky-500/40",
-                    )}
-                  >
-                    <Database className="h-3 w-3" /> {userSummaryStatus}
-                  </Badge>
-                </div>
               </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 xs:gap-3">
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-blue-500/20"
-              >
-                <div className="text-2xl font-bold text-blue-500">{formatSummaryValue(totalUsers)}</div>
-                <div className="text-xs text-muted-foreground">Users</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-purple-500/20"
-              >
-                <div className="text-2xl font-bold text-purple-500">{totalTeams}</div>
-                <div className="text-xs text-muted-foreground">Teams</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-green-500/20"
-              >
-                <div className="text-2xl font-bold text-green-500">{healthyTeams}</div>
-                <div className="text-xs text-muted-foreground">Healthy</div>
-              </motion.div>
-              <motion.div
-                whileHover={{ scale: 1.05, y: -5 }}
-                className="glass-card p-4 rounded-xl text-center border border-orange-500/20"
-              >
-                <div className="text-2xl font-bold text-orange-500">{atRiskTeams + criticalTeams}</div>
-                <div className="text-xs text-muted-foreground">At Risk</div>
-              </motion.div>
             </div>
           </div>
         </div>
