@@ -96,9 +96,10 @@ void users
 void proposals
 import { usersApi } from "@/lib/api/users"
 import { teamsApi } from "@/lib/api/teams"
+import { supportApi } from "@/lib/api/support"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { getFullName, getTeamProgressFallback } from "@/lib/team-display"
-import type { UsersSummary } from "@/lib/api/types"
+import type { ApiSupportSummary, ApiSupportTicketSummary, UsersSummary } from "@/lib/api/types"
 import NextLink from "next/link"
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
@@ -132,12 +133,275 @@ export default function DashboardPage() {
     return <TADashboard />
   }
 
+  if (currentUser.role === "support") {
+    return <SupportDashboard />
+  }
+
   // Admin
   if (currentUser.role === "admin") {
     return <AdminDashboard />
   }
 
   return null
+}
+
+function formatSupportDashboardDate(value?: string | null) {
+  if (!value) return "No activity"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "No activity"
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function supportDashboardLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function SupportDashboard() {
+  const { currentUser } = useAuthStore()
+  const [summary, setSummary] = useState<ApiSupportSummary | null>(null)
+  const [recentTickets, setRecentTickets] = useState<ApiSupportTicketSummary[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    let cancelled = false
+    setIsLoading(true)
+    setError("")
+
+    Promise.all([
+      supportApi.summary(),
+      supportApi.listTickets({ limit: 6, assignedTo: "me" }),
+    ])
+      .then(([summaryResult, ticketsResult]) => {
+        if (cancelled) return
+        setSummary(summaryResult)
+        setRecentTickets(ticketsResult.items)
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return
+        setError(loadError instanceof Error ? loadError.message : "Support dashboard could not load.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.id])
+
+  const metrics = [
+    {
+      label: "Open",
+      value: summary?.open ?? 0,
+      icon: ClipboardList,
+      tone: "text-sky-600 dark:text-sky-300",
+      bg: "bg-sky-500/10",
+    },
+    {
+      label: "Mine",
+      value: summary?.assignedToMe ?? 0,
+      icon: UserPlus,
+      tone: "text-indigo-600 dark:text-indigo-300",
+      bg: "bg-indigo-500/10",
+    },
+    {
+      label: "Unassigned",
+      value: summary?.unassigned ?? 0,
+      icon: Users,
+      tone: "text-amber-600 dark:text-amber-300",
+      bg: "bg-amber-500/10",
+    },
+    {
+      label: "Urgent",
+      value: summary?.urgent ?? 0,
+      icon: AlertTriangle,
+      tone: "text-red-600 dark:text-red-300",
+      bg: "bg-red-500/10",
+    },
+    {
+      label: "Overdue",
+      value: summary?.overdue ?? 0,
+      icon: AlertCircle,
+      tone: "text-red-600 dark:text-red-300",
+      bg: "bg-red-500/10",
+    },
+    {
+      label: "Due soon",
+      value: summary?.dueSoon ?? 0,
+      icon: Clock,
+      tone: "text-amber-600 dark:text-amber-300",
+      bg: "bg-amber-500/10",
+    },
+    {
+      label: "Resolved today",
+      value: summary?.resolvedToday ?? 0,
+      icon: CheckCircle,
+      tone: "text-emerald-600 dark:text-emerald-300",
+      bg: "bg-emerald-500/10",
+    },
+  ]
+
+  return (
+    <div className="space-y-5 pb-8">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Support workspace</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Support dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Welcome, {currentUser?.name || "Support"}</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button asChild className="gap-2">
+            <NextLink href="/dashboard/support">
+              Open queue
+              <ArrowRight className="h-4 w-4" />
+            </NextLink>
+          </Button>
+          <Button asChild variant="outline" className="gap-2 bg-transparent">
+            <NextLink href="/dashboard/chat">
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </NextLink>
+          </Button>
+        </div>
+      </section>
+
+      {error ? (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4" />
+          <div>
+            <p className="font-medium">Dashboard data could not load</p>
+            <p>{error}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <section className="rounded-xl border border-border/70 bg-card/60 p-2">
+        <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+          {metrics.map((metric) => (
+            <div key={metric.label} className="rounded-lg px-3 py-2.5">
+              <p className="text-xs text-muted-foreground">{metric.label}</p>
+              <p className={cn("mt-1 text-2xl font-semibold", metric.tone)}>{isLoading ? "..." : metric.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">My workload</h2>
+              <p className="text-sm text-muted-foreground">Assigned tickets that need a next step.</p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="gap-2 bg-transparent">
+              <NextLink href="/dashboard/support">
+                View queue
+                <ArrowRight className="h-4 w-4" />
+              </NextLink>
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-20 rounded-lg border bg-muted/30" />
+              ))
+            ) : recentTickets.length ? (
+              recentTickets.map((ticket) => (
+                <NextLink
+                  key={ticket.id}
+                  href={`/dashboard/support?ticket=${ticket.id}`}
+                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/35 p-3 transition hover:border-primary/40 hover:bg-accent/30 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">{ticket.ticketNumber}</span>
+                      <Badge variant={ticket.priority === "URGENT" ? "destructive" : "secondary"}>
+                        {supportDashboardLabel(ticket.priority)}
+                      </Badge>
+                      <Badge variant="outline">{supportDashboardLabel(ticket.status)}</Badge>
+                    </div>
+                    <p className="mt-2 line-clamp-1 text-sm font-medium">{ticket.subject}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {ticket.requester?.fullName ?? "Unknown requester"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    {formatSupportDashboardDate(ticket.lastActivityAt)}
+                  </div>
+                </NextLink>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed p-8 text-center">
+                <ClipboardCheck className="mx-auto h-8 w-8 text-muted-foreground" />
+                <h3 className="mt-3 font-semibold">No assigned tickets</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Open the queue to pick up new requester work.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+          <h2 className="text-lg font-semibold">Queue health</h2>
+          <p className="mt-1 text-sm text-muted-foreground">SLA and closure signals for today.</p>
+
+          <div className="mt-5 space-y-3 text-sm">
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+              <span className="text-muted-foreground">Overdue</span>
+              <span className="font-semibold">{isLoading ? "..." : summary?.overdue ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+              <span className="text-muted-foreground">Due soon</span>
+              <span className="font-semibold">{isLoading ? "..." : summary?.dueSoon ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+              <span className="text-muted-foreground">Closed today</span>
+              <span className="font-semibold">{isLoading ? "..." : summary?.closedToday ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
+              <span className="text-muted-foreground">Avg first response</span>
+              <span className="font-semibold">
+                {isLoading ? "..." : summary?.averageFirstResponseMinutes == null ? "No data" : `${summary.averageFirstResponseMinutes}m`}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-2">
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/support">
+                <Activity className="h-4 w-4" />
+                Open queue
+              </NextLink>
+            </Button>
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/support?view=overdue">
+                <AlertCircle className="h-4 w-4" />
+                Overdue
+              </NextLink>
+            </Button>
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/chat">
+                <MessageSquare className="h-4 w-4" />
+                Message anyone
+              </NextLink>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
 }
 
 // ============================================

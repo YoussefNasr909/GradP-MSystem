@@ -65,6 +65,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+function getInitials(name?: string | null) {
+  if (!name) return "??"
+  return name
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
 type TaskFormState = {
   title: string
   description: string
@@ -1066,101 +1076,138 @@ export function TasksBoardPage() {
         {/* ── Kanban view ───────────────────────────────────── */}
         {!loadingState && shouldShowTeamScopedContent && view === "kanban" && (
           <div className="-mx-2 overflow-x-auto px-2 pb-4 sm:mx-0 sm:px-0">
-            <div className="flex min-w-max gap-3 sm:min-w-0 sm:grid sm:grid-cols-2 sm:gap-3 lg:grid-cols-5">
+            <div className="flex min-w-max gap-5 sm:min-w-0 sm:grid sm:grid-cols-2 lg:grid-cols-5 lg:gap-5">
               {TASK_COLUMNS.map((column) => {
                 const columnTasks = filteredTasks.filter((t) => t.status === column.status)
                 return (
-                  <div key={column.status} className="w-[264px] shrink-0 sm:w-auto sm:shrink">
+                  <div key={column.status} className="w-[280px] shrink-0 sm:w-auto sm:shrink flex flex-col">
                     {/* Column header */}
-                    <div className="mb-2.5 flex items-center gap-2 px-1">
-                      <div className={cn("h-2.5 w-2.5 shrink-0 rounded-full", column.color)} />
-                      <span className="text-sm font-semibold">{column.label}</span>
-                      <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{columnTasks.length}</span>
+                    <div className="mb-4 flex items-center justify-between px-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className={cn("h-3 w-3 shrink-0 rounded-full shadow-sm", column.color)} />
+                        <h3 className="text-sm font-semibold tracking-tight text-foreground/70">{column.label}</h3>
+                      </div>
+                      <Badge variant="secondary" className="rounded-lg px-1.5 py-0 font-mono text-[10px] font-medium opacity-60">
+                        {columnTasks.length}
+                      </Badge>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="flex-1 space-y-3 min-h-[200px] rounded-2xl bg-muted/20 p-2 border border-border/40">
                       {columnTasks.length === 0 ? (
-                        <div className="rounded-[16px] border border-dashed border-border/50 py-8 text-center">
-                          <p className="text-xs text-muted-foreground">No tasks</p>
+                        <div className="h-full flex flex-col items-center justify-center py-10 opacity-40">
+                          <ClipboardList className="h-8 w-8 mb-2 stroke-[1.5px]" />
+                          <p className="text-[10px] font-medium uppercase tracking-widest">Empty</p>
                         </div>
                       ) : columnTasks.map((task) => {
                         const isUrgent = task.isPastEndDate && task.status !== "DONE"
                         const needsMyAction = (task.awaitingAcceptance && task.assignee?.id === currentUser?.id) || (task.status === "REVIEW" && (task.permissions.canApprove || task.permissions.canReject))
                         return (
-                          <motion.div key={task.id} layout initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} whileHover={{ y: -2 }} transition={{ duration: 0.18 }}>
-                            <div
+                          <motion.div 
+                            key={task.id} 
+                            layout 
+                            initial={{ opacity: 0, y: 10 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            whileHover={{ y: -4, scale: 1.02 }} 
+                            transition={{ duration: 0.2, ease: "easeOut" }}
+                          >
+                            <Card
                               className={cn(
-                                "group relative cursor-pointer overflow-hidden rounded-[16px] border bg-card transition-all hover:border-primary/30 hover:shadow-md",
-                                isUrgent ? "border-rose-500/30" : needsMyAction ? "border-primary/25" : "border-border/60",
+                                "group relative cursor-pointer overflow-hidden border-none shadow-sm transition-all duration-300 hover:shadow-xl hover:ring-2 hover:ring-primary/20",
+                                isUrgent ? "bg-rose-500/[0.03] ring-1 ring-rose-500/20" : needsMyAction ? "bg-primary/[0.03] ring-1 ring-primary/20" : "bg-card ring-1 ring-border/50",
                               )}
                               onClick={() => setSelectedTaskId(task.id)}
                             >
                               {/* Priority left accent bar */}
-                              <div className={cn("absolute bottom-0 left-0 top-0 w-[3px]", getPriorityBarColor(task.priority))} />
+                              <div className={cn("absolute bottom-0 left-0 top-0 w-[4px] rounded-full my-3 ml-1", getPriorityBarColor(task.priority))} />
 
-                              <div className="p-3 pl-4">
+                              <div className="p-4 pl-5 space-y-3">
                                 {/* Title row */}
-                                <div className="mb-2 flex items-start gap-2">
-                                  <h4 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold leading-snug">{task.title}</h4>
+                                <div className="flex items-start justify-between gap-2">
+                                  <h4 className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold leading-tight group-hover:text-primary transition-colors">
+                                    {task.title}
+                                  </h4>
                                   {(isUrgent || needsMyAction) && (
-                                    <AlertTriangle className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", isUrgent ? "text-rose-500" : "text-primary")} />
+                                    <div className={cn(
+                                      "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full shadow-sm",
+                                      isUrgent ? "bg-rose-500 text-white" : "bg-primary text-white"
+                                    )}>
+                                      <AlertTriangle className="h-3 w-3" />
+                                    </div>
                                   )}
                                 </div>
 
-                                {/* Badges */}
-                                <div className="mb-2 flex flex-wrap gap-1">
-                                  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", getPriorityColor(task.priority))}>
+                                {/* Badges & Info */}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                      "rounded-md border-none px-1.5 py-0 text-[9px] font-medium uppercase tracking-tighter", 
+                                      getPriorityColor(task.priority)
+                                    )}
+                                  >
                                     {formatPriorityLabel(task.priority)}
-                                  </span>
-                                  <span className="inline-flex items-center rounded-full border border-border/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                                  </Badge>
+                                  <Badge variant="outline" className="rounded-md border-border/50 bg-background/50 px-1.5 py-0 text-[9px] font-medium text-muted-foreground">
                                     {formatTaskTypeLabel(task.taskType)}
-                                  </span>
+                                  </Badge>
                                   {task.integrationMode === "GITHUB" && (
-                                    <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                    <Badge variant="outline" className="rounded-md border-primary/20 bg-primary/5 px-1.5 py-0 text-[9px] font-medium text-primary flex gap-0.5 items-center">
                                       <FolderGit2 className="h-2.5 w-2.5" />
-                                      GH
-                                    </span>
+                                      GITHUB
+                                    </Badge>
                                   )}
                                 </div>
 
                                 {/* Description */}
                                 {task.description && (
-                                  <p className="mb-2.5 line-clamp-2 text-[11px] leading-4 text-muted-foreground">{task.description}</p>
+                                  <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/80 font-medium">
+                                    {task.description}
+                                  </p>
                                 )}
 
-                                {/* Alert flags */}
+                                {/* Progress/Alert indicators */}
                                 {(task.awaitingAcceptance || isUrgent) && (
-                                  <div className="mb-2 flex flex-wrap gap-1">
+                                  <div className="flex flex-wrap gap-1.5">
                                     {task.awaitingAcceptance && (
-                                      <span className="inline-flex items-center rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400">
-                                        Awaiting acceptance
-                                      </span>
+                                      <div className="flex items-center gap-1 rounded-md bg-sky-500/10 px-2 py-0.5 text-[9px] font-medium text-sky-600 dark:text-sky-400 border border-sky-500/20 uppercase tracking-tighter">
+                                        <Clock className="h-2.5 w-2.5" />
+                                        Pending Acceptance
+                                      </div>
                                     )}
                                     {isUrgent && (
-                                      <span className="inline-flex items-center rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-600 dark:text-rose-400">
-                                        Past due
-                                      </span>
+                                      <div className="flex items-center gap-1 rounded-md bg-rose-500/10 px-2 py-0.5 text-[9px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/20 uppercase tracking-tighter">
+                                        <AlertCircle className="h-2.5 w-2.5" />
+                                        Past Due
+                                      </div>
                                     )}
                                   </div>
                                 )}
 
                                 {/* Footer */}
-                                <div className="mt-1 flex items-center justify-between gap-2 border-t border-border/40 pt-2">
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    <Avatar className="h-5 w-5 shrink-0">
+                                <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <Avatar className="h-6 w-6 shrink-0 ring-2 ring-background shadow-sm">
                                       <AvatarImage src={task.assignee?.avatarUrl || "/placeholder.svg"} />
-                                      <AvatarFallback className="text-[10px]">{task.assignee?.fullName?.charAt(0) || "?"}</AvatarFallback>
+                                      <AvatarFallback className="text-[10px] font-medium bg-muted text-muted-foreground">
+                                        {task.assignee?.fullName?.charAt(0) || "?"}
+                                      </AvatarFallback>
                                     </Avatar>
-                                    <span className="truncate text-[10px] text-muted-foreground">{task.assignee?.fullName || "Unassigned"}</span>
+                                    <span className="truncate text-[10px] font-medium text-muted-foreground uppercase tracking-tight">
+                                      {task.assignee?.fullName?.split(' ')[0] || "Unassigned"}
+                                    </span>
                                   </div>
                                   {task.endDate && (
-                                    <span className={cn("shrink-0 text-[10px]", isUrgent ? "font-medium text-rose-500" : "text-muted-foreground")}>
+                                    <div className={cn(
+                                      "flex items-center gap-1 text-[10px] font-medium",
+                                      isUrgent ? "text-rose-500" : "text-muted-foreground/60"
+                                    )}>
+                                      <Clock className="h-2.5 w-2.5" />
                                       {formatShortDate(task.endDate)}
-                                    </span>
+                                    </div>
                                   )}
                                 </div>
                               </div>
-                            </div>
+                            </Card>
                           </motion.div>
                         )
                       })}
@@ -1277,123 +1324,165 @@ export function TasksBoardPage() {
               return (
                 <>
                   {/* Fixed header */}
-                  <div className="shrink-0 border-b border-border/60 px-6 pb-0 pt-5">
-                    {/* Title + badges */}
-                    <div className="mb-3">
-                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                        <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold text-white", getStatusColor(selectedTask.status))}>
+                  <div className="shrink-0 px-8 pt-8 pb-0 border-b border-border/40 bg-muted/5">
+                    <div className="mb-6 flex flex-col gap-4">
+                      {/* Top row: Status & Badges */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className={cn("rounded-lg px-3 py-1 text-[10px] font-semibold uppercase tracking-wider shadow-sm", getStatusColor(selectedTask.status))}>
                           {formatStatusLabel(selectedTask.status)}
-                        </span>
-                        <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", getPriorityColor(selectedTask.priority))}>
+                        </Badge>
+                        <Badge variant="outline" className={cn("rounded-lg px-3 py-1 text-[10px] font-semibold uppercase tracking-wider border-none shadow-sm", getPriorityColor(selectedTask.priority))}>
                           {formatPriorityLabel(selectedTask.priority)}
-                        </span>
-                        <span className="inline-flex items-center rounded-full border border-border/60 px-2.5 py-0.5 text-xs text-muted-foreground">
+                        </Badge>
+                        <Badge variant="outline" className="rounded-lg px-3 py-1 text-[10px] font-semibold uppercase tracking-wider border-border/60 bg-background text-muted-foreground shadow-sm">
                           {formatTaskTypeLabel(selectedTask.taskType)}
-                        </span>
+                        </Badge>
                         {selectedTask.integrationMode === "GITHUB" && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-xs text-primary">
-                            <FolderGit2 className="h-3 w-3" />GitHub
-                          </span>
+                          <Badge variant="outline" className="rounded-lg px-3 py-1 text-[10px] font-semibold uppercase tracking-wider border-primary/20 bg-primary/5 text-primary shadow-sm flex gap-1.5 items-center">
+                            <FolderGit2 className="h-3 w-3" />GITHUB
+                          </Badge>
                         )}
                         {selectedTask.awaitingAcceptance && (
-                          <span className="inline-flex items-center rounded-full bg-sky-500/10 px-2.5 py-0.5 text-xs font-medium text-sky-600 dark:text-sky-400">
-                            Awaiting acceptance
-                          </span>
-                        )}
-                        {selectedTask.isPastEndDate && selectedTask.status !== "DONE" && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2.5 py-0.5 text-xs font-medium text-rose-600 dark:text-rose-400">
-                            <AlertTriangle className="h-3 w-3" />Past due
-                          </span>
+                          <Badge variant="outline" className="rounded-lg px-3 py-1 text-[10px] font-semibold uppercase tracking-wider border-sky-500/20 bg-sky-500/5 text-sky-600 shadow-sm">
+                            Awaiting Acceptance
+                          </Badge>
                         )}
                       </div>
-                      <DialogTitle className="text-base font-bold leading-snug sm:text-lg">{selectedTask.title}</DialogTitle>
-                      <DialogDescription className="sr-only">
-                        View and manage details for task: {selectedTask.title}
-                      </DialogDescription>
-                      {selectedTask.description && (
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{selectedTask.description}</p>
-                      )}
+
+                      {/* Middle row: Title */}
+                      <div className="space-y-1">
+                        <DialogTitle className="text-xl font-bold tracking-tight leading-tight sm:text-2xl text-foreground/90">
+                          {selectedTask.title}
+                        </DialogTitle>
+                        <DialogDescription className="sr-only">
+                          View and manage details for task: {selectedTask.title}
+                        </DialogDescription>
+                        {selectedTask.description && (
+                          <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl font-medium">{selectedTask.description}</p>
+                        )}
+                      </div>
                     </div>
+
                     {/* Tab bar */}
-                    <div className="flex gap-0 border-b-0">
+                    <div className="flex gap-2">
                       {tabs.map((tab) => (
                         <button
                           key={tab.value}
                           onClick={() => setDetailTab(tab.value)}
                           className={cn(
-                            "relative h-10 border-b-2 px-4 text-sm font-medium transition-colors",
+                            "relative h-11 px-6 text-sm font-semibold transition-all duration-300 rounded-t-xl",
                             detailTab === tab.value
-                              ? "border-primary text-foreground"
-                              : "border-transparent text-muted-foreground hover:text-foreground",
+                              ? "bg-background border-t border-l border-r border-border/60 text-primary shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.05)]"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted/30",
                           )}
                         >
                           {tab.label}
-                          {tab.dot && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-amber-500" />}
+                          {tab.dot && <span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-background" />}
                         </button>
                       ))}
                     </div>
                   </div>
 
                   {/* Scrollable content */}
-                  <div className="flex-1 overflow-y-auto">
+                  <div className="flex-1 overflow-y-auto bg-background">
 
                     {/* ── Overview tab ── */}
-                    <div className={cn("space-y-4 p-6", detailTab !== "overview" && "hidden")}>
+                    <div className={cn("space-y-8 p-8", detailTab !== "overview" && "hidden")}>
                       {/* Workflow timeline */}
-                      <div className="flex items-center gap-1 overflow-x-auto pb-1">
-                        {timeline.map((step, i) => (
-                          <div key={step.status} className="flex shrink-0 items-center gap-1">
-                            <div className={cn(
-                              "flex min-w-[68px] flex-col items-center gap-1.5 rounded-xl border px-3 py-2 text-center transition-colors",
-                              step.isCurrent ? "border-primary/40 bg-primary/10" : step.isComplete ? "border-emerald-500/25 bg-emerald-500/10" : "border-border/50 bg-muted/20",
-                            )}>
-                              <div className={cn("h-2 w-2 rounded-full", step.color)} />
-                              <p className={cn("text-[10px] font-semibold uppercase tracking-wide",
-                                step.isCurrent ? "text-primary" : step.isComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
-                              )}>{step.label}</p>
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <RefreshCw className="h-4 w-4 text-muted-foreground/60" />
+                          <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Workflow Progress</h4>
+                        </div>
+                        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                          {timeline.map((step, i) => (
+                            <div key={step.status} className="flex shrink-0 items-center gap-2">
+                              <div className={cn(
+                                "group relative flex flex-col items-center gap-2 rounded-2xl border px-4 py-3 text-center transition-all duration-300 min-w-[90px]",
+                                step.isCurrent ? "border-primary/40 bg-primary/[0.03] shadow-lg shadow-primary/5 ring-1 ring-primary/20" : 
+                                step.isComplete ? "border-emerald-500/20 bg-emerald-500/[0.02]" : 
+                                "border-border/40 bg-muted/20 opacity-60",
+                              )}>
+                                <div className={cn("h-2.5 w-2.5 rounded-full shadow-sm", step.color)} />
+                                <p className={cn("text-[10px] font-medium uppercase tracking-wider",
+                                  step.isCurrent ? "text-primary" : step.isComplete ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                                )}>{step.label}</p>
+                              </div>
+                              {i < timeline.length - 1 && (
+                                <ChevronRight className={cn(
+                                  "h-4 w-4 shrink-0 transition-colors",
+                                  timeline[i].isComplete ? "text-emerald-500/40" : "text-muted-foreground/20"
+                                )} />
+                              )}
                             </div>
-                            {i < timeline.length - 1 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />}
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
 
                       {/* Next step callout */}
-                      <div className={cn("rounded-[16px] border p-4",
-                        selectedTask.isPastEndDate && selectedTask.status !== "DONE" ? "border-rose-500/25 bg-rose-500/[0.05]" :
-                        selectedTask.awaitingAcceptance && selectedTask.assignee?.id === currentUser?.id ? "border-primary/25 bg-primary/[0.05]" :
-                        selectedTask.status === "REVIEW" && (selectedTask.permissions.canApprove || selectedTask.permissions.canReject) ? "border-purple-500/25 bg-purple-500/[0.05]" :
-                        "border-border/60 bg-muted/20",
+                      <div className={cn("rounded-3xl border p-6 transition-all duration-300 shadow-sm",
+                        selectedTask.isPastEndDate && selectedTask.status !== "DONE" ? "border-rose-500/20 bg-rose-500/[0.04] ring-1 ring-rose-500/10" :
+                        selectedTask.awaitingAcceptance && selectedTask.assignee?.id === currentUser?.id ? "border-primary/20 bg-primary/[0.04] ring-1 ring-primary/10" :
+                        selectedTask.status === "REVIEW" && (selectedTask.permissions.canApprove || selectedTask.permissions.canReject) ? "border-purple-500/20 bg-purple-500/[0.04] ring-1 ring-purple-500/10" :
+                        "border-border/60 bg-muted/30",
                       )}>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Next step</p>
-                        <p className="mt-1 text-sm font-semibold">{nextStep.title}</p>
-                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{nextStep.description}</p>
+                        <div className="flex items-start gap-4">
+                          <div className={cn(
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm",
+                            selectedTask.isPastEndDate && selectedTask.status !== "DONE" ? "bg-rose-500/10 text-rose-600" :
+                            selectedTask.awaitingAcceptance && selectedTask.assignee?.id === currentUser?.id ? "bg-primary/10 text-primary" :
+                            "bg-muted text-muted-foreground"
+                          )}>
+                            <Target className="h-5 w-5" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/50">Action Required</p>
+                            <p className="text-base font-semibold tracking-tight text-foreground/80">{nextStep.title}</p>
+                            <p className="text-sm leading-relaxed text-muted-foreground/70 font-medium">{nextStep.description}</p>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Key info */}
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                        {[
-                          { label: "Assignee", content: (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <Avatar className="h-6 w-6"><AvatarImage src={selectedTask.assignee?.avatarUrl || "/placeholder.svg"} /><AvatarFallback className="text-[10px]">{selectedTask.assignee?.fullName?.charAt(0) || "?"}</AvatarFallback></Avatar>
-                              <span className="truncate text-xs font-medium">{selectedTask.assignee?.fullName || "Unassigned"}</span>
+                      {/* Key info grid */}
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="h-4 w-4 text-muted-foreground/60" />
+                          <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Task Details</h4>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                          {[
+                            { label: "Assignee", icon: UserRound, content: (
+                              <div className="flex items-center gap-2.5 mt-2">
+                                <Avatar className="h-7 w-7 ring-2 ring-background shadow-sm">
+                                  <AvatarImage src={selectedTask.assignee?.avatarUrl || "/placeholder.svg"} />
+                                  <AvatarFallback className="text-[10px] font-medium">{selectedTask.assignee?.fullName?.charAt(0) || "?"}</AvatarFallback>
+                                </Avatar>
+                                <span className="truncate text-sm font-semibold text-foreground/80">{selectedTask.assignee?.fullName || "Unassigned"}</span>
+                              </div>
+                            )},
+                            { label: "Creator", icon: UserCheck, content: (
+                              <div className="flex items-center gap-2.5 mt-2">
+                                <Avatar className="h-7 w-7 ring-2 ring-background shadow-sm">
+                                  <AvatarImage src={selectedTask.createdBy?.avatarUrl || "/placeholder.svg"} />
+                                  <AvatarFallback className="text-[10px] font-medium">{selectedTask.createdBy?.fullName?.charAt(0) || "?"}</AvatarFallback>
+                                </Avatar>
+                                <span className="truncate text-sm font-semibold text-foreground/80">{selectedTask.createdBy?.fullName || "Unknown"}</span>
+                              </div>
+                            )},
+                            { label: "Start Date", icon: Clock, content: <p className="mt-2.5 text-sm font-semibold tracking-tight text-foreground/80">{formatShortDate(selectedTask.startDate)}</p> },
+                            { label: "Deadline", icon: AlertCircle, content: <p className={cn("mt-2.5 text-sm font-semibold tracking-tight", selectedTask.isPastEndDate && selectedTask.status !== "DONE" ? "text-rose-500" : "text-foreground/80")}>{formatShortDate(selectedTask.endDate)}</p> },
+                            { label: "Task Type", icon: ClipboardList, content: <p className="mt-2.5 text-sm font-semibold tracking-tight text-foreground/80">{formatTaskTypeLabel(selectedTask.taskType)}</p> },
+                            { label: "Integration", icon: FolderGit2, content: <p className="mt-2.5 text-sm font-semibold tracking-tight text-foreground/80">{formatIntegrationModeLabel(selectedTask.integrationMode)}</p> },
+                          ].map((item) => (
+                            <div key={item.label} className="rounded-2xl border border-border/40 bg-muted/5 p-4 hover:bg-muted/10 transition-colors group">
+                              <div className="flex items-center gap-2 mb-1">
+                                <item.icon className="h-3 w-3 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">{item.label}</p>
+                              </div>
+                              {item.content}
                             </div>
-                          )},
-                          { label: "Created By", content: (
-                            <div className="flex items-center gap-2 mt-1.5">
-                              <Avatar className="h-6 w-6"><AvatarImage src={selectedTask.createdBy?.avatarUrl || "/placeholder.svg"} /><AvatarFallback className="text-[10px]">{selectedTask.createdBy?.fullName?.charAt(0) || "?"}</AvatarFallback></Avatar>
-                              <span className="truncate text-xs font-medium">{selectedTask.createdBy?.fullName || "Unknown"}</span>
-                            </div>
-                          )},
-                          { label: "Start Date", content: <p className="mt-1.5 text-xs font-medium">{formatShortDate(selectedTask.startDate)}</p> },
-                          { label: "End Date", content: <p className={cn("mt-1.5 text-xs font-medium", selectedTask.isPastEndDate && selectedTask.status !== "DONE" ? "text-rose-500" : "")}>{formatShortDate(selectedTask.endDate)}</p> },
-                          { label: "Task Type", content: <p className="mt-1.5 text-xs font-medium">{formatTaskTypeLabel(selectedTask.taskType)}</p> },
-                          { label: "Mode", content: <p className="mt-1.5 text-xs font-medium">{formatIntegrationModeLabel(selectedTask.integrationMode)}</p> },
-                        ].map((item) => (
-                          <div key={item.label} className="rounded-xl border border-border/60 bg-background/70 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{item.label}</p>
-                            {item.content}
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
 
                       {/* Timestamps */}
@@ -1541,184 +1630,153 @@ export function TasksBoardPage() {
                         </div>
                       )}
 
-                      {/* Review timeline — every review (Leader + TA) on this task.
-                          Fallback to the legacy single-field block if no rows yet. */}
-                      {Array.isArray(selectedTask.reviews) && selectedTask.reviews.length > 0 ? (
-                        <div className="rounded-[16px] border border-border/60 bg-card/40 p-4">
-                          <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                              Reviews ({selectedTask.reviews.length})
-                            </p>
-                            <span className="text-[10px] text-muted-foreground/70">Newest first</span>
-                          </div>
-                          <div className="space-y-2.5">
-                            {selectedTask.reviews.map((review) => {
-                              const isApproved = review.decision === "APPROVED"
-                              const roleLabel =
-                                review.reviewerRole === "LEADER"
-                                  ? "Team Leader"
-                                  : review.reviewerRole === "TA"
-                                    ? "TA"
-                                    : "Admin"
-                              return (
-                                <div
-                                  key={review.id}
-                                  className={cn(
-                                    "rounded-[14px] border px-3 py-3",
-                                    isApproved
-                                      ? "border-emerald-500/25 bg-emerald-500/[0.04]"
-                                      : "border-amber-500/25 bg-amber-500/[0.05]",
-                                  )}
-                                >
-                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                      {/* Review Section (History & Form) */}
+                      <div className="space-y-8">
+                        <div className="flex items-center gap-3">
+                          <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                          <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Quality Review</h4>
+                        </div>
+
+                        {/* Review History */}
+                        {Array.isArray(selectedTask.reviews) && selectedTask.reviews.length > 0 ? (
+                          <div className="space-y-4">
+                            {selectedTask.reviews.map((review, i) => (
+                              <div key={review.id} className="relative flex gap-6">
+                                {i < selectedTask.reviews.length - 1 && (
+                                  <div className="absolute left-[19px] top-10 bottom-0 w-[2px] bg-border/40" />
+                                )}
+                                <div className={cn(
+                                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-4 ring-white dark:ring-zinc-950 z-10",
+                                  review.decision === "APPROVED" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                                )}>
+                                  {review.decision === "APPROVED" ? <CheckCircle2 className="h-5 w-5" /> : <RefreshCw className="h-5 w-5" />}
+                                </div>
+                                <div className="flex-1 space-y-2 pb-6">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-sm font-semibold">
-                                        {review.reviewer?.fullName || "Reviewer"}
-                                      </span>
-                                      <Badge
-                                        variant="outline"
-                                        className={cn(
-                                          "rounded-full border-0 px-2 py-0 text-[10px]",
-                                          review.reviewerRole === "LEADER"
-                                            ? "bg-violet-500/15 text-violet-700 dark:text-violet-400"
-                                            : review.reviewerRole === "TA"
-                                              ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400"
-                                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-                                        )}
-                                      >
-                                        {roleLabel}
+                                      <span className="text-sm font-bold text-foreground/80">{review.reviewer?.fullName || "Reviewer"}</span>
+                                      <Badge variant="secondary" className="rounded-full px-2 py-0 text-[8px] font-semibold uppercase tracking-widest opacity-60">
+                                        {review.reviewerRole}
                                       </Badge>
                                     </div>
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                        isApproved
-                                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                                          : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-                                      )}
-                                    >
-                                      {isApproved ? "Approved" : "Resubmission requested"}
+                                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">{formatDateTime(review.createdAt)}</span>
+                                  </div>
+                                  <Card className="rounded-2xl border-border/40 bg-muted/20 p-4 shadow-sm transition-all hover:bg-muted/30">
+                                    <p className="text-sm font-medium leading-relaxed text-muted-foreground/80">
+                                      {review.comment || "No written feedback provided."}
+                                    </p>
+                                  </Card>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : hasReviewRecord && (
+                          <div className={cn(
+                            "rounded-3xl border p-6 space-y-4",
+                            isResubmissionRequested ? "border-amber-500/20 bg-amber-500/[0.03]" : "border-emerald-500/20 bg-emerald-500/[0.03]"
+                          )}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "h-8 w-8 flex items-center justify-center rounded-full",
+                                  isResubmissionRequested ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"
+                                )}>
+                                  {isResubmissionRequested ? <RefreshCw className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                                </div>
+                                <p className="text-xs font-semibold uppercase tracking-widest text-foreground/70">
+                                  {isResubmissionRequested ? "Changes Requested" : "Task Approved"}
+                                </p>
+                              </div>
+                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">{formatDateTime(selectedTask.reviewedAt)}</span>
+                            </div>
+                            <p className="text-sm font-medium leading-relaxed text-muted-foreground/70">
+                              {selectedTask.reviewFeedback || "No detailed feedback was recorded."}
+                            </p>
+                            <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+                              <Avatar className="h-5 w-5">
+                                <AvatarImage src={selectedTask.reviewedBy?.avatarUrl || "/placeholder.svg"} />
+                                <AvatarFallback className="text-[8px] font-semibold bg-muted">{getInitials(selectedTask.reviewedBy?.fullName || "?")}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Reviewer: {selectedTask.reviewedBy?.fullName || "Unknown"}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Reviewer form — visible to both team leader and TA */}
+                        {(selectedTask.permissions.canApprove || selectedTask.permissions.canReject) && (() => {
+                          const actorRoleLabel =
+                            selectedTask.actorReviewerRole === "LEADER"
+                              ? "Team Leader"
+                              : selectedTask.actorReviewerRole === "TA"
+                                ? "TA"
+                                : selectedTask.actorReviewerRole === "ADMIN"
+                                  ? "Admin"
+                                  : "Reviewer"
+                          const isSupplementary = selectedTask.status !== "REVIEW"
+                          return (
+                            <Card className="overflow-hidden rounded-3xl border-border/40 bg-muted/5 shadow-inner">
+                              <div className="px-6 py-4 border-b border-border/40 bg-muted/10">
+                                <div className="flex items-center justify-between">
+                                  <div className="space-y-0.5">
+                                    <h5 className="text-sm font-bold tracking-tight text-foreground/80">{actorRoleLabel} Review</h5>
+                                    <p className="text-[10px] font-medium text-muted-foreground/60">
+                                      {isSupplementary ? "Follow-up review mode" : "Active review mode"}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="rounded-full bg-background/50 px-2 py-0 text-[8px] font-semibold uppercase tracking-widest">
+                                    {isSupplementary ? "Post-Review" : "Action Required"}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="p-6 space-y-6">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <Label htmlFor="task-review-comment" className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 ml-1">
+                                      Feedback Note
+                                    </Label>
+                                    <span className={cn(
+                                      "text-[9px] font-semibold tabular-nums tracking-widest uppercase",
+                                      reviewCommentDraft.trim().length >= RESUBMISSION_MIN_LENGTH ? "text-emerald-600/60" : "text-amber-600/60"
+                                    )}>
+                                      {reviewCommentDraft.trim().length} / {RESUBMISSION_MIN_LENGTH} MIN
                                     </span>
                                   </div>
-                                  <p className="mt-1 text-[11px] text-muted-foreground">{formatDateTime(review.createdAt)}</p>
-                                  {review.comment ? (
-                                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{review.comment}</p>
-                                  ) : (
-                                    <p className="mt-2 text-xs italic text-muted-foreground/70">No written note.</p>
+                                  <Textarea
+                                    id="task-review-comment"
+                                    value={reviewCommentDraft}
+                                    onChange={(e) => setReviewCommentDraft(e.target.value)}
+                                    placeholder="Enter your professional assessment here..."
+                                    className={cn(
+                                      "min-h-[120px] resize-none rounded-2xl border-border/40 bg-background/80 p-4 text-sm font-medium leading-relaxed shadow-sm transition-all focus:ring-primary/20",
+                                      reviewCommentDraft.trim().length > 0 && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH ? "border-amber-500/30" : ""
+                                    )}
+                                  />
+                                  {reviewCommentDraft.trim().length > 0 && reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH && (
+                                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 rounded-xl bg-amber-500/10 p-3 border border-amber-500/20">
+                                      <AlertCircle className="h-3 w-3 text-amber-600 shrink-0" />
+                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700 leading-tight">
+                                        Details required for resubmission
+                                      </p>
+                                    </motion.div>
                                   )}
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        hasReviewRecord && (
-                          <div className={cn(
-                            "rounded-[16px] border p-4",
-                            isResubmissionRequested
-                              ? "border-amber-500/25 bg-amber-500/[0.06]"
-                              : "border-emerald-500/20 bg-emerald-500/[0.05]",
-                          )}>
-                            <div className="mb-3 flex flex-wrap items-center gap-2">
-                              <p className={cn(
-                                "text-xs font-semibold uppercase tracking-[0.14em]",
-                                isResubmissionRequested ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400",
-                              )}>
-                                {isResubmissionRequested ? "Resubmission requested" : "Task reviewed"}
-                              </p>
-                              {reviewDecision && (
-                                <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium", reviewDecision.className)}>
-                                  {reviewDecision.label}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                              <span>Reviewed by {selectedTask.reviewedBy?.fullName || "Reviewer"}</span>
-                              <span>{formatDateTime(selectedTask.reviewedAt)}</span>
-                            </div>
-                            {selectedTask.reviewFeedback ? (
-                              <p className="mt-3 text-sm leading-6 text-muted-foreground">{selectedTask.reviewFeedback}</p>
-                            ) : (
-                              <p className="mt-3 text-sm leading-6 text-muted-foreground">No written note was added.</p>
-                            )}
-                          </div>
-                        )
-                      )}
 
-                      {/* Reviewer form — visible to both team leader and TA */}
-                      {(selectedTask.permissions.canApprove || selectedTask.permissions.canReject) && (() => {
-                        const actorRoleLabel =
-                          selectedTask.actorReviewerRole === "LEADER"
-                            ? "Team Leader"
-                            : selectedTask.actorReviewerRole === "TA"
-                              ? "TA"
-                              : selectedTask.actorReviewerRole === "ADMIN"
-                                ? "Admin"
-                                : "Reviewer"
-                        const isSupplementary = selectedTask.status !== "REVIEW"
-                        return (
-                        <div className="space-y-3 rounded-[16px] border border-border/60 bg-muted/10 p-4">
-                          <div>
-                            <p className="text-sm font-semibold">{actorRoleLabel} Review</p>
-                            <p className="text-xs text-muted-foreground">
-                              {isSupplementary
-                                ? "This task was already closed by another reviewer. Your follow-up review is recorded but won't change the task status."
-                                : "Your comment stays attached. Requesting resubmission moves the task back to To Do."}
-                            </p>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <Label htmlFor="task-review-comment" className="text-xs">
-                                Review Comment
-                                <span className="ml-1 text-[10px] font-normal text-muted-foreground">
-                                  (required for Request Resubmission)
-                                </span>
-                              </Label>
-                              <span
-                                className={cn(
-                                  "text-[10px] tabular-nums",
-                                  reviewCommentDraft.trim().length >= RESUBMISSION_MIN_LENGTH
-                                    ? "text-muted-foreground/70"
-                                    : "text-amber-600 dark:text-amber-400",
+                                {selectedTask.integrationMode === "GITHUB" && selectedTask.github?.pullRequest?.number && (
+                                  <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-border/40 bg-background/50 p-4 transition-all hover:bg-background">
+                                    <Checkbox checked={mergeOnApprove} onCheckedChange={(c) => setMergeOnApprove(c === true)} className="mt-1 rounded-md" />
+                                    <div className="space-y-1">
+                                      <p className="text-xs font-semibold uppercase tracking-widest text-foreground/80">Auto-Merge Pull Request</p>
+                                      <p className="text-[10px] font-medium leading-relaxed text-muted-foreground/60">
+                                        The pull request will be merged automatically upon approval. Recommended for small fixes.
+                                      </p>
+                                    </div>
+                                  </label>
                                 )}
-                              >
-                                {reviewCommentDraft.trim().length} / {RESUBMISSION_MIN_LENGTH} min for resubmission
-                              </span>
-                            </div>
-                            <Textarea
-                              id="task-review-comment"
-                              value={reviewCommentDraft}
-                              onChange={(e) => setReviewCommentDraft(e.target.value)}
-                              placeholder="Approval note (optional), or the exact reason the student must resubmit (required)"
-                              className={cn(
-                                "resize-none rounded-xl transition-colors",
-                                reviewCommentDraft.trim().length > 0 &&
-                                  reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH
-                                  ? "border-amber-500/50 focus-visible:ring-amber-500/30"
-                                  : "",
-                              )}
-                              rows={3}
-                            />
-                            {reviewCommentDraft.trim().length > 0 &&
-                            reviewCommentDraft.trim().length < RESUBMISSION_MIN_LENGTH ? (
-                              <p className="flex items-center gap-1.5 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
-                                <AlertCircle className="h-3 w-3" />
-                                Resubmission needs at least {RESUBMISSION_MIN_LENGTH} characters so the student knows what to fix.
-                              </p>
-                            ) : null}
-                          </div>
-                          {selectedTask.integrationMode === "GITHUB" && selectedTask.github?.pullRequest?.number && (
-                            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border/60 bg-background/70 px-3 py-3">
-                              <Checkbox checked={mergeOnApprove} onCheckedChange={(c) => setMergeOnApprove(c === true)} />
-                              <div>
-                                <p className="text-sm font-medium">Merge pull request when approving</p>
-                                <p className="text-xs text-muted-foreground">Leave off if you want the task in Approved until the PR is merged later.</p>
                               </div>
-                            </label>
-                          )}
-                        </div>
-                        )
-                      })()}
+                            </Card>
+                          )
+                        })()}
+                      </div>
                     </div>
 
                     {/* ── GitHub tab ── */}
@@ -1966,7 +2024,7 @@ export function TasksBoardPage() {
                         return (
                           <Button
                             variant="outline"
-                            className="h-9 rounded-xl border-destructive/30 bg-transparent text-destructive hover:bg-destructive/5 disabled:opacity-50"
+                            className="h-9 rounded-xl border-destructive/40 bg-transparent text-destructive hover:bg-destructive hover:text-white transition-all duration-200 disabled:opacity-40"
                             onClick={() => requestTaskWorkflowAction("reject")}
                             disabled={taskActionInFlight !== "" || commentTooShort}
                             title={
@@ -1991,85 +2049,169 @@ export function TasksBoardPage() {
         {/* ── Create Task Dialog ────────────────────────────── */}
         {isLeader && team && (
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogContent className="mx-4 max-h-[90vh] w-[94vw] overflow-y-auto rounded-[28px] sm:mx-auto sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-                <DialogDescription>
-                  Code, documentation, and design tasks connect to GitHub automatically when the mode is set to GitHub.
-                </DialogDescription>
-              </DialogHeader>
+            <DialogContent className="mx-4 max-h-[94vh] w-[96vw] overflow-hidden rounded-[32px] p-0 sm:mx-auto sm:max-w-2xl">
+              <div className="flex flex-col h-full max-h-[94vh]">
+                <DialogHeader className="px-8 pt-8 pb-6 border-b border-border/40 bg-muted/5">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20">
+                      <Plus className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <DialogTitle className="text-xl font-bold tracking-tight text-foreground/90">Create New Task</DialogTitle>
+                      <DialogDescription className="text-sm font-medium text-muted-foreground/70">
+                        Define goals, schedule work, and assign to team members.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
 
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label htmlFor="create-task-title">Title</Label>
-                  <Input id="create-task-title" placeholder="Task title" value={createForm.title} onChange={(e) => setCreateForm((c) => ({ ...c, title: e.target.value }))} className="rounded-xl" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="create-task-description">Description</Label>
-                  <Textarea id="create-task-description" placeholder="Briefly describe the work" value={createForm.description} onChange={(e) => setCreateForm((c) => ({ ...c, description: e.target.value }))} className="resize-none rounded-xl" rows={3} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-2">
-                    <Label>Task Type</Label>
-                    <Select value={createForm.taskType} onValueChange={(v) => setCreateForm((c) => ({ ...c, taskType: v as ApiTaskType, integrationMode: defaultIntegrationModeForTaskType(v as ApiTaskType) }))}>
-                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>{TASK_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-                    </Select>
+                <div className="flex-1 overflow-y-auto px-8 py-6 space-y-8">
+                  {/* Basic Info Section */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileText className="h-4 w-4 text-muted-foreground/50" />
+                      <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50">General Information</h4>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-task-title" className="text-sm font-medium text-foreground/70 ml-1">Task Title</Label>
+                        <Input 
+                          id="create-task-title" 
+                          placeholder="e.g. Implement user authentication flow" 
+                          value={createForm.title} 
+                          onChange={(e) => setCreateForm((c) => ({ ...c, title: e.target.value }))} 
+                          className="h-11 rounded-xl bg-muted/20 border-border/40 focus:bg-background transition-all font-medium" 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-task-description" className="text-sm font-medium text-foreground/70 ml-1">Detailed Description</Label>
+                        <Textarea 
+                          id="create-task-description" 
+                          placeholder="Break down the requirements and expected outcomes..." 
+                          value={createForm.description} 
+                          onChange={(e) => setCreateForm((c) => ({ ...c, description: e.target.value }))} 
+                          className="resize-none rounded-xl bg-muted/20 border-border/40 focus:bg-background transition-all min-h-[100px] font-medium" 
+                          rows={4} 
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Tracking</Label>
-                    <Select value={createForm.integrationMode} onValueChange={(v) => setCreateForm((c) => ({ ...c, integrationMode: v as ApiTaskIntegrationMode }))}>
-                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>{INTEGRATION_MODE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-                    </Select>
+
+                  {/* Classification Section */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Target className="h-4 w-4 text-muted-foreground/50" />
+                      <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50">Classification & Tracking</h4>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground/70 ml-1">Task Category</Label>
+                        <Select value={createForm.taskType} onValueChange={(v) => setCreateForm((c) => ({ ...c, taskType: v as ApiTaskType, integrationMode: defaultIntegrationModeForTaskType(v as ApiTaskType) }))}>
+                          <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-border/40 font-medium"><SelectValue /></SelectTrigger>
+                          <SelectContent className="rounded-xl shadow-xl">{TASK_TYPE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="font-medium">{o.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground/70 ml-1">Tracking Mode</Label>
+                        <Select value={createForm.integrationMode} onValueChange={(v) => setCreateForm((c) => ({ ...c, integrationMode: v as ApiTaskIntegrationMode }))}>
+                          <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-border/40 font-medium"><SelectValue /></SelectTrigger>
+                          <SelectContent className="rounded-xl shadow-xl">{INTEGRATION_MODE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="font-medium">{o.label}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-foreground/70 ml-1">Priority Level</Label>
+                        <Select value={createForm.priority} onValueChange={(v) => setCreateForm((c) => ({ ...c, priority: v as ApiTaskPriority }))}>
+                          <SelectTrigger className="h-11 rounded-xl bg-muted/20 border-border/40 font-medium"><SelectValue /></SelectTrigger>
+                          <SelectContent className="rounded-xl shadow-xl">
+                            <SelectItem value="LOW" className="text-emerald-600 font-medium">Low</SelectItem>
+                            <SelectItem value="MEDIUM" className="text-amber-600 font-medium">Medium</SelectItem>
+                            <SelectItem value="HIGH" className="text-orange-600 font-medium">High</SelectItem>
+                            <SelectItem value="CRITICAL" className="text-rose-600 font-semibold">Critical</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {createForm.integrationMode === "GITHUB" && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 5 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-4 flex gap-3"
+                      >
+                        <FolderGit2 className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+                        <p className="text-xs leading-5 text-primary font-medium">
+                          <strong className="block mb-0.5 font-semibold">GitHub Automation Enabled</strong>
+                          GPMS will automatically create a dedicated issue and feature branch when this task starts. Commits will be tracked in real-time.
+                        </p>
+                      </motion.div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label>Priority</Label>
-                    <Select value={createForm.priority} onValueChange={(v) => setCreateForm((c) => ({ ...c, priority: v as ApiTaskPriority }))}>
-                      <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="LOW">Low</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="HIGH">High</SelectItem>
-                        <SelectItem value="CRITICAL">Critical</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                  {/* Timeline Section */}
+                  <div className="space-y-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="h-4 w-4 text-muted-foreground/50" />
+                      <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50">Timeline</h4>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="create-task-start-date" className="text-sm font-medium text-foreground/70 ml-1">Scheduled Start</Label>
+                        <div className="relative">
+                          <Input 
+                            id="create-task-start-date" 
+                            type="date" 
+                            value={createForm.startDate} 
+                            onChange={(e) => setCreateForm((c) => ({ ...c, startDate: e.target.value }))} 
+                            className="h-11 rounded-xl bg-muted/20 border-border/40 focus:bg-background transition-all pl-4 font-medium" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="create-task-end-date" className="text-sm font-medium text-foreground/70 ml-1">Deadline</Label>
+                        <div className="relative">
+                          <Input 
+                            id="create-task-end-date" 
+                            type="date" 
+                            value={createForm.endDate} 
+                            onChange={(e) => setCreateForm((c) => ({ ...c, endDate: e.target.value }))} 
+                            className="h-11 rounded-xl bg-muted/20 border-border/40 focus:bg-background transition-all pl-4 font-medium" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Assignment Section */}
+                  <div className="space-y-5 pb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <UserCheck className="h-4 w-4 text-muted-foreground/50" />
+                      <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/50">Assignment</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground/70 ml-1 font-medium">Select the primary owner for this task. They will need to accept it to begin work.</p>
+                      {renderMemberChecklist(assignableMembers, createForm.assigneeUserId, (id) => setCreateForm((c) => ({ ...c, assigneeUserId: id })))}
+                    </div>
                   </div>
                 </div>
 
-                {createForm.integrationMode === "GITHUB" && (
-                  <div className="rounded-[16px] border border-primary/20 bg-primary/[0.04] px-4 py-3">
-                    <p className="text-xs font-medium text-primary">
-                      GitHub mode — an issue and branch will be created when you open this task for the first time.
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="create-task-start-date">Start Date</Label>
-                    <Input id="create-task-start-date" type="date" value={createForm.startDate} onChange={(e) => setCreateForm((c) => ({ ...c, startDate: e.target.value }))} className="rounded-xl" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="create-task-end-date">End Date</Label>
-                    <Input id="create-task-end-date" type="date" value={createForm.endDate} onChange={(e) => setCreateForm((c) => ({ ...c, endDate: e.target.value }))} className="rounded-xl" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Assign To</Label>
-                  <p className="text-xs text-muted-foreground">Assign the task to any team member, including the leader.</p>
-                  {renderMemberChecklist(assignableMembers, createForm.assigneeUserId, (id) => setCreateForm((c) => ({ ...c, assigneeUserId: id })))}
+                <div className="shrink-0 px-8 py-6 bg-muted/5 border-t border-border/40 flex flex-col sm:flex-row gap-3">
+                  <Button 
+                    variant="ghost" 
+                    className="flex-1 rounded-xl h-11 font-semibold" 
+                    onClick={() => { setCreateDialogOpen(false); setCreateForm(DEFAULT_TASK_FORM) }}
+                  >
+                    Discard
+                  </Button>
+                  <Button 
+                    className="flex-[2] rounded-xl h-11 font-semibold shadow-lg shadow-primary/20" 
+                    onClick={() => void handleCreateTask()} 
+                    disabled={isCreatingTask || !createForm.title.trim()}
+                  >
+                    {isCreatingTask ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Plus className="mr-2 h-5 w-5" />}
+                    Create Task
+                  </Button>
                 </div>
               </div>
-
-              <DialogFooter>
-                <Button variant="outline" className="rounded-xl bg-transparent" onClick={() => { setCreateDialogOpen(false); setCreateForm(DEFAULT_TASK_FORM) }}>Cancel</Button>
-                <Button className="rounded-xl" onClick={() => void handleCreateTask()} disabled={isCreatingTask}>
-                  {isCreatingTask ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Create Task
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         )}

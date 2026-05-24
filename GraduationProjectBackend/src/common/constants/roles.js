@@ -3,6 +3,7 @@ export const ROLES = Object.freeze({
   LEADER: "LEADER",
   TA: "TA",
   DOCTOR: "DOCTOR",
+  SUPPORT: "SUPPORT",
   ADMIN: "ADMIN",
 });
 

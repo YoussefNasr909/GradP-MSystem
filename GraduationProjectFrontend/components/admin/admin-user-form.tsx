@@ -33,6 +33,7 @@ export const roleOptions: Array<SelectOption<Role>> = [
   { value: "LEADER", label: "Team Leader" },
   { value: "DOCTOR", label: "Doctor" },
   { value: "TA", label: "TA" },
+  { value: "SUPPORT", label: "Support" },
   { value: "ADMIN", label: "Admin" },
 ];
 
@@ -222,10 +223,10 @@ export function AdminUserForm({
         />
         <FormInput
           id="academicId"
-          label="Academic ID *"
+          label={form.role === "SUPPORT" ? "Staff ID *" : "Academic ID *"}
           value={form.academicId}
           onChange={(value) => onChange("academicId", value)}
-          placeholder="e.g. CS2021010 or ADMIN-0001"
+          placeholder={form.role === "SUPPORT" ? "e.g. SUPPORT-0001" : "e.g. CS2021010 or ADMIN-0001"}
         />
         <FormInput
           id="phone"

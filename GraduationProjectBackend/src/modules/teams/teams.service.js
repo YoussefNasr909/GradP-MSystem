@@ -1297,6 +1297,31 @@ export async function transferLeadershipService(actor, teamId, { newLeaderId }) 
   };
 }
 
+export async function cancelJoinRequestService(actor, joinRequestId) {
+  const joinRequest = await findTeamJoinRequestById(joinRequestId);
+  if (!joinRequest) {
+    throw new AppError("Join request not found.", 404, "JOIN_REQUEST_NOT_FOUND");
+  }
+
+  // Only the student who sent the request (or admin) can cancel it
+  const isOwner = joinRequest.user.id === actor.id;
+  const isStaff = actor.role === ROLES.ADMIN;
+
+  if (!isOwner && !isStaff) {
+    throw new AppError("You are not allowed to cancel this join request.", 403, "JOIN_REQUEST_CANCEL_FORBIDDEN");
+  }
+
+  if (joinRequest.status !== TEAM_JOIN_REQUEST_STATUSES.PENDING) {
+    throw new AppError("Only pending join requests can be canceled.", 409, "JOIN_REQUEST_NOT_PENDING");
+  }
+
+  const updated = await updateTeamJoinRequestById(joinRequest.id, {
+    status: TEAM_JOIN_REQUEST_STATUSES.CANCELLED,
+  });
+
+  return toJoinRequestResponse(updated, actor);
+}
+
 export async function removeSupervisorAssignmentService(actor, teamId, supervisorRole) {
   const team = await findTeamById(teamId);
   assertCanManageTeam(team, actor);

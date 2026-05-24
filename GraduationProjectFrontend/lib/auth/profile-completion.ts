@@ -11,7 +11,10 @@ export function isUserProfileIncomplete(user: unknown) {
     preferredTrackRaw?: string | null
     academicId?: string | null
     studentCode?: string | null
+    role?: string | null
   }
+
+  if (candidate.role === "support" || candidate.role === "SUPPORT") return false
 
   const isBlank = (value: unknown) => value === null || value === undefined || String(value).trim() === ""
   const academicId = String(candidate.academicId ?? candidate.studentCode ?? "")

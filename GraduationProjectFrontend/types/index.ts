@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "doctor" | "ta" | "leader" | "member"
+export type UserRole = "admin" | "doctor" | "ta" | "support" | "leader" | "member"
 
 export type User = {
   id: string
@@ -330,7 +330,7 @@ export type DashboardWidget = {
 }
 
 export type NotificationPreference = {
-  category: "tasks" | "meetings" | "submissions" | "chat" | "system"
+  category: "tasks" | "meetings" | "submissions" | "chat" | "support" | "system"
   email: boolean
   push: boolean
   inApp: boolean

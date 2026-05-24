@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 import { useState } from "react"
-import { motion, useReducedMotion, AnimatePresence } from "framer-motion"
+import { motion, useReducedMotion, AnimatePresence, type Variants } from "framer-motion"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -10,6 +10,8 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardCheck,
   Copy,
   Crown,
@@ -32,6 +34,7 @@ import {
   UserMinus,
   UserPlus,
   Users,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 import { ApiRequestError } from "@/lib/api/http"
@@ -159,7 +162,7 @@ export default function MyTeamClient() {
   if (error) return <CenteredCard title="Couldn't load your team" body={error} onRetry={refresh} />
 
   if (isStudent && !data?.team) {
-    return (
+      return (
       <StudentNoTeam
         invitations={data?.receivedInvitations ?? []}
         myJoinRequests={data?.myJoinRequests ?? []}
@@ -932,7 +935,7 @@ function StudentTeamExperience({
     <div className="mx-auto w-full max-w-none space-y-6 p-4 md:p-6 xl:p-8">
       <motion.section
         {...getRevealMotion(reduceMotion)}
-        className="rounded-[28px] border border-border/70 bg-background shadow-sm"
+        className="rounded-xl border border-border/70 bg-card shadow-sm"
       >
         <div className="space-y-5 p-5 sm:p-6 md:p-7">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -947,7 +950,7 @@ function StudentTeamExperience({
               </div>
 
               <div className="space-y-3">
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{team.name}</h1>
+                <h1 className="text-2xl font-semibold sm:text-3xl">{team.name}</h1>
                 <p className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">{team.bio}</p>
               </div>
             </div>
@@ -1023,20 +1026,20 @@ function StudentTeamExperience({
           <motion.section {...getRevealMotion(reduceMotion, 0.04)} {...getPanelMotion(reduceMotion)} className="min-w-0 space-y-6">
             <Card className="group/panel border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
               <CardHeader className="space-y-2">
-                <CardTitle className="text-xl tracking-tight">About This Team</CardTitle>
+                <CardTitle className="text-xl">About this team</CardTitle>
                 <CardDescription>The essential project and workspace details in one place.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
                 <motion.div
                   {...getInsetMotion(reduceMotion)}
-                  className="rounded-3xl border border-border/60 bg-muted/20 p-4 transition-colors duration-300 group-hover/panel:bg-muted/30"
+                  className="rounded-lg border border-border/60 bg-muted/20 p-4 transition-colors duration-300 group-hover/panel:bg-muted/30"
                 >
                   <p className="text-sm leading-7 text-foreground/90">{team.bio}</p>
                 </motion.div>
 
                 <motion.div
                   {...getInsetMotion(reduceMotion)}
-                  className="rounded-3xl border border-border/60 bg-muted/20 p-4 transition-colors duration-300 group-hover/panel:bg-muted/30"
+                  className="rounded-lg border border-border/60 bg-muted/20 p-4 transition-colors duration-300 group-hover/panel:bg-muted/30"
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-muted-foreground">Capacity</span>
@@ -1095,7 +1098,7 @@ function StudentTeamExperience({
                 <CardHeader className="space-y-2">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div className="space-y-2">
-                      <CardTitle className="text-xl tracking-tight">Team Members</CardTitle>
+                      <CardTitle className="text-xl">Team members</CardTitle>
                       <CardDescription>Everyone currently building in this workspace.</CardDescription>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -1126,7 +1129,7 @@ function StudentTeamExperience({
           <motion.aside {...getRevealMotion(reduceMotion, 0.08)} {...getPanelMotion(reduceMotion)} className="space-y-6">
             <Card className="group/panel border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
               <CardHeader className="space-y-2">
-                <CardTitle className="text-xl tracking-tight">Team Leader</CardTitle>
+                <CardTitle className="text-xl">Team leader</CardTitle>
                 <CardDescription>The main contact guiding this workspace.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1172,7 +1175,7 @@ function StudentTeamExperience({
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <ShieldCheck className="h-4 w-4" />
                     </div>
-                    <CardTitle className="text-lg tracking-tight">Project Doctor</CardTitle>
+                    <CardTitle className="text-lg">Project doctor</CardTitle>
                   </div>
                   <CardDescription>The primary supervisor for your graduation project.</CardDescription>
                 </CardHeader>
@@ -1230,7 +1233,7 @@ function StudentTeamExperience({
                     <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
                       <Users className="h-4 w-4" />
                     </div>
-                    <CardTitle className="text-lg tracking-tight">Teaching Assistant</CardTitle>
+                    <CardTitle className="text-lg">Teaching assistant</CardTitle>
                   </div>
                   <CardDescription>Assisting in your project&apos;s technical guidance.</CardDescription>
                 </CardHeader>
@@ -1315,8 +1318,8 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
   }
 
   return (
-    <Card className="overflow-hidden rounded-[28px] border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
-      <div className="bg-gradient-to-br from-primary/[0.09] via-background to-transparent">
+    <Card className="overflow-hidden rounded-xl border-border/70 py-0 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
+      <div className="bg-card">
         <div className="flex flex-col gap-5 p-5 sm:p-6 md:p-7 lg:flex-row lg:items-start lg:justify-between">
           {/* Left: team info */}
           <div className="min-w-0 space-y-4">
@@ -1332,7 +1335,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
               </Badge>
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{team.name}</h1>
+              <h1 className="text-2xl font-semibold sm:text-3xl">{team.name}</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">{team.bio}</p>
             </div>
             {team.stack.length > 0 && (
@@ -1348,7 +1351,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
 
           {/* Right: leader card + actions */}
           <div className="flex shrink-0 flex-col gap-3 lg:items-end">
-            <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/70 px-4 py-3">
+            <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-background px-4 py-3">
               <Avatar className="h-10 w-10 border border-border/60">
                 <AvatarImage src={team.leader.avatarUrl || "/placeholder.svg"} />
                 <AvatarFallback className="text-sm font-semibold">{getAvatarInitial(team.leader)}</AvatarFallback>
@@ -1361,8 +1364,8 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
 
             {isLeader && team.inviteCode && (
               <div className="flex items-center gap-2">
-                {/* Invite code pill — text swaps to "Copied!" */}
-                <div className={`relative flex h-10 items-center overflow-hidden rounded-xl border px-3 font-mono text-sm tracking-[0.2em] transition-all duration-300 ${
+                {/* Invite code pill */}
+                <div className={`relative flex h-10 items-center overflow-hidden rounded-lg border px-3 font-mono text-sm transition-all duration-300 ${
                   copied
                     ? "border-green-500/40 bg-green-500/[0.06] text-green-700 dark:text-green-400"
                     : "border-border/60 bg-background/70"
@@ -1375,7 +1378,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
                         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] as const }}
-                        className="font-sans text-xs font-semibold tracking-wide"
+                        className="font-sans text-xs font-semibold"
                       >
                         Copied!
                       </motion.span>
@@ -1393,16 +1396,16 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
                   </AnimatePresence>
                 </div>
 
-                {/* Copy button — bounces on copy, turns green, swaps icon */}
+                {/* Copy button */}
                 <motion.div
-                  whileTap={{ scale: 0.82 }}
-                  animate={copied ? { scale: [1, 1.18, 0.95, 1] } : { scale: 1 }}
-                  transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] as const }}
+                  whileTap={{ scale: 0.96 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] as const }}
                 >
                   <Button
                     variant="outline"
                     size="icon"
-                    className={`h-10 w-10 rounded-xl transition-all duration-300 ${
+                    className={`h-10 w-10 rounded-lg transition-all duration-300 ${
                       copied
                         ? "border-green-500/40 bg-green-500/10 text-green-600 hover:bg-green-500/15 dark:text-green-400"
                         : "border-border/60 hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
@@ -1443,7 +1446,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 rounded-xl border-border/60 text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+                className="h-9 rounded-lg border-border/60 text-muted-foreground hover:border-destructive/40 hover:text-destructive"
                 onClick={() => setIsLeaveDialogOpen(true)}
                 disabled={busy === "leave"}
               >
@@ -1918,7 +1921,7 @@ function InvitationsCard({ team, invitations, onRefresh }: { team: ApiTeamDetail
           if (!open && !busyInvitationId) setInvitationToCancel(null)
         }}
       >
-        <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-border/70 p-0">
+        <AlertDialogContent className="max-w-md overflow-hidden rounded-xl border-border/70 p-0">
           <div className="p-5 sm:p-6">
             <AlertDialogHeader className="space-y-4 text-left">
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-900/40 dark:text-slate-300">
@@ -2088,7 +2091,7 @@ function JoinRequestsCard({ requests, onRefresh }: { requests: ApiTeamJoinReques
           if (!open && !busyId) setRequestDecision(null)
         }}
       >
-        <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-border/70 p-0">
+        <AlertDialogContent className="max-w-md overflow-hidden rounded-xl border-border/70 p-0">
           <div className="p-5 sm:p-6">
             <AlertDialogHeader className="space-y-4 text-left">
               <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${requestDecision?.action === "approve" ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-700 dark:bg-slate-900/50 dark:text-slate-200"}`}>
@@ -2396,6 +2399,8 @@ function StudentNoTeam({
   onRefresh: () => Promise<void>
 }) {
   const [busyInvitationId, setBusyInvitationId] = useState("")
+  const [busyRequestId, setBusyRequestId] = useState("")
+  const [cancelRequestId, setCancelRequestId] = useState<string | null>(null)
   const [invitationDecision, setInvitationDecision] = useState<{
     id: string
     teamName: string
@@ -2431,305 +2436,338 @@ function StudentNoTeam({
     }
   }
 
+  const handleCancelJoinRequest = async () => {
+    if (!cancelRequestId) return
+    setBusyRequestId(cancelRequestId)
+    try {
+      await teamsApi.cancelJoinRequest(cancelRequestId)
+      toast.success("Join request cancelled.")
+      setCancelRequestId(null)
+      await onRefresh()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Couldn't cancel that request.")
+    } finally {
+      setBusyRequestId("")
+    }
+  }
+
   const reduceMotion = Boolean(useReducedMotion())
 
   const stagger = (i: number) => ({
-    initial: reduceMotion ? {} : { opacity: 0, y: 18 },
+    initial: reduceMotion ? {} : { opacity: 0, y: 24 },
     animate: { opacity: 1, y: 0 },
-    transition: reduceMotion ? {} : { duration: 0.4, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] as const },
+    transition: reduceMotion ? {} : { duration: 0.5, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] as const },
   })
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:p-6 xl:p-8">
-
-      {/* ── Hero ──────────────────────────────────────── */}
-      <motion.div {...stagger(0)} className="space-y-2">
-        <Badge variant="outline" className="border-primary/25 bg-primary/5 text-primary text-xs font-semibold">
-          Student Member
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Find your team</h1>
-        <p className="max-w-lg text-base leading-7 text-muted-foreground">
-          Browse open teams, enter an invite code, or accept a direct invitation.
-        </p>
-      </motion.div>
-
-      {/* ── Invitations — always visible ──────────────── */}
-      <motion.section {...stagger(1)}>
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Mail className="h-4 w-4" />
-            </div>
-            <p className="text-sm font-semibold">Team Invitations</p>
-          </div>
-          {invitations.length > 0 && (
-            <Badge className="border border-primary/20 bg-primary/10 text-primary text-[10px] font-semibold">
-              {invitations.length} pending
-            </Badge>
-          )}
-        </div>
-
-        <AnimatePresence mode="wait">
-          {invitations.length === 0 ? (
-            <motion.div
-              key="empty"
-              initial={reduceMotion ? {} : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22 }}
-              className="flex items-center gap-4 rounded-2xl border border-dashed border-border/60 bg-muted/10 px-5 py-4"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted/40 text-muted-foreground">
-                <Mail className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">No pending invitations</p>
-                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                  When a team leader invites you, it will appear here for you to accept or decline.
-                </p>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="filled"
-              initial={reduceMotion ? {} : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22 }}
-              className="grid gap-3 sm:grid-cols-2"
-            >
-              {invitations.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={reduceMotion ? {} : { opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
-                  className="relative overflow-hidden rounded-2xl border border-primary/20 bg-background p-5 shadow-sm transition-all duration-200 hover:border-primary/35 hover:shadow-md"
-                >
-                  <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary/70 via-primary/30 to-transparent" />
-
-                  <div className="mb-3 flex flex-wrap gap-1.5">
-                    <Badge variant="secondary" className="text-[10px]">{formatTeamVisibility(item.team.visibility)}</Badge>
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                      {item.team.memberCount}/{item.team.maxMembers} members
-                    </Badge>
-                  </div>
-
-                  <h3 className="font-bold text-sm leading-snug tracking-tight">{item.team.name}</h3>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground line-clamp-2">{item.team.bio}</p>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary">
-                      {getAvatarInitial(item.invitedBy)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      From <span className="font-semibold text-foreground">{getFullName(item.invitedBy)}</span>
-                    </p>
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <Button
-                      size="sm"
-                      className="h-9 flex-1 rounded-xl"
-                      disabled={busyInvitationId === item.id}
-                      onClick={() => openInvitationDecision(item, "accept")}
-                    >
-                      {busyInvitationId === item.id
-                        ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
-                      Accept
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-9 rounded-xl px-4 text-muted-foreground hover:text-foreground"
-                      disabled={busyInvitationId === item.id}
-                      onClick={() => openInvitationDecision(item, "decline")}
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.section>
-
-      {/* ── Three action paths ────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-
-        {/* 1 · Browse Teams */}
-        <motion.div {...stagger(2)} className="h-full">
-          <Link href="/dashboard/teams" className="group block h-full">
-            <div className="flex h-full flex-col rounded-2xl border border-border/70 bg-background p-5 shadow-sm transition-all duration-200 hover:border-primary/30 hover:shadow-md">
-              <div className="mb-4 flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
-                  <Search className="h-4 w-4" />
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground/40 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
-              </div>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Explore</p>
-              <h3 className="text-lg font-bold tracking-tight">Browse Teams</h3>
-              <p className="mt-2 flex-1 text-sm leading-6 text-muted-foreground">
-                Compare open teams by project idea, capacity, and tech stack to find the right fit.
-              </p>
-              <p className="mt-4 text-sm font-semibold text-primary">View all open teams →</p>
-            </div>
-          </Link>
-        </motion.div>
-
-        {/* 2 · Join with Code */}
-        <motion.div {...stagger(3)} className="h-full">
-          <div id="join-with-code" className="flex h-full flex-col rounded-2xl border border-border/70 bg-background p-5 shadow-sm">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Hash className="h-4 w-4" />
-            </div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Instant access</p>
-            <h3 className="text-lg font-bold tracking-tight">Join with Code</h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Got an invite code from a team leader? Enter it to join right away — no request needed.
+    <div className="mx-auto w-full max-w-6xl p-4 md:p-6 lg:p-10">
+      <Card className="overflow-hidden rounded-[40px] border-blue-500/15 bg-gradient-to-br from-blue-600/[0.03] via-background to-background shadow-2xl shadow-blue-500/5">
+        <div className="flex flex-col gap-8 p-6 md:p-10 lg:p-12">
+          {/* Header */}
+          <motion.section {...stagger(0)} className="space-y-4">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Find your team</h1>
+            <p className="max-w-3xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Join an existing workspace or launch your own project. Start collaborating with your peers in minutes.
             </p>
+          </motion.section>
 
-            <div className="mt-4 flex flex-1 flex-col justify-end space-y-2.5">
-              <Input
-                value={joinCode}
-                placeholder="e.g. TEAM-A1B2"
-                className={`h-11 rounded-xl font-mono text-center text-sm tracking-[0.22em] uppercase ${
-                  joinCodeError ? "border-destructive ring-1 ring-destructive/25" : ""
-                }`}
-                onChange={(e) => {
-                  if (joinCodeError) clearJoinCodeError()
-                  setJoinCode(e.target.value.toUpperCase())
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && joinCode.trim() && !joiningByCode && !joinSuccess) void onJoinByCode()
-                }}
-              />
-              <AnimatePresence>
-                {joinCodeError && (
-                  <motion.p
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="flex items-center gap-1.5 overflow-hidden text-xs text-destructive"
-                  >
-                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                    {joinCodeError}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-              <Button
-                className={`h-10 w-full rounded-xl font-semibold transition-all duration-300 ${
-                  joinSuccess ? "bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20" : ""
-                }`}
-                disabled={!joinCode.trim() || joiningByCode || joinSuccess}
-                onClick={() => void onJoinByCode()}
-              >
-                <AnimatePresence mode="wait">
-                  {joiningByCode ? (
-                    <motion.span key="l" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />Joining…
-                    </motion.span>
-                  ) : joinSuccess ? (
-                    <motion.span key="s" initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" />Joined!
-                    </motion.span>
-                  ) : (
-                    <motion.span key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
-                      <Hash className="h-4 w-4" />Join Team
-                    </motion.span>
+          <div className="grid gap-8 lg:grid-cols-12">
+            {/* Left Column: Requests & Invitations */}
+            <div className="lg:col-span-7 space-y-8">
+              {/* Grouped Status Cards */}
+              <motion.div {...stagger(1)} className="grid gap-4 sm:grid-cols-1">
+                {/* My join requests - Moved to top as requested */}
+                <AnimatePresence mode="popLayout">
+                  {myJoinRequests.length > 0 && (
+                    <motion.div
+                      key="join-requests-section"
+                      initial={reduceMotion ? {} : { opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      className="space-y-4"
+                    >
+                      <div className="flex items-center justify-between px-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                            <Sparkles className="h-4 w-4" />
+                          </div>
+                          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">My join requests</h2>
+                        </div>
+                        <Badge variant="secondary" className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-400">
+                          {myJoinRequests.length} pending
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-4">
+                        {myJoinRequests.map((item) => (
+                          <div
+                            key={item.id}
+                            className="group relative flex flex-col gap-4 rounded-2xl border border-border/60 bg-card p-5 shadow-sm transition-all hover:border-amber-500/30 hover:shadow-md"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <h3 className="truncate text-lg font-bold tracking-tight">{item.team.name}</h3>
+                                <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{item.team.bio}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 rounded-lg px-2 text-[11px] font-bold text-muted-foreground hover:bg-destructive/5 hover:text-destructive"
+                                disabled={busyRequestId === item.id}
+                                onClick={() => setCancelRequestId(item.id)}
+                              >
+                                {busyRequestId === item.id ? (
+                                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                                ) : (
+                                  <X className="mr-1.5 h-3 w-3" />
+                                )}
+                                Cancel
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-3 border-t border-border/40 pt-4">
+                              <Badge variant="secondary" className="bg-muted/50 text-[10px] font-bold uppercase tracking-wider">{formatTeamVisibility(item.team.visibility)}</Badge>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 italic">Waiting for leader approval</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
-              </Button>
-              <p className="text-center text-[11px] text-muted-foreground/60">
-                Press <kbd className="rounded border border-border/60 bg-muted/50 px-1 py-0.5 font-mono text-[10px]">Enter</kbd> to confirm
+
+                {/* My invitations */}
+                <motion.div
+                  key="invitations-section"
+                  className="space-y-4"
+                >
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">My invitations</h2>
+                    </div>
+                    {invitations.length > 0 && (
+                      <Badge className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                        {invitations.length} new
+                      </Badge>
+                    )}
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {invitations.length === 0 ? (
+                      <motion.div
+                        key="empty-invites"
+                        initial={reduceMotion ? {} : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-muted/20 py-10 text-center"
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/40 text-muted-foreground/40">
+                          <Mail className="h-5 w-5" />
+                        </div>
+                        <p className="mt-3 text-sm font-bold">No pending invitations</p>
+                        <p className="mt-1 max-w-[200px] text-xs leading-relaxed text-muted-foreground">Ask a leader for an invite or join using a team code.</p>
+                      </motion.div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {invitations.map((item) => (
+                          <div
+                            key={item.id}
+                            className="group relative flex flex-col gap-5 rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
+                          >
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <Badge variant="secondary" className="bg-muted/50 text-[10px] font-bold uppercase tracking-wider">{formatTeamVisibility(item.team.visibility)}</Badge>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{item.team.memberCount}/{item.team.maxMembers} members</span>
+                              </div>
+                              <h3 className="text-xl font-bold tracking-tight">{item.team.name}</h3>
+                              <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{item.team.bio}</p>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8 border-2 border-background shadow-sm">
+                                <AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px]">{getAvatarInitial(item.invitedBy)}</AvatarFallback>
+                              </Avatar>
+                              <p className="text-xs text-muted-foreground">
+                                Invited by <span className="font-bold text-foreground">{getFullName(item.invitedBy)}</span>
+                              </p>
+                            </div>
+
+                            <div className="flex gap-3">
+                              <Button
+                                className="h-10 flex-1 rounded-xl font-bold shadow-sm shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                disabled={busyInvitationId === item.id}
+                                onClick={() => openInvitationDecision(item, "accept")}
+                              >
+                                {busyInvitationId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                                Accept
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="h-10 flex-1 rounded-xl border-border/60 font-bold transition-all hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30"
+                                disabled={busyInvitationId === item.id}
+                                onClick={() => openInvitationDecision(item, "decline")}
+                              >
+                                Decline
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </motion.div>
+            </div>
+
+            {/* Right Column: Join Paths */}
+            <div className="lg:col-span-5 space-y-8">
+              <motion.div {...stagger(2)} className="grid gap-6">
+                {/* Join with code - More prominent */}
+                <div className="flex flex-col gap-6 rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Hash className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold tracking-tight">Join with code</h2>
+                      <p className="text-xs text-muted-foreground">Enter a unique invite code to join instantly.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Input
+                      value={joinCode}
+                      placeholder="TEAM-A1B2"
+                      className={`h-12 w-full rounded-xl border-border/60 bg-muted/30 px-4 font-mono text-base uppercase tracking-wider transition-all focus-visible:bg-background focus-visible:ring-primary/20 ${
+                        joinCodeError ? "border-destructive ring-1 ring-destructive/25" : ""
+                      }`}
+                      onChange={(e) => {
+                        if (joinCodeError) clearJoinCodeError()
+                        setJoinCode(e.target.value.toUpperCase())
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && joinCode.trim() && !joiningByCode && !joinSuccess) void onJoinByCode()
+                      }}
+                    />
+                    <Button
+                      className={`h-11 w-full rounded-xl font-bold shadow-sm transition-all duration-300 ${
+                        joinSuccess ? "bg-emerald-600 hover:bg-emerald-600" : "hover:shadow-lg hover:shadow-primary/10"
+                      }`}
+                      disabled={!joinCode.trim() || joiningByCode || joinSuccess}
+                      onClick={() => void onJoinByCode()}
+                    >
+                      <AnimatePresence mode="wait">
+                        {joiningByCode ? (
+                          <motion.span key="l" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Joining...
+                          </motion.span>
+                        ) : joinSuccess ? (
+                          <motion.span key="s" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4" /> Joined
+                          </motion.span>
+                        ) : (
+                          <motion.span key="i" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-2">
+                            Join Team
+                            <ArrowRight className="h-4 w-4" />
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                    </Button>
+                    {joinCodeError && (
+                      <p className="flex items-center gap-1.5 px-1 text-[11px] font-bold text-destructive">
+                        <AlertCircle className="h-3.5 w-3.5" /> {joinCodeError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Browse directory */}
+                <Link href="/dashboard/teams" className="group block outline-none">
+                  <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition-all duration-300 hover:border-primary/30 hover:shadow-lg hover:-translate-y-0.5">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                      <Search className="h-6 w-6" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold tracking-tight group-hover:text-primary transition-colors">Browse teams</h3>
+                      <p className="text-xs text-muted-foreground">Find teams looking for members.</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                  </div>
+                </Link>
+
+                {/* Become a leader */}
+                <div className="flex flex-col gap-5 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-background to-background p-6 shadow-sm">
+                  <div className="flex items-center gap-3 text-amber-700 dark:text-amber-400">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10">
+                      <Crown className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-base font-bold tracking-tight">Create a team</h3>
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Want to lead your own project? Switch to a <span className="font-bold text-foreground">Leader</span> role to build a team from scratch and recruit your own teammates.
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="h-10 w-full rounded-xl border-amber-500/30 bg-amber-500/5 font-bold text-amber-700 shadow-sm transition-all hover:bg-amber-500 hover:text-white dark:text-amber-400 dark:hover:bg-amber-600"
+                    disabled={isSwitchingToLeader}
+                    onClick={() => void onBecomeLeader()}
+                  >
+                    {isSwitchingToLeader ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crown className="mr-2 h-4 w-4" />}
+                    Become a Leader
+                  </Button>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Join request cancellation dialog */}
+      <AlertDialog
+        open={Boolean(cancelRequestId)}
+        onOpenChange={(open) => { if (!open && !busyRequestId) setCancelRequestId(null) }}
+      >
+        <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-border/70 p-0">
+          <div className="p-5 sm:p-6">
+            <AlertDialogHeader className="space-y-4 text-left">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                <X className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <AlertDialogTitle className="text-2xl tracking-tight">Cancel join request?</AlertDialogTitle>
+                <AlertDialogDescription className="leading-6">
+                  Are you sure you want to cancel your request to join <span className="font-medium text-foreground">{myJoinRequests.find(r => r.id === cancelRequestId)?.team.name}</span>?
+                </AlertDialogDescription>
+              </div>
+            </AlertDialogHeader>
+
+            <div className="mt-6 rounded-2xl border border-destructive/15 bg-destructive/[0.03] p-4">
+              <p className="text-sm font-medium text-foreground">What happens next</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                This will remove your pending request. You can request to join this team again later if there are still open seats.
               </p>
             </div>
+
+            <AlertDialogFooter className="mt-6 gap-3 sm:gap-3">
+              <Button type="button" variant="outline" className="h-11" disabled={Boolean(busyRequestId)} onClick={() => setCancelRequestId(null)}>
+                Keep Request
+              </Button>
+              <Button
+                type="button"
+                className="h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => void handleCancelJoinRequest()}
+                disabled={!cancelRequestId || Boolean(busyRequestId)}
+              >
+                {busyRequestId ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                <span className="ml-2">Cancel Request</span>
+              </Button>
+            </AlertDialogFooter>
           </div>
-        </motion.div>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        {/* 3 · Become a Leader */}
-        <motion.div {...stagger(4)} className="h-full">
-          <div className="flex h-full flex-col rounded-2xl border border-amber-500/25 bg-amber-500/[0.03] p-5">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <Crown className="h-4 w-4" />
-            </div>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Another path</p>
-            <h3 className="text-lg font-bold tracking-tight">Become a Leader</h3>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Want to define the project direction? Create and lead your own team from scratch.
-            </p>
-            <ul className="mt-4 flex-1 space-y-2">
-              {["Define your project idea", "Invite teammates directly", "Manage join requests"].map((point) => (
-                <li key={point} className="flex items-center gap-2.5 text-xs text-muted-foreground">
-                  <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500/60" />
-                  {point}
-                </li>
-              ))}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-5 h-9 w-full rounded-xl border-amber-500/30 text-sm font-medium hover:bg-amber-500/5 hover:border-amber-500/50 hover:text-amber-700 dark:hover:text-amber-300"
-              disabled={isSwitchingToLeader}
-              onClick={() => void onBecomeLeader()}
-            >
-              {isSwitchingToLeader
-                ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                : <Crown className="mr-2 h-3.5 w-3.5 text-amber-500" />}
-              Switch to Leader
-            </Button>
-          </div>
-        </motion.div>
-      </div>
-
-      {/* ── My Join Requests ──────────────────────────── */}
-      <AnimatePresence>
-        {myJoinRequests.length > 0 && (
-          <motion.section
-            key="join-requests"
-            initial={reduceMotion ? {} : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="mb-3 flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <p className="text-sm font-semibold">My Join Requests</p>
-              <Badge className="border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px] font-semibold">
-                {myJoinRequests.length} pending
-              </Badge>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {myJoinRequests.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={reduceMotion ? {} : { opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.26, delay: index * 0.05 }}
-                  className="rounded-2xl border border-border/60 bg-background p-4 shadow-sm"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm leading-tight">{item.team.name}</h3>
-                    <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                      Pending
-                    </span>
-                  </div>
-                  <p className="text-xs leading-5 text-muted-foreground line-clamp-2 mb-3">{item.team.bio}</p>
-                  <Badge variant="secondary" className="text-[10px]">{formatTeamVisibility(item.team.visibility)}</Badge>
-                </motion.div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-
-      {/* ── Invitation decision dialog ────────────────────── */}
+      {/* Invitation decision dialog */}
       <AlertDialog
         open={Boolean(invitationDecision)}
         onOpenChange={(open) => { if (!open && !busyInvitationId) setInvitationDecision(null) }}
@@ -2737,7 +2775,7 @@ function StudentNoTeam({
         <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-border/70 p-0">
           <div className="p-5 sm:p-6">
             <AlertDialogHeader className="space-y-4 text-left">
-              <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+              <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
                 invitationDecision?.action === "accept"
                   ? "bg-primary/10 text-primary"
                   : "bg-muted text-muted-foreground"
@@ -2747,7 +2785,7 @@ function StudentNoTeam({
                   : <AlertCircle className="h-6 w-6" />}
               </div>
               <div className="space-y-2">
-                <AlertDialogTitle className="text-xl tracking-tight">
+                <AlertDialogTitle className="text-xl">
                   {invitationDecision?.action === "accept" ? "Accept invitation?" : "Decline invitation?"}
                 </AlertDialogTitle>
                 <AlertDialogDescription className="leading-6">
@@ -2758,7 +2796,7 @@ function StudentNoTeam({
               </div>
             </AlertDialogHeader>
 
-            <div className={`mt-5 rounded-2xl border p-4 ${
+            <div className={`mt-5 rounded-lg border p-4 ${
               invitationDecision?.action === "accept"
                 ? "border-primary/15 bg-primary/[0.03]"
                 : "border-border/60 bg-muted/20"
@@ -2775,14 +2813,14 @@ function StudentNoTeam({
 
             <AlertDialogFooter className="mt-5 gap-3">
               <AlertDialogCancel
-                className="h-11 rounded-xl"
+                className="h-11 rounded-lg"
                 disabled={busyInvitationId === invitationDecision?.id}
                 onClick={() => { if (!busyInvitationId) setInvitationDecision(null) }}
               >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
-                className={`h-11 rounded-xl ${
+                className={`h-11 rounded-lg ${
                   invitationDecision?.action === "accept"
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
                     : "bg-muted text-foreground hover:bg-muted/80"
@@ -2838,13 +2876,42 @@ function LeaderNoTeam({
     stage: "REQUIREMENTS",
   })
 
+  const [currentStep, setCurrentStep] = useState(1)
+  const totalSteps = 4
+
   const stackItems = form.stack
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
   const bioLength = form.bio.trim().length
-  const canCreateTeam = form.name.trim().length >= 3 && bioLength >= 10
   const reduceMotion = Boolean(useReducedMotion())
+
+  const isStepValid = () => {
+    switch (currentStep) {
+      case 1:
+        return form.name.trim().length >= 3
+      case 2:
+        return bioLength >= 10
+      case 3:
+        return true // Stack is optional
+      case 4:
+        return true // Visibility always has a selection
+      default:
+        return false
+    }
+  }
+
+  const nextStep = () => {
+    if (isStepValid() && currentStep < totalSteps) {
+      setCurrentStep((s) => s + 1)
+    }
+  }
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep((s) => s - 1)
+    }
+  }
 
   const slide = (delay = 0) =>
     reduceMotion
@@ -2855,17 +2922,58 @@ function LeaderNoTeam({
           transition: { duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] as const },
         }
 
+  const stepVariants: Variants = {
+    initial: (direction: number) => ({
+      x: direction > 0 ? 50 : -50,
+      opacity: 0,
+    }),
+    animate: {
+      x: 0,
+      opacity: 1,
+      transition: {
+        x: { type: "spring", stiffness: 300, damping: 30 },
+        opacity: { duration: 0.2 },
+      },
+    },
+    exit: (direction: number) => ({
+      x: direction > 0 ? -50 : 50,
+      opacity: 0,
+      transition: {
+        x: { type: "spring", stiffness: 300, damping: 30 },
+        opacity: { duration: 0.2 },
+      },
+    }),
+  }
+
+  const [direction, setDirection] = useState(0)
+
+  const handleNext = () => {
+    if (currentStep < totalSteps) {
+      setDirection(1)
+      nextStep()
+    }
+  }
+
+  const handlePrev = () => {
+    if (currentStep > 1) {
+      setDirection(-1)
+      prevStep()
+    }
+  }
+
   const addSuggestedStack = (value: string) => {
     const current = new Set(stackItems.map((item) => item.toLowerCase()))
     if (current.has(value.toLowerCase())) return
+    const newStack = stackItems.length > 0 ? [...stackItems, value].join(", ") : value
     setForm((state) => ({
       ...state,
-      stack: [...stackItems, value].join(", "),
+      stack: newStack,
     }))
   }
 
   const createTeam = async () => {
-    if (!canCreateTeam) {
+    const canCreate = form.name.trim().length >= 3 && bioLength >= 10
+    if (!canCreate) {
       toast.error("Add a team name and a short bio before creating the team.")
       return
     }
@@ -2890,310 +2998,392 @@ function LeaderNoTeam({
     }
   }
 
-  return (
-    <div className="mx-auto flex w-full flex-col gap-6 p-4 md:p-6 xl:p-8">
+  const steps = [
+    { id: 1, title: "Identity", icon: Crown },
+    { id: 2, title: "Mission", icon: Sparkles },
+    { id: 3, title: "Stack", icon: Layers3 },
+    { id: 4, title: "Access", icon: LockKeyhole },
+  ]
 
-      {/* ── Hero ─────────────────────────────────────── */}
-      <motion.div {...slide(0)} className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-primary/25 bg-primary/5 text-primary text-xs font-semibold">
-              <Crown className="mr-1.5 h-3 w-3" />
-              Team Leader
-            </Badge>
-            <Badge variant="secondary" className="text-xs">Setup</Badge>
-          </div>
-          <div className="space-y-1.5">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Create your team</h1>
-            <p className="text-base leading-7 text-muted-foreground">
-              Define your project workspace, set team capacity, and choose who can find you.
-            </p>
-          </div>
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-4 md:p-6 lg:p-8">
+      {/* Header */}
+      <motion.div {...slide(0)} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-2">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Set up your team</h1>
+          <p className="mt-1 text-muted-foreground">Launch your project workspace in minutes.</p>
         </div>
 
         <Button
           variant="outline"
-          className="h-10 shrink-0 rounded-xl border-border/70 px-5 text-sm font-medium hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+          className="h-10 shrink-0 rounded-xl border-border/60 bg-background/50 px-4 text-sm font-medium text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
           onClick={() => void onBecomeMember()}
           disabled={isSwitchingToMember}
         >
-          {isSwitchingToMember ? (
-            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Users className="mr-2 h-3.5 w-3.5" />
-          )}
-          Switch to Member
+          {isSwitchingToMember ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+          Join a team instead
         </Button>
       </motion.div>
 
-      {/* ── Two-column form ───────────────────────────── */}
+      {/* Progress Indicator */}
+      <motion.div {...slide(0.05)} className="relative px-4 sm:px-16">
+        <div className="flex justify-between">
+          {steps.map((step) => {
+            const Icon = step.icon
+            const isActive = currentStep === step.id
+            const isCompleted = currentStep > step.id
+            return (
+              <div key={step.id} className="relative z-10 flex flex-col items-center gap-2">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : isCompleted
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-muted-foreground"
+                  }`}
+                >
+                  {isCompleted ? <Check className="h-5 w-5" /> : <Icon className="h-4 w-4" />}
+                </div>
+                <span
+                  className={`text-[11px] font-bold uppercase tracking-wider transition-colors duration-300 ${
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  }`}
+                >
+                  {step.title}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        {/* Progress line */}
+        <div className="absolute left-0 top-5 -z-0 h-[2px] w-full bg-border px-16 sm:px-28">
+          <motion.div
+            className="h-full bg-primary transition-all duration-500"
+            initial={false}
+            animate={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
+          />
+        </div>
+      </motion.div>
+
+      {/* Main Card */}
       <motion.div
-        {...slide(0.07)}
-        className="overflow-hidden rounded-3xl border border-border/70 bg-background shadow-sm"
+        {...slide(0.1)}
+        className="relative min-h-[440px] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition-all duration-300 hover:shadow-md"
       >
-        <div className="grid lg:grid-cols-2 lg:divide-x lg:divide-border/50">
+        <div className="flex flex-col h-full">
+          <div className="flex-1 p-6 md:p-10 lg:p-12">
+            <AnimatePresence mode="wait" custom={direction}>
+              <motion.div
+                key={currentStep}
+                custom={direction}
+                variants={stepVariants}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                className="h-full"
+              >
+                {currentStep === 1 && (
+                  <div className="space-y-8">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-bold">Team Identity</h2>
+                      <p className="text-muted-foreground">Choose a name that reflects your project's goals.</p>
+                    </div>
 
-          {/* ── Left column: Steps 1 & 2 ─── */}
-          <div className="flex flex-col divide-y divide-border/50">
-
-            {/* Step 1 — Identity */}
-            <div className="p-6 sm:p-7">
-              <LeaderFormStep step={1} title="Team Identity" sub="Name your team and set the member capacity" />
-
-              <div className="mt-6 space-y-5">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Team Name <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    value={form.name}
-                    className="h-11 rounded-xl border-border/60 bg-background"
-                    placeholder="e.g. Smart Campus Builders"
-                    onChange={(e) => setForm((state) => ({ ...state, name: e.target.value }))}
-                  />
-                  {form.name.trim().length > 0 && form.name.trim().length < 3 ? (
-                    <p className="text-xs text-destructive">Name must be at least 3 characters.</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">This is how your team appears in the directory.</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Team Size</Label>
-                  <Select
-                    value={form.maxMembers}
-                    onValueChange={(value) => setForm((state) => ({ ...state, maxMembers: value }))}
-                  >
-                    <SelectTrigger className="h-11 rounded-xl border-border/60">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["3", "4", "5", "6"].map((v) => (
-                        <SelectItem key={v} value={v}>
-                          {v} members (you + {Number(v) - 1} others)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">You count as 1 — the team leader.</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Step 2 — Description */}
-            <div className="flex flex-1 flex-col p-6 sm:p-7">
-              <LeaderFormStep step={2} title="Project Description" sub="Help teammates understand what you're building" />
-
-              <div className="mt-6 flex flex-1 flex-col space-y-2">
-                <Textarea
-                  rows={6}
-                  value={form.bio}
-                  className="flex-1 resize-none rounded-xl border-border/60 bg-background p-4"
-                  placeholder="Describe your project idea, the problem it solves, and the kind of teammates you're looking for…"
-                  onChange={(e) => setForm((state) => ({ ...state, bio: e.target.value }))}
-                />
-                <div className="flex items-center justify-between">
-                  {bioLength > 0 && bioLength < 10 ? (
-                    <p className="text-xs text-destructive">Write at least 10 characters.</p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">A clear description attracts better-fit teammates.</p>
-                  )}
-                  <span className={`text-xs tabular-nums font-medium ${bioLength > 0 && bioLength < 10 ? "text-destructive" : "text-muted-foreground"}`}>
-                    {bioLength}/1000
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Right column: Steps 3 & 4 ── */}
-          <div className="flex flex-col divide-y divide-border/50">
-
-            {/* Step 3 — Tech Stack */}
-            <div className="p-6 sm:p-7">
-              <LeaderFormStep step={3} title="Tech Stack" sub="Technologies your team plans to use" optional />
-
-              <div className="mt-6 space-y-4">
-                <Input
-                  value={form.stack}
-                  className="h-11 rounded-xl border-border/60 bg-background"
-                  placeholder="React, Node.js, PostgreSQL… (comma-separated)"
-                  onChange={(e) => setForm((state) => ({ ...state, stack: e.target.value }))}
-                />
-
-                <AnimatePresence>
-                  {stackItems.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="flex flex-wrap gap-2 py-1">
-                        {stackItems.map((tag) => (
-                          <span
-                            key={tag}
-                            className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary"
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <Label htmlFor="team-name" className="text-sm font-semibold">
+                          Team Name <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          id="team-name"
+                          value={form.name}
+                          autoFocus
+                          className="h-14 rounded-xl border-border/60 bg-muted/30 text-lg focus-visible:ring-primary/20"
+                          placeholder="e.g. EcoTrack Solutions"
+                          onChange={(e) => setForm((state) => ({ ...state, name: e.target.value }))}
+                        />
+                        {form.name.trim().length > 0 && form.name.trim().length < 3 && (
+                          <p className="flex items-center gap-1.5 text-xs text-destructive">
+                            <AlertCircle className="h-3 w-3" /> Name must be at least 3 characters.
+                          </p>
+                        )}
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">Quick add:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {STACK_SUGGESTIONS.map((s) => {
-                      const added = stackItems.map((i) => i.toLowerCase()).includes(s.toLowerCase())
-                      return (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => addSuggestedStack(s)}
-                          disabled={added}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
-                            added
-                              ? "border-primary/25 bg-primary/10 text-primary cursor-default"
-                              : "border-border/60 bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">Team Size</Label>
+                        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                          {["3", "4", "5", "6"].map((v) => (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() => setForm((state) => ({ ...state, maxMembers: v }))}
+                              className={`flex flex-col items-center justify-center rounded-xl border-2 py-4 transition-all ${
+                                form.maxMembers === v
+                                  ? "border-primary bg-primary/5 text-primary shadow-sm shadow-primary/10"
+                                  : "border-border/60 bg-transparent text-muted-foreground hover:border-border hover:bg-muted/30"
+                              }`}
+                            >
+                              <span className="text-xl font-bold">{v}</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider">Members</span>
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[11px] font-medium text-muted-foreground">Includes you as the team leader.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 2 && (
+                  <div className="space-y-8">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-bold">Project Mission</h2>
+                      <p className="text-muted-foreground">Describe what you are building and who you need.</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <Label htmlFor="team-bio" className="text-sm font-semibold">
+                        Brief Description <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        id="team-bio"
+                        rows={10}
+                        value={form.bio}
+                        autoFocus
+                        className="resize-none rounded-xl border-border/60 bg-muted/30 p-5 text-base leading-relaxed focus-visible:ring-primary/20"
+                        placeholder="We're building a platform that helps local farmers track soil moisture using IoT sensors..."
+                        onChange={(e) => setForm((state) => ({ ...state, bio: e.target.value }))}
+                      />
+                      <div className="flex items-center justify-between px-1">
+                        <span
+                          className={`text-xs font-medium ${
+                            bioLength > 0 && bioLength < 10 ? "text-destructive" : "text-muted-foreground"
                           }`}
                         >
-                          {added && <Check className="h-2.5 w-2.5" />}
-                          {s}
-                        </button>
-                      )
-                    })}
+                          {bioLength < 10 ? "Min 10 characters required" : "Looks good!"}
+                        </span>
+                        <span className="text-xs font-bold tabular-nums text-muted-foreground">
+                          {bioLength}/1000
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            </div>
+                )}
 
-            {/* Step 4 — Visibility */}
-            <div className="p-6 sm:p-7">
-              <LeaderFormStep step={4} title="Visibility & Access" sub="Control who can discover and join your team" />
+                {currentStep === 3 && (
+                  <div className="space-y-8">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-bold">Tech Stack</h2>
+                      <p className="text-muted-foreground">List the tools and technologies you plan to use.</p>
+                    </div>
 
-              <div className="mt-6 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Public */}
-                  <button
-                    type="button"
-                    onClick={() => setForm((state) => ({ ...state, visibility: "PUBLIC", allowJoinRequests: true }))}
-                    className={`relative flex flex-col gap-3 rounded-2xl border-2 p-4 text-left transition-all duration-150 ${
-                      form.visibility === "PUBLIC"
-                        ? "border-primary bg-primary/[0.04] shadow-sm"
-                        : "border-border/60 hover:border-border hover:bg-muted/15"
-                    }`}
-                  >
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                      form.visibility === "PUBLIC" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                    }`}>
-                      <Globe2 className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Public</p>
-                      <p className="mt-0.5 text-xs leading-4 text-muted-foreground">Listed in teams directory</p>
-                    </div>
-                    {form.visibility === "PUBLIC" && (
-                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <Check className="h-3 w-3" />
-                      </div>
-                    )}
-                  </button>
-
-                  {/* Private */}
-                  <button
-                    type="button"
-                    onClick={() => setForm((state) => ({ ...state, visibility: "PRIVATE", allowJoinRequests: false }))}
-                    className={`relative flex flex-col gap-3 rounded-2xl border-2 p-4 text-left transition-all duration-150 ${
-                      form.visibility === "PRIVATE"
-                        ? "border-primary bg-primary/[0.04] shadow-sm"
-                        : "border-border/60 hover:border-border hover:bg-muted/15"
-                    }`}
-                  >
-                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                      form.visibility === "PRIVATE" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                    }`}>
-                      <LockKeyhole className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm">Private</p>
-                      <p className="mt-0.5 text-xs leading-4 text-muted-foreground">Invite-only, hidden from directory</p>
-                    </div>
-                    {form.visibility === "PRIVATE" && (
-                      <div className="absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <Check className="h-3 w-3" />
-                      </div>
-                    )}
-                  </button>
-                </div>
-
-                <AnimatePresence>
-                  {form.visibility === "PUBLIC" && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-                      className="overflow-hidden"
-                    >
-                      <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/15 px-4 py-3.5">
-                        <div>
-                          <p className="text-sm font-medium">Allow join requests</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Students can request to join from the teams page.
-                          </p>
-                        </div>
-                        <Switch
-                          checked={form.allowJoinRequests}
-                          onCheckedChange={(checked) =>
-                            setForm((state) => ({ ...state, allowJoinRequests: checked }))
-                          }
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">
+                          Stack <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+                        </Label>
+                        <Input
+                          value={form.stack}
+                          className="h-14 rounded-xl border-border/60 bg-muted/30 text-lg focus-visible:ring-primary/20"
+                          placeholder="React, Node.js, PostgreSQL..."
+                          onChange={(e) => setForm((state) => ({ ...state, stack: e.target.value }))}
                         />
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
 
+                      <div className="space-y-4">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Suggested Technologies:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {STACK_SUGGESTIONS.map((s) => {
+                            const isAdded = stackItems.some((item) => item.toLowerCase() === s.toLowerCase())
+                            return (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => addSuggestedStack(s)}
+                                disabled={isAdded}
+                                className={`inline-flex items-center gap-2 rounded-full border px-5 py-2 text-sm font-medium transition-all ${
+                                  isAdded
+                                    ? "border-primary/30 bg-primary/10 text-primary cursor-default"
+                                    : "border-border/60 bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                                }`}
+                              >
+                                {isAdded && <Check className="h-4 w-4" />}
+                                {s}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 4 && (
+                  <div className="space-y-8">
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-bold">Visibility & Access</h2>
+                      <p className="text-muted-foreground">Decide how students can discover and join your team.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setForm((state) => ({ ...state, visibility: "PUBLIC", allowJoinRequests: true }))}
+                        className={`group relative flex flex-col gap-5 rounded-2xl border-2 p-6 text-left transition-all ${
+                          form.visibility === "PUBLIC"
+                            ? "border-primary bg-primary/[0.03]"
+                            : "border-border/60 hover:border-border hover:bg-muted/30"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-14 w-14 items-center justify-center rounded-xl transition-all ${
+                            form.visibility === "PUBLIC"
+                              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                              : "bg-muted text-muted-foreground group-hover:bg-muted/80"
+                          }`}
+                        >
+                          <Globe2 className="h-7 w-7" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold">Public Team</p>
+                          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                            Visible in the directory. Students can find you and request to join.
+                          </p>
+                        </div>
+                        {form.visibility === "PUBLIC" && (
+                          <div className="absolute right-5 top-5 rounded-full bg-primary p-1.5 text-primary-foreground shadow-sm">
+                            <Check className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setForm((state) => ({ ...state, visibility: "PRIVATE", allowJoinRequests: false }))}
+                        className={`group relative flex flex-col gap-5 rounded-2xl border-2 p-6 text-left transition-all ${
+                          form.visibility === "PRIVATE"
+                            ? "border-primary bg-primary/[0.03]"
+                            : "border-border/60 hover:border-border hover:bg-muted/30"
+                        }`}
+                      >
+                        <div
+                          className={`flex h-14 w-14 items-center justify-center rounded-xl transition-all ${
+                            form.visibility === "PRIVATE"
+                              ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                              : "bg-muted text-muted-foreground group-hover:bg-muted/80"
+                          }`}
+                        >
+                          <LockKeyhole className="h-7 w-7" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold">Private Team</p>
+                          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                            Hidden from the directory. Only people you invite can join.
+                          </p>
+                        </div>
+                        {form.visibility === "PRIVATE" && (
+                          <div className="absolute right-5 top-5 rounded-full bg-primary p-1.5 text-primary-foreground shadow-sm">
+                            <Check className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                      </button>
+                    </div>
+
+                    <AnimatePresence>
+                      {form.visibility === "PUBLIC" && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 10 }}
+                          className="rounded-xl border border-border/60 bg-muted/20 px-6 py-5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <p className="text-base font-bold">Open for requests</p>
+                              <p className="text-sm text-muted-foreground">Allow students to apply to your team.</p>
+                            </div>
+                            <Switch
+                              checked={form.allowJoinRequests}
+                              onCheckedChange={(checked) =>
+                                setForm((state) => ({ ...state, allowJoinRequests: checked }))
+                              }
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Footer Controls */}
+          <div className="border-t border-border/60 bg-muted/10 p-4 md:px-8 md:py-6">
+            <div className="flex items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePrev}
+                disabled={currentStep === 1 || busy}
+                className="h-11 rounded-xl border-border/60 bg-background/50 px-5 text-sm font-semibold transition-all hover:bg-muted hover:-translate-x-0.5 disabled:opacity-0"
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Back
+              </Button>
+
+              {currentStep < totalSteps ? (
+                <Button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!isStepValid()}
+                  className="h-11 rounded-xl px-8 text-sm font-bold shadow-sm shadow-primary/20 transition-all hover:translate-x-0.5 active:scale-[0.98]"
+                >
+                  Continue
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={!isStepValid() || busy}
+                  onClick={() => void createTeam()}
+                  className="h-11 rounded-xl px-8 text-sm font-bold shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  {busy ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Crown className="mr-2 h-4 w-4" />
+                      Create Team
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </motion.div>
 
-      {/* ── Create CTA ───────────────────────────────── */}
-      <motion.div {...slide(0.14)} className="space-y-3 pb-4">
-        <Button
-          size="lg"
-          className="h-14 w-full rounded-2xl text-base font-semibold shadow-lg shadow-primary/15 transition-all disabled:opacity-50"
-          disabled={!canCreateTeam || busy}
-          onClick={() => void createTeam()}
-        >
-          {busy ? (
-            <>
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              Creating your team…
-            </>
-          ) : (
-            <>
-              <Crown className="mr-2 h-5 w-5" />
-              Create Team
-            </>
-          )}
-        </Button>
-        <p className="text-center text-xs text-muted-foreground">
-          {canCreateTeam
-            ? "You'll become the team leader and can start inviting students right away."
-            : !form.name.trim()
-              ? "Add a team name to continue."
-              : "Write at least 10 characters in the description to continue."}
-        </p>
-      </motion.div>
+      {/* Helper message */}
+      <motion.p
+        {...slide(0.15)}
+        className="text-center text-xs text-muted-foreground"
+      >
+        {currentStep === 1 && "Start by giving your project a memorable name."}
+        {currentStep === 2 && "A clear mission helps you find the right teammates."}
+        {currentStep === 3 && "You can always update your stack later."}
+        {currentStep === 4 && "Finalize your team's accessibility settings."}
+      </motion.p>
     </div>
   )
 }
+
 
 function LeaderFormStep({
   step,
@@ -3208,7 +3398,7 @@ function LeaderFormStep({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <span className="text-sm font-bold">{step}</span>
       </div>
       <div>
@@ -3525,12 +3715,12 @@ function StudentMemberCard({
 
           <Button
             variant="outline"
-            className="group mt-3 h-10 w-full justify-between rounded-xl border-border/70 bg-transparent px-4 text-foreground transition-[color,border-color,background-color] duration-200 hover:border-primary/35 hover:bg-primary/[0.06] hover:text-primary"
+            className="group mt-3 h-10 w-full justify-between rounded-lg border-border/70 bg-background px-4 text-foreground transition-all duration-200 hover:border-primary/40 hover:bg-primary/5 hover:text-primary shadow-sm"
             asChild
           >
             <Link href={`/dashboard/users/${member.user.id}`}>
               View Profile
-              <ArrowRight className="ml-2 h-4 w-4 text-muted-foreground transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+              <ArrowRight className="ml-2 h-4 w-4 text-muted-foreground transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
             </Link>
           </Button>
         </div>

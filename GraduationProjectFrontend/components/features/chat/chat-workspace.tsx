@@ -137,6 +137,8 @@ function humanizeRelation(relation: ApiChatRelation | null) {
       return "Supervised leader"
     case "ADMIN_DIRECT":
       return "Admin"
+    case "SUPPORT_DIRECT":
+      return "Support"
     case "STUDENT_PEER":
       return "Student"
     case "STAFF_PEER":
@@ -160,6 +162,8 @@ function roleToLabel(role: Role | undefined): string {
       return "Student"
     case "ADMIN":
       return "Admin"
+    case "SUPPORT":
+      return "Support"
     default:
       return "User"
   }
@@ -167,11 +171,16 @@ function roleToLabel(role: Role | undefined): string {
 
 function relationLabelForUser(relation: ApiChatRelation | null, user: Pick<ApiChatUser, "role"> | null | undefined) {
   if (relation === "ADMIN_DIRECT") return roleToLabel(user?.role)
+  if (relation === "SUPPORT_DIRECT") return roleToLabel(user?.role)
   return humanizeRelation(relation)
 }
 
 function isStudentChatRole(role: Role | string | undefined) {
   return role === "STUDENT" || role === "LEADER" || role === "leader" || role === "member"
+}
+
+function isSupportChatRole(role: Role | string | undefined) {
+  return role === "SUPPORT" || role === "support"
 }
 
 function canSendDirectMessage(currentRole: Role | string | undefined, targetRole: Role | undefined) {
@@ -197,6 +206,9 @@ function getRoleSearchTerms(role: Role | undefined, relation: ApiChatRelation | 
       break
     case "ADMIN":
       terms.push("admin", "administrator")
+      break
+    case "SUPPORT":
+      terms.push("support", "help desk", "tickets")
       break
     default:
       break
@@ -766,7 +778,8 @@ export function ChatWorkspace({
   }, [allItems, searchQuery])
 
   useEffect(() => {
-    if (!showNewConversationPicker) {
+    const shouldSearchPeople = showNewConversationPicker || isSupportChatRole(currentUser?.role)
+    if (!shouldSearchPeople) {
       setSearchedContacts([])
       setIsSearchingUsers(false)
       return
@@ -792,7 +805,7 @@ export function ChatWorkspace({
     }, 400)
 
     return () => clearTimeout(timer)
-  }, [searchQuery, showNewConversationPicker])
+  }, [currentUser?.role, searchQuery, showNewConversationPicker])
 
   const selectedItem = useMemo(() => {
     if (selectedItemOverride && selectedItemOverride.key === selectedItemKey) {
@@ -1595,7 +1608,7 @@ export function ChatWorkspace({
               <Input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={showNewConversationPicker ? "Search people..." : "Search chats..."}
+                placeholder={showNewConversationPicker || isSupportChatRole(currentUser?.role) ? "Search people or chats..." : "Search chats..."}
                 className="h-9 rounded-full border-border/60 bg-muted/50 pl-9 pr-9 text-sm placeholder:text-muted-foreground focus-visible:border-primary/40 focus-visible:ring-primary/40 dark:border-zinc-700/50 dark:bg-zinc-800/60 dark:text-zinc-200 dark:placeholder:text-zinc-500"
               />
               {searchQuery && !isSearchingUsers ? (
@@ -1682,6 +1695,30 @@ export function ChatWorkspace({
                     isPinned={isPinned}
                   />
                 )
+              ) : isSupportChatRole(currentUser?.role) && searchQuery.trim().length >= 2 && isSearchingUsers ? (
+                <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Searching people...
+                </div>
+              ) : isSupportChatRole(currentUser?.role) && searchQuery.trim().length >= 2 && searchedItems.length > 0 ? (
+                <ChatListSection
+                  title={`People (${searchedItems.length})`}
+                  items={searchedItems}
+                  selectedItemKey={selectedItemKey}
+                  onSelect={selectItem}
+                  onTogglePin={handleTogglePin}
+                  isPinned={isPinned}
+                />
+              ) : isSupportChatRole(currentUser?.role) && searchQuery.trim().length >= 2 && filteredItems.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 p-6 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Search className="h-6 w-6" />
+                  </div>
+                  <p className="mt-4 text-sm font-medium">No people found</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Try a different name, role, email, or ID.
+                  </p>
+                </div>
               ) : filteredItems.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-border/70 bg-muted/30 p-6 text-center">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -2444,6 +2481,11 @@ function ChatListSection({
                       >
                         {item.title}
                       </p>
+                      {item.user?.role === "SUPPORT" ? (
+                        <span className="shrink-0 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                          Support
+                        </span>
+                      ) : null}
                     </div>
 
                     {item.subtitle ? (

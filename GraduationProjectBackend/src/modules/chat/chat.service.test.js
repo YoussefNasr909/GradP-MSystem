@@ -121,6 +121,35 @@ test("searchChatUsersService only shows team-only accounts to allowed team conta
   }
 });
 
+test("searchChatUsersService shows support accounts to students", async () => {
+  const supportUser = {
+    id: "support-1",
+    firstName: "Sam",
+    lastName: "Support",
+    email: "support@example.com",
+    role: "SUPPORT",
+    academicId: "SUPPORT-1",
+    avatarUrl: null,
+    bio: null,
+    accountStatus: "ACTIVE",
+    isEmailVerified: true,
+    settings: { profileVisibility: "PRIVATE" },
+  };
+  const restore = patchPrismaForSearch({
+    teamMembers: [],
+    users: [supportUser],
+  });
+
+  try {
+    const results = await searchChatUsersService({ id: "student-actor", role: "STUDENT" }, "support");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].user.id, supportUser.id);
+    assert.equal(results[0].relation, "SUPPORT_DIRECT");
+  } finally {
+    restore();
+  }
+});
+
 test("searchChatUsersService shows admins to supervisors", async () => {
   const adminUser = {
     id: "admin-1",
@@ -173,6 +202,34 @@ test("searchChatUsersService lets admins discover active users", async () => {
     assert.equal(results.length, 1);
     assert.equal(results[0].user.id, studentUser.id);
     assert.equal(results[0].relation, "ADMIN_DIRECT");
+  } finally {
+    restore();
+  }
+});
+
+test("searchChatUsersService lets support discover active users", async () => {
+  const studentUser = {
+    id: "student-1",
+    firstName: "Alex",
+    lastName: "Student",
+    email: "alex.student@example.com",
+    role: "STUDENT",
+    academicId: "S1",
+    avatarUrl: null,
+    bio: null,
+    accountStatus: "ACTIVE",
+    isEmailVerified: true,
+    settings: { profileVisibility: "PRIVATE" },
+  };
+  const restore = patchPrismaForSearch({
+    users: [studentUser],
+  });
+
+  try {
+    const results = await searchChatUsersService({ id: "support-actor", role: "SUPPORT" }, "alex");
+    assert.equal(results.length, 1);
+    assert.equal(results[0].user.id, studentUser.id);
+    assert.equal(results[0].relation, "SUPPORT_DIRECT");
   } finally {
     restore();
   }

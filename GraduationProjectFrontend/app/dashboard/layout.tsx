@@ -4,7 +4,6 @@ import type React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { AppSidebar } from "@/components/app-shell/app-sidebar"
 import { AppTopbar } from "@/components/app-shell/app-topbar"
-import { Breadcrumbs } from "@/components/app-shell/breadcrumbs"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useRouter, usePathname } from "next/navigation"
 import { useEffect, useLayoutEffect, useRef } from "react"
@@ -38,15 +37,25 @@ useEffect(() => {
   const department = u.departmentRaw ?? u.department
 
   const incomplete =
-    isBlank(u.phone) ||
-    isBlank(department) ||
-    isBlank(academicYear) ||
-    isBlank(preferredTrack) ||
-    isBlank(academicId) ||
-    academicId.startsWith("OAUTH-")
+    currentUser.role !== "support" &&
+    (isBlank(u.phone) ||
+      isBlank(department) ||
+      isBlank(academicYear) ||
+      isBlank(preferredTrack) ||
+      isBlank(academicId) ||
+      academicId.startsWith("OAUTH-"))
 
   if (incomplete) router.replace("/complete-profile?reason=incomplete")
 }, [hasHydrated, accessToken, currentUser, router])
+
+useEffect(() => {
+  if (!hasHydrated || !accessToken || !currentUser) return
+  if (currentUser.role !== "support") return
+  const supportAllowedPaths = ["/dashboard", "/dashboard/support", "/dashboard/chat", "/dashboard/settings", "/dashboard/notifications"]
+  if (!supportAllowedPaths.some((allowedPath) => pathname === allowedPath || pathname.startsWith(`${allowedPath}/`))) {
+    router.replace("/dashboard")
+  }
+}, [hasHydrated, accessToken, currentUser, pathname, router])
 
 
 
@@ -82,12 +91,13 @@ const academicYear = u.academicYearRaw ?? u.academicYear
 const department = u.departmentRaw ?? u.department
 
 const incomplete =
-  isBlank(u.phone) ||
-  isBlank(department) ||
-  isBlank(academicYear) ||
-  isBlank(preferredTrack) ||
-  isBlank(academicId) ||
-  academicId.startsWith("OAUTH-")
+  currentUser.role !== "support" &&
+  (isBlank(u.phone) ||
+    isBlank(department) ||
+    isBlank(academicYear) ||
+    isBlank(preferredTrack) ||
+    isBlank(academicId) ||
+    academicId.startsWith("OAUTH-"))
 
 // ✅ BLOCK DASHBOARD UI (no flash)
 if (incomplete) {
@@ -145,8 +155,6 @@ if (incomplete) {
 
         <main ref={mainRef} className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth-touch safe-area-bottom">
           <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
-            <Breadcrumbs />
-
             <div className="min-w-0">{children}</div>
           </div>
         </main>

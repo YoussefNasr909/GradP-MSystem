@@ -27,9 +27,11 @@ import {
   CheckCircle2,
   Check,
   CheckSquare,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Copy,
+  Download,
   ExternalLink,
   FileCode2,
   FilePlus2,
@@ -41,9 +43,11 @@ import {
   Github,
   GitMerge,
   GitPullRequest,
+  History,
   Link2,
   Loader2,
   Lock,
+  MousePointer2,
   Plus,
   RefreshCw,
   Rocket,
@@ -51,6 +55,8 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Tag,
+  Terminal,
   Trash2,
   Unplug,
   Upload,
@@ -116,7 +122,7 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ),
 })
 
-type WorkspaceTab = "overview" | "code" | "commits" | "issues" | "pulls" | "branches" | "actions" | "releases" | "members" | "settings"
+type WorkspaceTab = "overview" | "code" | "commits" | "issues" | "pulls" | "branches" | "members" | "settings"
 type RepositorySetupMode = "create" | "connect"
 type PullRequestMergeMethod = "merge" | "squash" | "rebase"
 type GitHubCallbackNotice = {
@@ -183,11 +189,11 @@ const GITHUB_CALLBACK_MESSAGE_TYPE = "gpms:github-callback"
 const GITHUB_INSTALL_STATUS_POLL_MS = 2500
 const GITHUB_INSTALL_STATUS_TIMEOUT_MS = 120000
 const workspaceTabTriggerClass =
-  "relative min-h-10 rounded-[18px] px-3 py-2 text-[13px] font-medium text-muted-foreground transition-all duration-250 ease-out motion-reduce:transition-none sm:px-3.5 sm:py-2.5 sm:text-sm hover:-translate-y-0.5 hover:text-primary hover:bg-primary/8 hover:shadow-[0_10px_22px_-18px_color-mix(in_oklab,var(--primary)_30%,transparent)] dark:hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=active]:-translate-y-0.5 data-[state=active]:text-primary data-[state=active]:bg-primary/12 data-[state=active]:shadow-[0_12px_24px_-18px_color-mix(in_oklab,var(--primary)_40%,transparent)] data-[state=active]:ring-1 data-[state=active]:ring-primary/30 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-1.5 after:h-[2px] after:rounded-full after:bg-primary after:opacity-0 after:scale-x-50 after:transition-all after:duration-250 after:ease-out hover:after:opacity-70 hover:after:scale-x-100 data-[state=active]:after:opacity-100 data-[state=active]:after:scale-x-100"
+  "relative min-h-9 rounded-[16px] px-3 py-1.5 text-[12.5px] font-semibold text-muted-foreground transition-all duration-250 ease-out motion-reduce:transition-none sm:px-4 sm:py-2 sm:text-[13px] hover:-translate-y-0.5 hover:text-primary hover:bg-primary/8 hover:shadow-[0_8px_18px_-12px_color-mix(in_oklab,var(--primary)_30%,transparent)] dark:hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 data-[state=active]:-translate-y-0.5 data-[state=active]:text-primary data-[state=active]:bg-primary/10 data-[state=active]:shadow-[0_10px_20px_-15px_color-mix(in_oklab,var(--primary)_40%,transparent)] data-[state=active]:ring-1 data-[state=active]:ring-primary/20 after:pointer-events-none after:absolute after:inset-x-4 after:bottom-1.5 after:h-[1.5px] after:rounded-full after:bg-primary after:opacity-0 after:scale-x-50 after:transition-all after:duration-250 after:ease-out hover:after:opacity-70 hover:after:scale-x-100 data-[state=active]:after:opacity-100 data-[state=active]:after:scale-x-100"
 const quickActionButtonClass =
-  "group h-10 w-full justify-start rounded-xl border border-border/60 bg-background/70 text-foreground/85 transition-all duration-200 motion-reduce:transform-none hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+  "group h-11 w-full justify-start rounded-xl border border-border/60 bg-background/70 px-5 text-sm font-semibold text-foreground/85 transition-all duration-200 motion-reduce:transform-none hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
 const tabActionButtonClass =
-  "h-10 rounded-xl border-border/50 bg-background/70 text-foreground/85 transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary"
+  "h-10 rounded-xl border-border/50 bg-background/70 px-5 text-sm font-semibold text-foreground/85 transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary"
 
 const initialConfirmationDialogState: ConfirmationDialogState = {
   open: false,
@@ -285,6 +291,10 @@ function splitCsv(value: string) {
 const ANIM_FADE_IN          = { opacity: 1 } as const
 const ANIM_FADE_OUT         = { opacity: 0 } as const
 const ANIM_FADE_IN_UP       = { opacity: 1, y: 0 } as const
+const VARIANTS_FADE_IN_UP    = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0 },
+} as const
 const ANIM_FADE_OUT_DOWN    = { opacity: 0, y: 10 } as const
 const ANIM_FADE_IN_UP_SM    = { opacity: 1, y: 0 } as const
 const ANIM_FADE_OUT_UP_SM   = { opacity: 0, y: -10 } as const
@@ -723,31 +733,45 @@ function StatCard({
   onClick?: () => void;
 }) {
   const colorMap = {
-    blue: "text-primary bg-primary/10 border-primary/20 shadow-primary/10",
-    amber: "text-destructive bg-destructive/5 border-destructive/20 shadow-destructive/5 dark:bg-destructive/10 dark:border-destructive/20 dark:text-destructive",
-    emerald: "text-emerald-600 bg-emerald-50/50 border-emerald-100 shadow-emerald-500/5 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400",
-    indigo: "text-slate-700 bg-slate-50/50 border-slate-200 shadow-slate-500/5 dark:bg-slate-500/10 dark:border-slate-500/20 dark:text-slate-400",
+    blue: "text-blue-600 bg-blue-500/10 border-blue-500/20 dark:text-blue-400 dark:bg-blue-500/5",
+    amber: "text-amber-600 bg-amber-500/10 border-amber-500/20 dark:text-amber-400 dark:bg-amber-500/5",
+    emerald: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20 dark:text-emerald-400 dark:bg-emerald-500/5",
+    indigo: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20 dark:text-indigo-400 dark:bg-indigo-500/5",
   };
 
   return (
     <motion.button
-      whileHover={ANIM_HOVER_LIFT_CARD}
-      whileTap={ANIM_TAP_CARD}
+      whileHover={{ y: -6, transition: { duration: 0.2, ease: "easeOut" } }}
+      whileTap={{ scale: 0.97 }}
       onClick={onClick}
       className={cn(
-        "group relative overflow-hidden rounded-[28px] border bg-background p-6 text-left transition-all duration-300",
-        onClick ? "cursor-pointer hover:border-primary/30 hover:shadow-xl" : "cursor-default border-border/50 shadow-sm"
+        "group relative flex h-full w-full flex-col items-start gap-5 overflow-hidden rounded-[32px] border bg-background p-6 text-left transition-all duration-300",
+        onClick 
+          ? "cursor-pointer hover:border-primary/30 hover:shadow-[0_24px_48px_-20px_rgba(0,0,0,0.08)] dark:hover:shadow-[0_24px_48px_-20px_rgba(0,0,0,0.3)]" 
+          : "cursor-default border-border/50 shadow-sm"
       )}
     >
-      <div className="flex items-center gap-4">
-        <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110", colorMap[color])}>
-          {icon}
-        </div>
-        <div className="space-y-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">{label}</p>
-          <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
+      {/* Decorative background element */}
+      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/5 blur-2xl transition-transform duration-500 group-hover:scale-150" />
+      
+      <div className={cn(
+        "relative flex h-14 w-14 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/10", 
+        colorMap[color]
+      )}>
+        {icon}
+      </div>
+      <div className="relative space-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/60">{label}</p>
+        <div className="flex items-baseline gap-1">
+          <p className="text-2xl font-semibold tracking-tight text-foreground/85">{value}</p>
         </div>
       </div>
+      
+      {onClick && (
+        <div className="absolute bottom-4 right-6 translate-x-4 opacity-0 transition-all duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+          <ChevronRight className="h-4 w-4 text-primary" />
+        </div>
+      )}
     </motion.button>
   );
 }
@@ -755,9 +779,9 @@ function StatCard({
 function AutomationRow({ icon, label, active }: { icon: ReactNode; label: string; active: boolean }) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/40 bg-muted/[0.03] p-4 transition-all hover:bg-muted/[0.06] hover:border-border/60">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         <div className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-xl border transition-colors",
+          "flex h-10 w-10 items-center justify-center rounded-xl border transition-colors",
           active ? "bg-primary/10 border-primary/20 text-primary" : "bg-muted/10 border-border/40 text-muted-foreground/60"
         )}>
           {icon}
@@ -766,7 +790,7 @@ function AutomationRow({ icon, label, active }: { icon: ReactNode; label: string
       </div>
       <Badge 
         className={cn(
-          "rounded-full px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider border-none shadow-none",
+          "rounded-full px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider border-none shadow-none",
           active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
         )}
       >
@@ -894,61 +918,60 @@ const FileTreeItem = memo(function FileTreeItem({
   const isDeleting = busyAction === deleteKey
 
   return (
-    <div className={cn("group relative flex items-center gap-1 rounded-xl transition-all duration-200", !isLastRow && "border-b border-border/35")}>
-      <button
+    <div className="group relative">
+      <motion.button
+        whileHover={{ x: 2 }}
+        whileTap={{ scale: 0.99 }}
         type="button"
         onClick={() => (isDirectory ? onOpenDirectory(item.path) : onOpenFile(item.path))}
         className={cn(
-          "flex flex-1 items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-left transition-all duration-200 [content-visibility:auto]",
+          "flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2 text-left transition-all duration-200 [content-visibility:auto]",
           isSelected
-            ? "bg-primary/12 text-primary ring-1 ring-primary/25 dark:bg-primary/20"
-            : "text-foreground/90 hover:border-border/50 hover:bg-muted/45 hover:text-foreground dark:text-foreground/85 dark:hover:bg-muted/35",
+            ? "bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+            : "text-foreground/80 hover:bg-muted/50 hover:text-foreground",
         )}
       >
         <div className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
-          isSelected ? "border-primary/25 bg-background dark:bg-background/80" : "border-transparent group-hover:bg-background group-hover:border-border/60 dark:group-hover:bg-background/80"
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all",
+          isSelected ? "bg-background shadow-sm text-primary" : "text-muted-foreground/60 group-hover:text-foreground"
         )}>
           {isDirectory ? (
-            <Folder className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <Folder className={cn("h-4 w-4 transition-transform duration-300 group-hover:scale-110", isSelected ? "fill-amber-400 text-amber-500" : "text-amber-500/70")} />
           ) : (
-            <FileCode2 className="h-4 w-4 text-slate-600 dark:text-slate-300" />
+            <FileCode2 className="h-4 w-4 transition-transform duration-300 group-hover:scale-110" />
           )}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold tracking-tight text-foreground/95 dark:text-foreground/90">{item.name}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 dark:text-muted-foreground/80">{isDirectory ? "Folder" : "File"}</p>
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <p className={cn(
+            "truncate text-sm font-semibold tracking-tight",
+            isSelected ? "text-primary" : "text-foreground/90"
+          )}>{item.name}</p>
+          <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground/40">{isDirectory ? "Folder" : "File"}</p>
         </div>
-        <ChevronRight className={cn(
-          "h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:opacity-100 text-muted-foreground/65",
-          isSelected && "opacity-100 text-primary"
-        )} />
-      </button>
+        
+        {!isDeleting && (
+          <ChevronRight className={cn(
+            "h-3.5 w-3.5 shrink-0 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0 text-muted-foreground/40",
+            isSelected && "opacity-100 translate-x-0 text-primary/50"
+          )} />
+        )}
 
-      {canDelete && (
-        <div className="absolute right-10 flex items-center pr-2">
-          <button
-            type="button"
-            className={cn(
-              "inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors opacity-0 group-hover:opacity-100",
-              isDeleting
-                ? "cursor-not-allowed opacity-70"
-                : "cursor-pointer hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10",
-            )}
+        {isDeleting && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary/40" />}
+      </motion.button>
+
+      {canDelete && !isDeleting && (
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-600 dark:hover:bg-red-500/20"
             onClick={(event) => {
               event.stopPropagation()
-              if (isDeleting) return
               onRequestDelete(item)
             }}
-            aria-label={`Delete ${isDirectory ? "folder" : "file"} ${item.name}`}
-            disabled={isDeleting}
           >
-            {isDeleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" />
-            )}
-          </button>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       )}
     </div>
@@ -967,46 +990,534 @@ const CommitListItem = memo(function CommitListItem({
   onSelect: (sha: string) => void
 }) {
   return (
-    <button
+    <motion.button
       type="button"
+      variants={VARIANTS_FADE_IN_UP}
+      whileHover={ANIM_HOVER_LIFT}
+      whileTap={ANIM_TAP_SOFT}
       onClick={() => onSelect(commit.sha)}
       className={cn(
-        "group relative w-full rounded-2xl border p-4 text-left transition-all duration-250",
+        "group relative w-full rounded-2xl border p-4 text-left transition-all duration-300",
         isSelected
-          ? "border-primary/35 bg-primary/12 shadow-xl shadow-primary/15 ring-1 ring-primary/30 dark:border-primary/45 dark:bg-primary/20 dark:ring-primary/40"
-          : "border-border/40 bg-muted/2 hover:-translate-y-0.5 hover:border-primary/20 hover:bg-primary/4 hover:shadow-md",
+          ? "border-primary/40 bg-primary/10 shadow-lg shadow-primary/10 ring-1 ring-primary/20 dark:border-primary/50 dark:bg-primary/20"
+          : "border-border/40 bg-background/50 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md",
       )}
     >
-      <div className="flex items-start gap-3">
-        <Avatar className="h-9 w-9 border border-border/50 shadow-sm">
-          <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
-          <AvatarFallback className="text-[10px] font-bold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1 space-y-1.5">
+      <div className="flex items-start gap-4">
+        <div className="relative">
+          <Avatar className="h-10 w-10 border border-border/50 shadow-sm transition-transform duration-300 group-hover:scale-105">
+            <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
+            <AvatarFallback className="text-[10px] font-semibold">{getInitials(commit.author.login ?? commit.author.name)}</AvatarFallback>
+          </Avatar>
+          {isSelected && (
+            <motion.div
+              layoutId="commit-active-indicator"
+              className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-background bg-primary shadow-sm"
+            />
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Badge variant="outline" className="h-5 rounded-full border-border/50 bg-background/50 px-2 text-[10px] font-bold text-muted-foreground shadow-none">
-              {commit.sha.slice(0, 7)}
-            </Badge>
-            <Badge
-              variant="outline"
-              className="h-5 rounded-full border-primary/20 bg-primary/8 px-2 text-[10px] font-bold text-primary shadow-none"
-            >
-              {branchName}
-            </Badge>
-            <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(commit.author.date)}</span>
+            <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className="h-5 rounded-md border-border/40 bg-muted/30 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 shadow-none">
+                {commit.sha.slice(0, 7)}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="h-5 rounded-md border-primary/20 bg-primary/5 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-primary shadow-none"
+              >
+                {branchName}
+              </Badge>
+            </div>
+            <span className="text-[10px] font-semibold text-muted-foreground/40">{formatRelative(commit.author.date)}</span>
           </div>
           <p className={cn(
-            "line-clamp-2 text-sm font-bold leading-snug tracking-tight transition-colors",
-            isSelected ? "text-primary" : "text-foreground/90 group-hover:text-foreground"
+            "line-clamp-2 text-sm font-semibold leading-snug tracking-tight transition-colors",
+            isSelected ? "text-primary" : "text-foreground/85 group-hover:text-foreground"
           )}>
             {getCommitSubject(commit.message)}
           </p>
-          <p className="truncate text-[11px] font-medium text-muted-foreground/70">
-            by <span className="text-foreground/60">@{commit.author.login || commit.author.name}</span>
-          </p>
+          <div className="flex items-center justify-between gap-2 pt-0.5">
+            <p className="truncate text-[11px] font-semibold text-muted-foreground/60">
+              by <span className={cn("transition-colors", isSelected ? "text-primary/70" : "text-foreground/50 group-hover:text-foreground/70")}>@{commit.author.login || commit.author.name}</span>
+            </p>
+          </div>
         </div>
       </div>
-    </button>
+    </motion.button>
+  )
+})
+
+const BranchListItem = memo(function BranchListItem({
+  branch,
+  selectedBranch,
+  defaultBranchName,
+  isTeamLeader,
+  busyAction,
+  canAuthorRepositoryChanges,
+  onSetDefault,
+  onCompare,
+  onDelete,
+}: {
+  branch: ApiGitHubBranch
+  selectedBranch: string | null
+  defaultBranchName: string
+  isTeamLeader: boolean
+  busyAction: string | null
+  canAuthorRepositoryChanges: boolean
+  onSetDefault: (name: string) => void
+  onCompare: (name: string) => void
+  onDelete: (branch: ApiGitHubBranch) => void
+}) {
+  const isSelected = selectedBranch === branch.name
+  const isDefault = branch.name === defaultBranchName
+  const isSettingDefault = busyAction === `set-default-${branch.name}`
+  const isDeleting = busyAction === `delete-branch-${branch.name}`
+
+  return (
+    <motion.div
+      variants={VARIANTS_FADE_IN_UP}
+      whileHover={ANIM_HOVER_LIFT}
+      className={cn(
+        "group relative overflow-hidden rounded-[24px] border p-5 transition-all duration-300",
+        isSelected
+          ? "border-primary/40 bg-primary/5 shadow-lg shadow-primary/5 ring-1 ring-primary/20"
+          : "border-border/50 bg-background hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+      )}
+    >
+      <div className="flex flex-col gap-5 md:flex-row md:items-center">
+        <div className={cn(
+          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/5",
+          isSelected ? "bg-primary text-primary-foreground border-primary" : "bg-muted/10 text-muted-foreground border-border/50"
+        )}>
+          <GitBranch className="h-6 w-6" />
+        </div>
+        
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h4 className="text-lg font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
+              {branch.name}
+            </h4>
+            <div className="flex flex-wrap gap-1.5">
+              {isDefault && (
+                <Badge className="rounded-full border-none bg-emerald-500/10 px-2 py-0 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 shadow-none">
+                  Default
+                </Badge>
+              )}
+              {branch.protected && (
+                <Badge variant="outline" className="rounded-full border-none bg-amber-500/10 px-2 py-0 text-[10px] font-semibold uppercase tracking-wider text-amber-600 shadow-none">
+                  <Lock className="mr-1.5 h-3 w-3" /> Protected
+                </Badge>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+              {branch.commitSha ? `Latest: ${branch.commitSha.slice(0, 7)}` : "No commits found"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 md:min-w-[200px]">
+          {isTeamLeader && !isDefault && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 rounded-xl border-emerald-200/50 bg-emerald-50/50 px-4 text-xs font-semibold text-emerald-600 transition-all hover:bg-emerald-500 hover:text-white dark:bg-emerald-500/5 dark:hover:bg-emerald-500"
+              onClick={() => onSetDefault(branch.name)}
+              disabled={isSettingDefault}
+            >
+              {isSettingDefault ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Make Default
+            </Button>
+          )}
+
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-xs font-semibold transition-all hover:bg-muted hover:text-foreground"
+            onClick={() => onCompare(branch.name)}
+          >
+            Compare
+          </Button>
+
+          {canAuthorRepositoryChanges && isTeamLeader && !branch.protected && !isDefault && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-xl border-red-200/50 bg-red-50/50 text-red-600 transition-all hover:bg-red-500 hover:text-white dark:bg-red-500/5 dark:hover:bg-red-500"
+              onClick={() => onDelete(branch)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+})
+
+const IssueListItem = memo(function IssueListItem({
+  issue,
+  canManageActions,
+  busyAction,
+  isDarkTheme,
+  onEdit,
+  onToggleState,
+}: {
+  issue: ApiGitHubIssue
+  canManageActions: boolean
+  busyAction: string | null
+  isDarkTheme: boolean
+  onEdit: (issue: ApiGitHubIssue) => void
+  onToggleState: (issue: ApiGitHubIssue) => void
+}) {
+  const isToggling = busyAction === `issue-${issue.number}`
+
+  return (
+    <motion.div
+      variants={VARIANTS_FADE_IN_UP}
+      whileHover={ANIM_HOVER_LIFT}
+      className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+    >
+      <div className="flex flex-col gap-5 md:flex-row md:items-start">
+        <div className={cn(
+          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/5",
+          issue.state === "open" ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-purple-50 text-purple-600 border-purple-100"
+        )}>
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">#{issue.number}</span>
+                <Badge variant="outline" className={cn(
+                  "rounded-full px-2 py-0 text-[10px] font-semibold uppercase tracking-wider border-none",
+                  issue.state === "open" ? "bg-amber-600/10 text-amber-600" : "bg-purple-600/10 text-purple-600"
+                )}>
+                  {issue.state}
+                </Badge>
+                {issue.linkedTask && (
+                  <a href={`/dashboard/tasks?taskId=${issue.linkedTask.id}`}>
+                    <Badge className="rounded-full border-none bg-primary/10 px-2 py-0 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-none hover:bg-primary/20 transition-colors">
+                      Linked Task
+                    </Badge>
+                  </a>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold text-muted-foreground/40">{formatRelative(issue.createdAt)}</span>
+            </div>
+            <h4 className="text-lg font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
+              {issue.title}
+            </h4>
+            {issue.body && (
+              <p className="line-clamp-2 text-sm text-muted-foreground/70 leading-relaxed font-medium">
+                {issue.body}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 pt-1">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-6 w-6 border border-border/40 shadow-sm">
+                <AvatarImage src={issue.author.avatarUrl ?? undefined} />
+                <AvatarFallback className="text-[8px] font-semibold">{getInitials(issue.author.login)}</AvatarFallback>
+              </Avatar>
+              <span className="text-[11px] font-semibold text-foreground/60">@{issue.author.login}</span>
+            </div>
+            
+            {issue.labels.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {issue.labels.map(label => (
+                  <Badge 
+                    key={label.name} 
+                    style={{ 
+                      backgroundColor: isDarkTheme ? `#${label.color}15` : `#${label.color}25`, 
+                      color: isDarkTheme ? `#${label.color}` : "rgba(0,0,0,0.8)", 
+                      borderColor: isDarkTheme ? `#${label.color}30` : `#${label.color}50` 
+                    }}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[9px] font-semibold border transition-all shadow-sm ring-1 ring-inset uppercase tracking-tight",
+                      isDarkTheme ? "ring-white/5" : "ring-black/5"
+                    )}
+                  >
+                    {label.name}
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 md:min-w-[140px]">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-9 w-9 rounded-xl border-border/40 bg-background/50 transition-all hover:bg-muted hover:text-foreground" 
+            asChild
+          >
+            <a href={issue.htmlUrl} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-4 w-4 opacity-60" />
+            </a>
+          </Button>
+
+          {canManageActions && (
+            <>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-9 w-9 rounded-xl border-border/40 bg-background/50 transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/20" 
+                onClick={() => onEdit(issue)}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                title={issue.state === "open" ? "Close issue" : "Reopen issue"}
+                className={cn(
+                  "h-9 w-9 rounded-xl transition-all border-none",
+                  issue.state === "open" 
+                    ? "bg-red-500/10 text-red-600 hover:bg-red-500/20" 
+                    : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20",
+                )} 
+                onClick={() => onToggleState(issue)} 
+                disabled={isToggling}
+              >
+                {isToggling ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : issue.state === "open" ? (
+                  <XCircle className="h-4 w-4" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  )
+})
+
+const PullRequestListItem = memo(function PullRequestListItem({
+  pullRequest,
+  canManageActions,
+  canRunLeaderActions,
+  busyAction,
+  onRefresh,
+  onReview,
+  onToggleState,
+  onMerge,
+}: {
+  pullRequest: ApiGitHubPullRequest
+  canManageActions: boolean
+  canRunLeaderActions: boolean
+  busyAction: string | null
+  onRefresh: (number: number) => void
+  onReview: (pr: ApiGitHubPullRequest) => void
+  onToggleState: (pr: ApiGitHubPullRequest) => void
+  onMerge: (pr: ApiGitHubPullRequest) => void
+}) {
+  const mergeGuidance = getPullRequestMergeGuidance(pullRequest)
+  const isRefreshing = busyAction === `pull-refresh-${pullRequest.number}`
+  const isToggling = busyAction === `pull-${pullRequest.number}`
+  const isMerging = busyAction === `merge-${pullRequest.number}`
+
+  return (
+    <motion.div
+      variants={VARIANTS_FADE_IN_UP}
+      whileHover={ANIM_HOVER_LIFT}
+      className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+    >
+      <div className="flex flex-col gap-5 md:flex-row md:items-start">
+        <div className={cn(
+          "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/5",
+          pullRequest.state === "open" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-purple-50 text-purple-600 border-purple-100"
+        )}>
+          <GitPullRequest className="h-6 w-6" />
+        </div>
+        
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">#{pullRequest.number}</span>
+                <Badge variant="outline" className={cn(
+                  "rounded-full px-2 py-0 text-[10px] font-semibold uppercase tracking-wider border-none",
+                  pullRequest.merged 
+                    ? "bg-purple-600/10 text-purple-600" 
+                    : pullRequest.state === "open"
+                      ? "bg-emerald-600/10 text-emerald-600"
+                      : "bg-red-600/10 text-red-600"
+                )}>
+                  {pullRequest.merged ? "merged" : pullRequest.state}
+                </Badge>
+                {pullRequest.draft && (
+                  <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 px-2 py-0 text-[10px] font-semibold uppercase tracking-wider text-amber-600 border-none">
+                    Draft
+                  </Badge>
+                )}
+              </div>
+              <span className="text-[10px] font-semibold text-muted-foreground/40">{formatRelative(pullRequest.createdAt)}</span>
+            </div>
+            <h4 className="text-lg font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
+              {pullRequest.title}
+            </h4>
+            {pullRequest.body && (
+              <p className="line-clamp-2 text-sm text-muted-foreground/70 leading-relaxed font-medium">
+                {pullRequest.body}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-5 pt-1">
+            <div className="flex items-center gap-2">
+              <Avatar className="h-6 w-6 border border-border/40 shadow-sm">
+                <AvatarImage src={pullRequest.author.avatarUrl ?? undefined} />
+                <AvatarFallback className="text-[8px] font-semibold">{getInitials(pullRequest.author.login)}</AvatarFallback>
+              </Avatar>
+              <span className="text-[11px] font-semibold text-foreground/60">@{pullRequest.author.login}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground/50">
+              <GitBranch className="h-3.5 w-3.5 opacity-40" />
+              <span className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]">{pullRequest.head}</span>
+              <ArrowRight className="h-3 w-3 opacity-30" />
+              <span className="rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]">{pullRequest.base}</span>
+            </div>
+            <div className="flex items-center gap-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+              <span className="flex items-center gap-1.5">
+                <FileCode2 className="h-3.5 w-3.5 opacity-40" />
+                {pullRequest.changedFiles} files
+              </span>
+              <span className="flex items-center gap-1.5">
+                <GitCommitHorizontal className="h-3.5 w-3.5 opacity-40" />
+                {pullRequest.commits} commits
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4 md:items-end md:min-w-[240px]">
+          <div className="flex flex-col items-end gap-1.5">
+            <div
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider border-none",
+                mergeGuidance.tone === "success" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+                mergeGuidance.tone === "warning" && "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                mergeGuidance.tone === "danger" && "bg-red-500/10 text-red-600 dark:text-red-400",
+                mergeGuidance.tone === "muted" && "bg-muted/60 text-muted-foreground",
+              )}
+            >
+              {mergeGuidance.label}
+            </div>
+            <p className="max-w-[200px] text-right text-[10px] font-medium text-muted-foreground/50 leading-tight">
+              {mergeGuidance.detail}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="h-9 w-9 rounded-xl border-border/40 bg-background/50 transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/20"
+              onClick={() => onRefresh(pullRequest.number)}
+              disabled={isRefreshing}
+              title="Refresh PR status"
+            >
+              <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-xs font-semibold transition-all hover:bg-muted hover:text-foreground" 
+              asChild
+            >
+              <a href={pullRequest.htmlUrl} target="_blank" rel="noreferrer">
+                <Github className="mr-2 h-4 w-4 opacity-60" />
+                View
+              </a>
+            </Button>
+
+            {canManageActions && pullRequest.state === "open" && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 rounded-xl border-primary/20 bg-primary/5 text-xs font-semibold text-primary hover:bg-primary/10 hover:border-primary/30 transition-all" 
+                onClick={() => onReview(pullRequest)}
+              >
+                Review
+              </Button>
+            )}
+
+            {canRunLeaderActions && !pullRequest.merged && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                title={pullRequest.state === "open" ? "Close PR" : "Reopen PR"}
+                className={cn(
+                  "h-9 rounded-xl text-xs font-semibold transition-all border-none",
+                  pullRequest.state === "open" 
+                    ? "bg-red-500/10 text-red-600 hover:bg-red-500/20" 
+                    : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20",
+                )} 
+                onClick={() => onToggleState(pullRequest)} 
+                disabled={isToggling}
+              >
+                {isToggling ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : pullRequest.state === "open" ? (
+                  <XCircle className="mr-2 h-4 w-4" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                {pullRequest.state === "open" ? "Close" : "Reopen"}
+              </Button>
+            )}
+
+            {canRunLeaderActions && pullRequest.state === "open" && !pullRequest.draft && (
+              <Button
+                size="sm"
+                className="h-9 rounded-xl bg-emerald-600 px-5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30"
+                onClick={() => onMerge(pullRequest)}
+                disabled={isMerging || !mergeGuidance.canMerge}
+              >
+                {isMerging ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <GitMerge className="mr-2 h-4 w-4" />
+                )}
+                {mergeGuidance.canMerge ? "Merge" : "Blocked"}
+              </Button>
+            )}
+          </div>
+          
+          {mergeGuidance.tone === "danger" && (
+            <div className="flex items-start gap-2 max-w-[220px] rounded-xl border border-red-200/40 bg-red-50/50 p-2.5 text-left dark:border-red-500/10 dark:bg-red-500/5">
+              <AlertCircle className="h-3.5 w-3.5 text-red-600 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-[10px] font-semibold text-red-800 dark:text-red-400">Blocked requirements:</p>
+                <p className="text-[9px] font-medium text-red-700/70 dark:text-red-300/70 leading-relaxed">
+                  Branch conflicts, missing reviews, or failing status checks.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
   )
 })
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1283,6 +1794,7 @@ export function GitHubWorkspaceClient() {
   const [releaseForm, setReleaseForm] = useState(initialReleaseForm)
   const [releaseDialogError, setReleaseDialogError] = useState("")
   const [setupDialogError, setSetupDialogError] = useState("")
+  const lastProcessedPayloadRef = useRef<string | null>(null)
   const availableInstallations = useMemo(() => workspace?.availableInstallations ?? [], [workspace?.availableInstallations])
   const [inviteForm, setInviteForm] = useState({
     login: "",
@@ -1677,7 +2189,7 @@ export function GitHubWorkspaceClient() {
 
   const announceInstallationReady = useCallback(() => {
     const message = "GitHub App installation is ready. You can finish repository setup now."
-    toast.success(message)
+    toast.success(message, { id: "github-install-ready" })
     setCallbackNotice({
       tone: "success",
       title: "GitHub App ready",
@@ -1818,6 +2330,10 @@ export function GitHubWorkspaceClient() {
 
   const handleGitHubCallbackPayload = useCallback(
     async (payload: GitHubCallbackPayload) => {
+      const payloadKey = JSON.stringify(payload)
+      if (lastProcessedPayloadRef.current === payloadKey) return
+      lastProcessedPayloadRef.current = payloadKey
+
       if (payload.installationId) {
         setCallbackInstallationHint(payload.installationId)
       }
@@ -1844,7 +2360,7 @@ export function GitHubWorkspaceClient() {
       if (payload.githubInstall === "error") {
         clearInstallWatcher()
         const message = payload.reason || "GitHub App installation was cancelled."
-        toast.error(message)
+        toast.error(message, { id: "github-install-error" })
         setCallbackNotice({
           tone: "error",
           title: "GitHub App installation failed",
@@ -1856,7 +2372,7 @@ export function GitHubWorkspaceClient() {
         await refreshWorkspace()
         setSetupDialogOpen(true)
         const message = "Your personal GitHub connection is ready."
-        toast.success(message)
+        toast.success(message, { id: "github-connect-success" })
         setCallbackNotice({
           tone: "success",
           title: "GitHub connected",
@@ -1866,7 +2382,7 @@ export function GitHubWorkspaceClient() {
 
       if (payload.githubConnect === "error") {
         const notice = getGitHubConnectErrorNotice(payload.reason)
-        toast.error(notice.message)
+        toast.error(notice.message, { id: "github-connect-error" })
         setCallbackNotice(notice)
       }
     },
@@ -1973,10 +2489,6 @@ export function GitHubWorkspaceClient() {
       } catch (error) {
         toast.error(friendlyError(error, "Couldn't refresh pull requests right now."))
       }
-    } else if (activeTab === "actions") {
-      await loadActionsFeed()
-    } else if (activeTab === "releases") {
-      await loadReleasesFeed()
     }
   }, [
     activeTab,
@@ -1986,8 +2498,6 @@ export function GitHubWorkspaceClient() {
     deferredPullSearch,
     issuePage,
     issueStateFilter,
-    loadActionsFeed,
-    loadReleasesFeed,
     loadRepositorySnapshot,
     pullPage,
     pullStateFilter,
@@ -2302,32 +2812,6 @@ export function GitHubWorkspaceClient() {
     if (!workspace?.repositoryRecord || workspace.repositoryRecord.connectionStatus !== "ACTIVE") return
     void loadPullPage(1)
   }, [activeTab, deferredPullSearch, loadPullPage, workspace?.repositoryRecord, workspace?.repositoryRecord?.connectionStatus])
-
-  useEffect(() => {
-    if (activeTab !== "actions") return
-    if (!workspace?.repositoryRecord || workspace.repositoryRecord.connectionStatus !== "ACTIVE") return
-    if (workflowRuns.length) return
-    void loadActionsFeed()
-  }, [
-    activeTab,
-    loadActionsFeed,
-    workflowRuns.length,
-    workspace?.repositoryRecord,
-    workspace?.repositoryRecord?.connectionStatus,
-  ])
-
-  useEffect(() => {
-    if (activeTab !== "releases") return
-    if (!workspace?.repositoryRecord || workspace.repositoryRecord.connectionStatus !== "ACTIVE") return
-    if (releases.length) return
-    void loadReleasesFeed()
-  }, [
-    activeTab,
-    loadReleasesFeed,
-    releases.length,
-    workspace?.repositoryRecord,
-    workspace?.repositoryRecord?.connectionStatus,
-  ])
 
   useEffect(() => {
     if (activeTab !== "commits") return
@@ -4169,7 +4653,7 @@ export function GitHubWorkspaceClient() {
           initial={ANIM_ENTRY_DOWN}
           animate={ANIM_FADE_IN_UP}
           className={cn(
-            "rounded-[24px] border p-5 mb-6 shadow-sm",
+            "rounded-[24px] border p-5 mb-4 shadow-sm",
             callbackNotice.tone === "error"
               ? "border-destructive/20 bg-destructive/5 text-destructive dark:border-destructive/30 dark:bg-destructive/10"
               : "border-emerald-200/70 bg-emerald-50/80 text-emerald-900 dark:border-emerald-500/20 dark:bg-emerald-500/5 dark:text-emerald-400",
@@ -4191,7 +4675,7 @@ export function GitHubWorkspaceClient() {
               )}
             </div>
             <div className="space-y-1.5 pt-1">
-              <p className="text-lg font-bold tracking-tight">{callbackNotice.title}</p>
+              <p className="text-lg font-semibold tracking-tight">{callbackNotice.title}</p>
               <p className="leading-6 opacity-90">{callbackNotice.message}</p>
               {callbackNotice.actionLabel && callbackNotice.onAction && (
                 <div className="pt-2">
@@ -4219,14 +4703,14 @@ export function GitHubWorkspaceClient() {
         <motion.div
           initial={ANIM_ENTRY_SCALE}
           animate={ANIM_SCALE_IN}
-          className="rounded-[24px] border border-rose-500/20 bg-rose-500/5 p-6 mb-6 dark:border-rose-500/30 dark:bg-rose-500/10"
+          className="rounded-[24px] border border-rose-500/20 bg-rose-500/5 p-5 mb-4 dark:border-rose-500/30 dark:bg-rose-500/10"
         >
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400">
               <AlertCircle className="h-5 w-5" />
             </div>
             <div className="space-y-3 pt-1">
-              <p className="text-lg font-bold tracking-tight text-rose-700 dark:text-rose-400">Action required for full setup</p>
+              <p className="text-lg font-semibold tracking-tight text-rose-700 dark:text-rose-400">Action required for full setup</p>
               <ul className="space-y-2 text-sm text-muted-foreground dark:text-muted-foreground">
                 {!workspace.githubConnection.isConnected ? (
                   <li className="flex items-center gap-2">
@@ -4292,1465 +4776,1478 @@ export function GitHubWorkspaceClient() {
         />
       ) : (
         <>
-          <Card className="relative overflow-hidden rounded-[30px] border border-border/70 bg-linear-to-b from-primary/12 via-background/95 to-background/95 shadow-[0_26px_72px_-56px_rgba(15,23,42,0.34)] transition-all duration-300 motion-reduce:transform-none hover:-translate-y-0.5 hover:shadow-[0_34px_84px_-56px_rgba(15,23,42,0.42)]">
-            <CardContent className="relative space-y-6 p-5 sm:p-6 lg:p-7">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-start">
+          <Card className="relative overflow-hidden rounded-[32px] border border-border/50 bg-background shadow-sm">
+            <CardContent className="relative p-4 lg:px-8 lg:py-5">
+              <div className="grid gap-5 lg:grid-cols-[1fr_320px] lg:items-center">
                 <motion.div
                   initial={ANIM_ENTRY_UP}
                   animate={ANIM_FADE_IN_UP}
                   transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                  className="space-y-5"
+                  className="space-y-3.5"
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge className="rounded-full bg-primary/10 px-3 py-1 text-primary shadow-none hover:bg-primary/10">
-                      <Github className="mr-1.5 h-3.5 w-3.5" />
-                      Team: {workspace?.team?.name}
-                    </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1.5 rounded-full px-3 py-1 capitalize">
-                      {workspace?.repository?.visibility === "PRIVATE" ? (
-                        <Lock className="h-3.5 w-3.5 text-amber-600" />
-                      ) : (
-                        <Globe className="h-3.5 w-3.5 text-emerald-600" />
-                      )}
-                      Visibility: {normalizeGitHubVisibility(workspace?.repository?.visibility)}
-                    </Badge>
-                    <Badge variant="secondary" className="flex items-center gap-1.5 rounded-full px-3 py-1">
-                      <GitBranch className="h-3.5 w-3.5 text-primary" />
-                      Branch: {selectedBranch || defaultBranchName}
-                    </Badge>
-                    {workspace?.permissions.canReadAsSupervisor ? (
-                      <Badge className="rounded-full bg-amber-100 px-3 py-1 text-amber-800 shadow-none hover:bg-amber-100">
-                        Read-only view
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+                        {workspace?.repository?.visibility === "PRIVATE" ? (
+                          <Lock className="h-3.5 w-3.5 text-amber-600" />
+                        ) : (
+                          <Globe className="h-3.5 w-3.5 text-emerald-600" />
+                        )}
+                        {normalizeGitHubVisibility(workspace?.repository?.visibility)}
                       </Badge>
-                    ) : null}
-                  </div>
+                      <Badge variant="outline" className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider">
+                        <GitBranch className="h-3.5 w-3.5" />
+                        {selectedBranch || defaultBranchName}
+                      </Badge>
+                    </div>
 
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Connected repository</p>
-                      <div className="flex flex-col gap-1.5">
-                        <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-foreground sm:text-[2rem]">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background shadow-sm">
-                            <Github className="h-6 w-6 text-foreground" />
-                          </span>
-                          {repositoryPathLabel.includes("/") ? (
-                            <Link
-                              href={`https://github.com/${repositoryPathLabel}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="hover:text-primary transition-colors"
-                            >
-                              {repositoryDisplayName}
-                            </Link>
-                          ) : (
-                            repositoryDisplayName
-                          )}
-                        </h1>
-                        <div className="flex items-center gap-2 text-sm font-medium text-foreground/80 sm:text-[15px]">
-                          <span>GitHub path:</span>
-                          {repositoryPathLabel.includes("/") ? (
-                            <Link
-                              href={`https://github.com/${repositoryPathLabel}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group flex items-center gap-1.5 transition-colors hover:text-primary"
-                            >
-                              <span className="underline decoration-border/50 decoration-1 underline-offset-[3px] transition-all group-hover:decoration-primary/50 group-hover:underline-offset-[4px]">
-                                {repositoryPathLabel}
-                              </span>
-                              <ExternalLink className="h-3.5 w-3.5 opacity-40 transition-opacity group-hover:opacity-100" />
-                            </Link>
-                          ) : (
-                            <span>{repositoryPathLabel}</span>
-                          )}
+                    <div className="space-y-1">
+                      <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-4xl">
+                        {repositoryPathLabel.includes("/") ? (
+                          <Link
+                            href={`https://github.com/${repositoryPathLabel}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-primary transition-colors"
+                          >
+                            {repositoryDisplayName}
+                          </Link>
+                        ) : (
+                          repositoryDisplayName
+                        )}
+                      </h1>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground/60">
+                        <span>{repositoryPathLabel}</span>
+                        <ExternalLink className="h-3.5 w-3.5 opacity-40" />
+                      </div>
+                    </div>
+
+                    {workspace?.repository?.description && (
+                      <p className="max-w-3xl text-base font-medium leading-relaxed text-muted-foreground/75">
+                        {workspace.repository.description}
+                      </p>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-6 pt-1">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20">
+                          <RefreshCw className={cn("h-4 w-4", busyAction === "sync" && "animate-spin")} />
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 leading-none">Last Activity</p>
+                          <p className="text-[13px] font-semibold text-foreground/80 leading-none">{lastSyncLabel}</p>
                         </div>
                       </div>
-                    </div>
-                    <p className="max-w-3xl text-sm leading-6 text-muted-foreground sm:text-[15px]">
-                      {workspace?.repository?.description ||
-                        workspace?.team?.bio ||
-                        "Connected repository for code, pull requests, releases, and day-to-day team delivery."}
-                    </p>
-                  </div>
 
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <MetaCard label="Default branch" value={defaultBranchName} hint="Primary branch for new PRs" />
-                    <MetaCard label="Last sync" value={lastSyncLabel} hint={syncStatusLabel} />
-                    <MetaCard label="Latest push" value={lastPushLabel} hint="Newest commit received" />
-                  </div>
+                      <div className="h-6 w-px bg-border/20" />
 
-                  <motion.div
-                    whileHover={ANIM_HOVER_LIFT}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="flex flex-col gap-3 rounded-[24px] border border-border/70 bg-muted/4 p-4 transition-all duration-200 hover:border-primary/25 hover:bg-primary/5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Avatar className="h-11 w-11 border border-border/70 bg-background shadow-sm">
-                        <AvatarImage
-                          src={workspace.githubConnection.avatarUrl ?? workspace.repository?.owner.avatarUrl ?? undefined}
-                          alt={connectedGitHubIdentity}
-                        />
-                        <AvatarFallback>{getInitials(connectedGitHubIdentity)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 space-y-1">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          Connected as{" "}
-                          <Link
-                            href={`https://github.com/${workspace.githubConnection.login}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-primary transition-colors"
-                          >
-                            {connectedGitHubIdentity}
-                          </Link>
-                        </p>
-                        <p className="truncate text-xs leading-5 text-muted-foreground">
-                          Owner{" "}
-                          <Link
-                            href={`https://github.com/${repositoryOwnerLogin}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-primary transition-colors"
-                          >
-                            {repositoryOwnerLogin}
-                          </Link>{" "}
-                          | Last push {lastPushLabel}
-                        </p>
-                      </div>
+                      {commits[0] && (
+                        <button 
+                          onClick={() => setActiveTab("commits")}
+                          className="group flex items-center gap-3 text-left transition-all hover:opacity-85"
+                        >
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 shadow-sm ring-1 ring-emerald-500/20">
+                            <GitCommitHorizontal className="h-4 w-4" />
+                          </div>
+                          <div className="space-y-0.5 max-w-[240px]">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 leading-none">Latest Change</p>
+                            <p className="text-[13px] font-semibold text-foreground/80 truncate leading-none group-hover:text-primary transition-colors">
+                              {getCommitSubject(commits[0].message)}
+                            </p>
+                          </div>
+                        </button>
+                      )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className="rounded-full px-3 py-1">
-                        {connectedAccessLabel}
-                      </Badge>
-                      <Badge variant="outline" className="rounded-full px-3 py-1">
-                        {syncStatusLabel}
-                      </Badge>
-                    </div>
-                  </motion.div>
-
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <WorkspaceFact
-                      label="Team members"
-                      value={`${teamMemberCount}`}
-                      detail={`${teamMemberCount === 1 ? "Member" : "Members"} in this repo team`}
-                    />
-                    <WorkspaceFact
-                      label="GitHub profiles"
-                      value={`${teamMembersWithGitHubCount} ready`}
-                      detail={
-                        missingGitHubCount
-                          ? `${missingGitHubCount} teammate${missingGitHubCount === 1 ? "" : "s"} still missing`
-                          : "Everyone mapped to GitHub"
-                      }
-                    />
-                    <WorkspaceFact
-                      label="Collaborators"
-                      value={`${collaboratorCount}`}
-                      detail={`${collaboratorWriteCount} with write access`}
-                    />
-                    <WorkspaceFact
-                      label="Pending invites"
-                      value={`${pendingInvitationCount}`}
-                      detail={pendingInvitationCount ? "Waiting on GitHub acceptance" : "No invitations waiting"}
-                    />
-                    <WorkspaceFact
-                      label="Issues & PRs"
-                      value={`${openIssueCount} / ${openPullRequestCount}`}
-                      detail="Open work in GitHub"
-                    />
-                    <WorkspaceFact
-                      label="Branches"
-                      value={`${branchCount || 1}`}
-                      detail={`Default branch: ${defaultBranchName}`}
-                    />
-                    <WorkspaceFact
-                      label="Task sync"
-                      value={`${repoBackedTaskCount}`}
-                      detail={
-                        workspaceTasksLoading
-                          ? "Loading GPMS tasks"
-                          : settingsDraft.syncIssuesToTasks
-                            ? `${linkedTaskCount} GitHub issue link${linkedTaskCount === 1 ? "" : "s"}`
-                            : "Issue sync is off"
-                      }
-                    />
-                    <WorkspaceFact
-                      label="Workflow runs"
-                      value={`${workflowRunCount}`}
-                      detail={`Last sync ${lastSyncLabel}`}
-                    />
                   </div>
                 </motion.div>
 
                 <motion.div
                   initial={ANIM_ENTRY_UP_SM}
                   animate={ANIM_FADE_IN_UP}
-                  transition={{ delay: 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="space-y-4 rounded-[24px] border border-border/70 bg-muted/6 p-4 shadow-sm"
+                  transition={{ delay: 0.1, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-3 rounded-[28px] border border-border/50 bg-muted/[0.03] p-3.5"
                 >
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Quick actions</p>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      Jump into the next repository task without leaving the main workspace card.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2">
-                    {canAuthorRepositoryChanges ? (
-                      <>
-                        <Button className={cn(quickActionButtonClass, "bg-primary text-primary-foreground border-primary/30 hover:bg-primary/90 hover:text-primary-foreground")} onClick={handleOpenBranchDialog}>
+                  <div className="grid gap-2.5">
+                    {canAuthorRepositoryChanges && (
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <Button className="h-11 rounded-xl bg-primary text-sm font-semibold shadow-md shadow-primary/15 hover:bg-primary/90" onClick={handleOpenBranchDialog}>
                           <GitBranch className="mr-2 h-4 w-4" />
-                          Create branch
+                          Branch
                         </Button>
-                        <Button
-                          className={quickActionButtonClass}
-                          variant="outline"
-                          onClick={() => {
-                            setActiveTab("code")
-                            handleOpenNewFileDialog()
-                          }}
-                        >
+                        <Button variant="outline" className="h-11 rounded-xl text-sm font-semibold bg-background/50" onClick={() => { setActiveTab("code"); handleOpenNewFileDialog(); }}>
                           <FilePlus2 className="mr-2 h-4 w-4" />
-                          Add new file
-                        </Button>
-                      </>
-                    ) : !workspace?.githubConnection.isConnected ? (
-                      <Button className={cn(quickActionButtonClass, "bg-primary text-primary-foreground border-primary/30 hover:bg-primary/90 hover:text-primary-foreground")} onClick={() => void handleGitHubUserConnect()} disabled={busyAction === "connect-user"}>
-                        {busyAction === "connect-user" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Link2 className="mr-2 h-4 w-4" />}
-                        Connect Personal GitHub
-                      </Button>
-                    ) : null}
-
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                      {canManagePullRequestActions ? (
-                        <Button
-                          className={quickActionButtonClass}
-                          variant="outline"
-                          onClick={() => {
-                            setActiveTab("pulls")
-                            setPullRequestForm((current) => ({
-                              ...current,
-                              base: defaultBranchName,
-                              head: selectedBranch || "",
-                            }))
-                            setPullRequestDialogOpen(true)
-                          }}
-                        >
-                          <GitPullRequest className="mr-2 h-4 w-4" />
-                          New PR
-                        </Button>
-                      ) : null}
-
-                      {canSyncWorkspace ? (
-                        <Button className={quickActionButtonClass} variant="outline" onClick={() => void handleSyncRepository()} disabled={busyAction === "sync"}>
-                          {busyAction === "sync" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                          Sync now
-                        </Button>
-                      ) : null}
-
-                      {workspace?.repository?.url ? (
-                        <Button className={quickActionButtonClass} variant="outline" asChild>
-                          <a href={workspace.repository.url} target="_blank" rel="noreferrer">
-                            <ExternalLink className="mr-2 h-4 w-4" />
-                            GitHub
-                          </a>
-                        </Button>
-                      ) : null}
-
-                      {workspace?.repositoryRecord?.cloneUrlHttps ? (
-                        <Button className={quickActionButtonClass} variant="outline" onClick={() => void handleCopy("HTTPS clone URL", workspace?.repositoryRecord?.cloneUrlHttps, "copy-clone")}>
-                          <motion.span
-                            key={copiedActionKey === "copy-clone" ? "copied-clone" : "copy-clone"}
-                            initial={ANIM_BADGE_OUT}
-                            animate={ANIM_BADGE_IN}
-                            transition={{ duration: 0.16 }}
-                            className="mr-2 inline-flex"
-                          >
-                            {copiedActionKey === "copy-clone" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          </motion.span>
-                          {copiedActionKey === "copy-clone" ? "Copied" : "Copy clone"}
-                        </Button>
-                      ) : null}
-
-                      {workspace?.githubConnection.isConnected ? (
-                        <Button className={cn(quickActionButtonClass, "border-transparent bg-transparent text-muted-foreground hover:border-red-300/60 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300")} variant="ghost" onClick={() => void requestDisconnectUserConnection()} disabled={busyAction === "disconnect-user"}>
-                          {busyAction === "disconnect-user" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Unplug className="mr-2 h-4 w-4" />}
-                          Disconnect
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-border/70 bg-muted/6 p-4 shadow-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Tasks ↔ GitHub</p>
-                      <Badge variant="outline" className="h-5 rounded-full border-primary/20 bg-primary/5 px-2 text-[10px] font-bold text-primary">
-                        {repoBackedTaskCount} Linked
-                      </Badge>
-                    </div>
-
-                    {workspaceTasksLoading ? (
-                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Syncing tasks...
-                      </div>
-                    ) : workspaceTasksError ? (
-                      <p className="mt-2 text-[11px] text-destructive">{workspaceTasksError}</p>
-                    ) : repoBackedTaskCount > 0 ? (
-                      <div className="mt-4 space-y-4">
-                        {/* Compact Stats Row */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-background/50 p-2">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
-                              <AlertCircle className="h-3.5 w-3.5" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-foreground">{repoBackedTasksBlocked}</p>
-                              <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Blocked</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-background/50 p-2">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
-                              <Clock className="h-3.5 w-3.5" />
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-bold text-foreground">{repoBackedTasksWaitingAcceptance}</p>
-                              <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Pending</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Next Task - Streamlined Row */}
-                        {nextRepoTask && (
-                          <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-primary/5 p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0 flex-1 space-y-0.5">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                                  <p className="truncate text-xs font-bold text-foreground">{nextRepoTask.title}</p>
-                                </div>
-                                <p className="truncate text-[10px] text-muted-foreground">
-                                  {humanizeStateLabel(nextRepoTask.status)} · {nextRepoTask.assignee?.fullName || "Unassigned"}
-                                </p>
-                              </div>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 rounded-lg p-0 hover:bg-primary/10 hover:text-primary" asChild>
-                                <a href={`/dashboard/tasks?teamId=${activeTeamId}${nextRepoTask?.id ? `&taskId=${nextRepoTask.id}` : ""}`}>
-                                  <ArrowRight className="h-3.5 w-3.5" />
-                                </a>
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-
-                        <Button variant="ghost" size="sm" className="h-8 w-full rounded-xl text-[11px] text-muted-foreground hover:text-primary" asChild>
-                          <a href={`/dashboard/tasks?teamId=${activeTeamId}`}>
-                            Open Task Board <ChevronRight className="ml-1 h-3 w-3" />
-                          </a>
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="mt-3 space-y-3">
-                        <p className="text-xs text-muted-foreground">No GitHub-tracked tasks found for this team.</p>
-                        <Button variant="outline" size="sm" className="h-8 w-full rounded-xl text-[11px]" asChild>
-                          <a href={`/dashboard/tasks?teamId=${activeTeamId ?? ""}`}>Setup Tracking</a>
+                          File
                         </Button>
                       </div>
                     )}
+
+                    <Button variant="outline" className="h-11 rounded-xl text-sm font-semibold bg-background/50" onClick={() => { setActiveTab("pulls"); setPullRequestDialogOpen(true); }}>
+                      <GitPullRequest className="mr-2 h-4 w-4" />
+                      New PR
+                    </Button>
+
+                    <Button variant="outline" className="h-11 rounded-xl text-sm font-semibold bg-background/50 transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void handleSyncRepository()} disabled={busyAction === "sync"}>
+                      {busyAction === "sync" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                      Sync Now
+                    </Button>
+
+                    <div className="h-px bg-border/40 my-1" />
+
+                    <Button variant="ghost" className="h-10 w-full rounded-xl text-xs font-semibold text-muted-foreground hover:text-red-600 hover:bg-red-500/5" onClick={() => void requestDisconnectUserConnection()} disabled={busyAction === "disconnect-user"}>
+                      <Unplug className="mr-2 h-4 w-4" />
+                      Disconnect
+                    </Button>
                   </div>
                 </motion.div>
               </div>
             </CardContent>
           </Card>
 
-          <Tabs value={activeTab} onValueChange={(value) => startTransition(() => setActiveTab(value as WorkspaceTab))} className="space-y-8">
-            <div className="sticky top-0 z-20 -mx-4 mb-2 overflow-x-auto no-scrollbar bg-background/80 px-4 py-3 backdrop-blur-md transition-all duration-300 md:-mx-8 md:px-8">
-              <TabsList className="flex h-auto w-max items-center justify-start gap-1.5 bg-transparent p-0 pr-2">
-                <TabsTrigger value="overview" className={workspaceTabTriggerClass}>
+          <Tabs value={activeTab} onValueChange={(value) => startTransition(() => setActiveTab(value as WorkspaceTab))} className="space-y-6">
+            <div className="sticky top-0 z-20 -mx-4 mb-2 overflow-x-auto no-scrollbar bg-background/80 px-4 py-1.5 backdrop-blur-md transition-all duration-300 md:-mx-8 md:px-8">
+              <TabsList className="flex h-11 w-max items-center justify-start gap-0.5 rounded-2xl bg-muted/20 p-1 pr-2">
+                <TabsTrigger value="overview" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4" />
+                    <Globe className="h-3.5 w-3.5" />
                     <span>Overview</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="code" className={workspaceTabTriggerClass}>
+                <TabsTrigger value="code" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <FileCode2 className="h-4 w-4" />
+                    <FileCode2 className="h-3.5 w-3.5" />
                     <span>Code</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="commits" className={workspaceTabTriggerClass}>
+                <TabsTrigger value="pulls" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <GitCommitHorizontal className="h-4 w-4" />
-                    <span>Commits</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="issues" className={workspaceTabTriggerClass}>
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>Issues</span>
-                    {openIssueCount > 0 && (
-                      <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] rounded-full bg-primary/10 px-1 text-[10px] text-primary">
-                        {openIssueCount}
-                      </Badge>
-                    )}
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="pulls" className={workspaceTabTriggerClass}>
-                  <div className="flex items-center gap-2">
-                    <GitPullRequest className="h-4 w-4" />
-                    <span>Pull Requests</span>
+                    <GitPullRequest className="h-3.5 w-3.5" />
+                    <span>PRs</span>
                     {openPullRequestCount > 0 && (
-                      <Badge variant="secondary" className="ml-1 h-5 min-w-[20px] rounded-full bg-primary/10 px-1 text-[10px] text-primary">
+                      <Badge variant="secondary" className="ml-1 h-4 min-w-[18px] rounded-full bg-primary/10 px-1 text-[9px] font-semibold text-primary">
                         {openPullRequestCount}
                       </Badge>
                     )}
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="branches" className={workspaceTabTriggerClass}>
+                <TabsTrigger value="commits" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <GitBranch className="h-4 w-4" />
+                    <GitCommitHorizontal className="h-3.5 w-3.5" />
+                    <span>Commits</span>
+                  </div>
+                </TabsTrigger>
+                <TabsTrigger value="issues" className={cn(workspaceTabTriggerClass, "px-3")}>
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    <span>Issues</span>
+                    {openIssueCount > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-4 min-w-[18px] rounded-full bg-primary/10 px-1 text-[9px] font-semibold text-primary">
+                        {openIssueCount}
+                      </Badge>
+                    )}
+                  </div>
+                </TabsTrigger>
+                <div className="mx-1.5 h-4 w-px bg-border/40" />
+                <TabsTrigger value="branches" className={cn(workspaceTabTriggerClass, "px-3")}>
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-3.5 w-3.5" />
                     <span>Branches</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="actions" className={workspaceTabTriggerClass}>
+                <TabsTrigger value="members" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <Rocket className="h-4 w-4" />
-                    <span>Actions</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="releases" className={workspaceTabTriggerClass}>
-                  <div className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    <span>Releases</span>
-                  </div>
-                </TabsTrigger>
-                <TabsTrigger value="members" className={workspaceTabTriggerClass}>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
+                    <Users className="h-3.5 w-3.5" />
                     <span>Members</span>
                   </div>
                 </TabsTrigger>
-                <TabsTrigger value="settings" className={workspaceTabTriggerClass}>
+                <TabsTrigger value="settings" className={cn(workspaceTabTriggerClass, "px-3")}>
                   <div className="flex items-center gap-2">
-                    <Settings2 className="h-4 w-4" />
+                    <Settings2 className="h-3.5 w-3.5" />
                     <span>Settings</span>
                   </div>
                 </TabsTrigger>
               </TabsList>
             </div>
 
-            {activeTab === "overview" && (<TabsContent value="overview" forceMount className="mt-0 space-y-8 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4, ease: "easeOut" }}
-                className="grid gap-8 xl:grid-cols-[1fr_minmax(320px,360px)]"
-              >
-                <div className="space-y-8">
-
-                  {/* Quick Stats Grid */}
-                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard 
-                      icon={<GitCommitHorizontal className="h-5 w-5" />} 
-                      label="Commits" 
-                      value={String(commits.length)} 
-                      color="blue"
-                      onClick={() => setActiveTab("commits")}
-                    />
-                    <StatCard 
-                      icon={<AlertCircle className="h-5 w-5" />} 
-                      label="Open Issues" 
-                      value={String(openIssueCount)} 
-                      color="amber"
-                      onClick={() => setActiveTab("issues")}
-                    />
-                    <StatCard 
-                      icon={<GitPullRequest className="h-5 w-5" />} 
-                      label="Pull Requests" 
-                      value={String(openPullRequestCount)} 
-                      color="emerald"
-                      onClick={() => setActiveTab("pulls")}
-                    />
-                    <StatCard 
-                      icon={<Users className="h-5 w-5" />} 
-                      label="Collaborators" 
-                      value={String(collaboratorCount)} 
-                      color="indigo"
-                      onClick={() => setActiveTab("members")}
-                    />
-                  </div>
-
-                  {/* Integration Health Section */}
-                  <SectionCard
-                    title="Integration health"
-                    description="Live monitoring of the connection between GitHub and your GPMS team workspace."
-                    className="overflow-hidden border-border/50 shadow-sm"
-                  >
-                    <div className="space-y-6">
-                      <div className="flex flex-col gap-6 md:flex-row">
-                        <div className="flex-1 space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                              <ShieldCheck className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-foreground">Connection Status</p>
-                              <p className="text-sm text-muted-foreground">GPMS App connection to GitHub</p>
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-border/40 bg-muted/5 p-4">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">Status</span>
-                              <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-none shadow-none font-bold uppercase tracking-wider text-[10px]">
-                                Active
-                              </Badge>
-                            </div>
-                            <Separator className="my-3 opacity-40" />
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">Webhook</span>
-                              <span className="text-sm font-bold text-foreground/80">{lastWebhookLabel}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex-1 space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 text-primary">
-                              <UserRound className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <p className="font-semibold text-foreground">Your Access</p>
-                              <p className="text-sm text-muted-foreground">Personal GitHub permissions</p>
-                            </div>
-                          </div>
-                          <div className="rounded-2xl border border-border/40 bg-muted/5 p-4">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">Account</span>
-                              <span className="text-sm font-bold text-foreground/80">@{workspace?.githubConnection.login || "Not connected"}</span>
-                            </div>
-                            <Separator className="my-3 opacity-40" />
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">Write Access</span>
-                              <Badge className={cn(
-                                "border-none shadow-none font-bold uppercase tracking-wider text-[10px]",
-                                hasConnectedGitHubWriteAccess 
-                                  ? "bg-emerald-500/10 text-emerald-600" 
-                                  : "bg-amber-500/10 text-amber-600"
-                              )}>
-                                {hasConnectedGitHubWriteAccess ? "Granted" : "Limited"}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  </SectionCard>
-
-                  <SectionCard
-                    title="Recent activity"
-                    description="Latest commits with quick context on who changed what."
-                    className="border-border/50 shadow-sm"
-                  >
-                    {commits.length ? (
-                      <div className="space-y-5">
-                        <div className="grid gap-2 sm:grid-cols-3">
-                          <MetaCard label="Recent commits" value={String(commits.length)} hint="Loaded in current timeline" />
-                          <MetaCard label="Open work" value={`${openIssueCount + openPullRequestCount}`} hint={`${openIssueCount} issues + ${openPullRequestCount} PRs`} />
-                          <MetaCard label="Sync health" value={syncStatusLabel} hint={`Last sync ${lastSyncLabel}`} />
-                        </div>
-                        <div className="space-y-2.5">
-                          {commits.slice(0, 3).map((commit) => (
-                            <motion.button
-                              key={`overview-${commit.sha}`}
-                              whileHover={ANIM_HOVER_LIFT}
-                              whileTap={ANIM_TAP_SOFT}
-                              onClick={() => {
-                                setSelectedCommitSha(commit.sha)
-                                setActiveTab("commits")
-                              }}
-                              className="group w-full rounded-2xl border border-border/60 bg-background/60 p-3 text-left transition-all hover:border-primary/25 hover:bg-primary/6"
-                            >
-                              <div className="flex items-start gap-3">
-                                <Avatar className="mt-0.5 h-8 w-8 border border-border/60">
-                                  <AvatarImage src={commit.author.avatarUrl ?? undefined} alt={commit.author.login ?? undefined} />
-                                  <AvatarFallback className="text-[10px] font-semibold">
-                                    {getInitials(commit.author.login ?? commit.author.name)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="min-w-0 flex-1 space-y-1">
-                                  <p className="truncate text-sm font-semibold text-foreground/90 group-hover:text-primary transition-colors">
-                                    {getCommitSubject(commit.message)}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                                    <Badge variant="outline" className="h-5 rounded-full px-2 text-[10px] font-semibold">
-                                      {commit.sha.slice(0, 7)}
-                                    </Badge>
-                                    <span>{formatRelative(commit.author.date)}</span>
-                                    <span>·</span>
-                                    <span>@{commit.author.login || "unknown"}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </motion.button>
-                          ))}
-                        </div>
-                        <Button variant="outline" size="sm" className="w-full rounded-xl border-border/50 text-foreground/85 hover:bg-primary/10 hover:text-primary hover:border-primary/30 dark:hover:bg-primary/20 transition-all" onClick={() => setActiveTab("commits")}>
-                          View All History
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="text-center py-6 text-sm text-muted-foreground italic">No recent activity detected.</p>
-                    )}
-                  </SectionCard>
-                </div>
-
-                <div className="space-y-8">
-                  <SectionCard
-                    title="Active automation"
-                    description="How this repository syncs with your GPMS project."
-                    className="border-border/50 shadow-sm"
-                  >
-                    <div className="space-y-3">
-                      <AutomationRow 
-                        icon={<CheckSquare className="h-4 w-4" />} 
-                        label="Issues to Tasks" 
-                        active={settingsDraft.syncIssuesToTasks} 
-                      />
-                      <AutomationRow 
-                        icon={<Calendar className="h-4 w-4" />} 
-                        label="Weekly Progress" 
-                        active={settingsDraft.syncActivityToWeeklyReports} 
-                      />
-                      <AutomationRow 
-                        icon={<Upload className="h-4 w-4" />} 
-                        label="Release Tracking" 
-                        active={settingsDraft.syncReleasesToSubmissions} 
-                      />
-                    </div>
-                    <div className="mt-6 pt-4 border-t border-border/40">
-                      <Button variant="ghost" size="sm" className="w-full rounded-xl text-muted-foreground hover:text-primary transition-all" onClick={() => setActiveTab("settings")}>
-                        Configure Sync Settings
-                        <ChevronRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                  </SectionCard>
-
-                </div>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "commits" && (<TabsContent value="commits" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col gap-4 rounded-[24px] border border-border/60 bg-muted/4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="space-y-1">
-                    <h3 className="text-xl font-bold tracking-tight text-foreground">Commit timeline</h3>
-                    <p className="text-sm text-muted-foreground">Review recent changes and inspect file-level diffs quickly.</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                      {filteredCommits.length}/{commits.length} shown
-                    </Badge>
-                    <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                      {selectedCommit ? "1 selected" : "No selection"}
-                    </Badge>
-                  </div>
-                </div>
-                {commitDetailError && selectedCommit ? (
-                  <InlineNotice
-                    tone="error"
-                    title="Couldn't load full commit details"
-                    message={commitDetailError}
-                    actionLabel="Retry"
-                    onAction={() => void loadCommitDetails(selectedCommit.sha)}
-                  />
-                ) : null}
-
-                <div className="grid gap-8 xl:grid-cols-[minmax(320px,400px)_1fr]">
-                <SectionCard
-                  title="Commit history"
-                  description={`Inspect the timeline of changes on ${selectedBranch || defaultBranchName}.`}
-                  stackHeader
-                  className="xl:sticky xl:top-24 xl:self-start border-border/50 bg-background/80 shadow-sm rounded-[28px] backdrop-blur-sm"
-                >
-                  <div className="mb-3">
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <Select
-                        value={selectedBranch}
-                        onValueChange={(value) => {
-                          setSelectedBranch(value)
-                          setCurrentPath("")
-                          setSelectedFilePath("")
-                          setSelectedBlob(null)
-                        }}
-                      >
-                        <SelectTrigger className="h-10 rounded-xl border-border/40 bg-background/80 sm:w-[180px]">
-                          <SelectValue placeholder="Branch" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/50 shadow-2xl">
-                          {branches.map((branch) => (
-                            <SelectItem key={`commit-branch-${branch.name}`} value={branch.name} className="rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <GitBranch className="h-3.5 w-3.5 opacity-60" />
-                                <span className="text-sm font-medium">{branch.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                        <DeferredSearchInput
-                          value={commitSearch}
-                          onDeferredChange={setCommitSearch}
-                          placeholder="Filter commits by message, author, or SHA..."
-                          aria-label="Filter commits"
-                          className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
+            {activeTab === "overview" && (
+              <TabsContent value="overview" forceMount className="mt-0 outline-none">
+                <div className="grid gap-8 xl:grid-cols-[1fr_360px]">
+                  <div className="space-y-8">
+                    {/* Primary Data Grid with staggered animation */}
+                    <motion.div 
+                      variants={{
+                        hidden: { opacity: 0 },
+                        show: {
+                          opacity: 1,
+                          transition: { staggerChildren: 0.1 }
+                        }
+                      }}
+                      initial="hidden"
+                      animate="show"
+                      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+                    >
+                      <motion.div variants={VARIANTS_FADE_IN_UP} className="h-full">
+                        <StatCard 
+                          icon={<GitCommitHorizontal className="h-6 w-6" />} 
+                          label="Commits" 
+                          value={String(commits.length)} 
+                          color="blue"
+                          onClick={() => setActiveTab("commits")}
                         />
-                      </div>
-                    </div>
-                  </div>
-                  {commitFeedError ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-sm text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/5 dark:text-amber-200">
-                      <div className="flex items-start gap-3">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <div className="space-y-3">
-                          <p>{commitFeedError}</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-xl border-amber-200 bg-background hover:bg-amber-100"
-                            onClick={() => void loadCommitPage(commitPage)}
-                          >
-                            Retry
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : commitFeedLoading && !commits.length ? (
-                    <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-dashed border-border/50 bg-muted/5">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary/30" />
-                      <span className="text-sm font-medium text-muted-foreground/60">Loading history...</span>
-                    </div>
-                  ) : filteredCommits.length ? (
-                    <div className="space-y-4">
-                      <ScrollArea className="h-[52vh] min-h-[320px] sm:h-[calc(100vh-22rem)] sm:min-h-[400px]">
-                        <div className="space-y-3 p-2">
-                          {visibleCommits.map((commit) => (
-                            <CommitListItem
-                              key={commit.sha}
-                              commit={commit}
-                              isSelected={selectedCommitSha === commit.sha}
-                              branchName={selectedBranch || defaultBranchName}
-                              onSelect={setSelectedCommitSha}
-                            />
-                          ))}
-                          {hasMoreCommits ? (
-                            <div className="px-2 pb-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-full rounded-xl text-xs"
-                                onClick={() => setCommitRenderLimit((current) => current + 60)}
-                              >
-                                Load more commits ({visibleCommits.length}/{filteredCommits.length})
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      </ScrollArea>
-                      <CommitPaginationControls
-                        pageStart={commitPageStart}
-                        pageEnd={commitPageEnd}
-                        page={commitPage}
-                        loading={commitFeedLoading}
-                        hasPreviousPage={commitHasPreviousPage}
-                        hasNextPage={commitHasNextPage}
-                        onPrevious={() => void loadCommitPage(commitPage - 1)}
-                        onNext={() => void loadCommitPage(commitPage + 1)}
-                      />
-                    </div>
-                  ) : commitSearch.trim() ? (
-                    <EmptySection
-                      title="No matching commits"
-                      description="Try another keyword, author name, or partial commit SHA."
-                      icon={<Search className="h-5 w-5" />}
-                    />
-                  ) : (
-                    <EmptySection
-                      title="No commits yet"
-                      description="The repository history is currently empty."
-                      icon={<GitCommitHorizontal className="h-5 w-5" />}
-                    />
-                  )}
-                </SectionCard>
+                      </motion.div>
+                      <motion.div variants={VARIANTS_FADE_IN_UP} className="h-full">
+                        <StatCard 
+                          icon={<AlertCircle className="h-6 w-6" />} 
+                          label="Open Issues" 
+                          value={String(openIssueCount)} 
+                          color="amber"
+                          onClick={() => setActiveTab("issues")}
+                        />
+                      </motion.div>
+                      <motion.div variants={VARIANTS_FADE_IN_UP} className="h-full">
+                        <StatCard 
+                          icon={<GitPullRequest className="h-6 w-6" />} 
+                          label="Pull Requests" 
+                          value={String(openPullRequestCount)} 
+                          color="emerald"
+                          onClick={() => setActiveTab("pulls")}
+                        />
+                      </motion.div>
+                      <motion.div variants={VARIANTS_FADE_IN_UP} className="h-full">
+                        <StatCard 
+                          icon={<Users className="h-6 w-6" />} 
+                          label="Collaborators" 
+                          value={String(collaboratorCount)} 
+                          color="indigo"
+                          onClick={() => setActiveTab("members")}
+                        />
+                      </motion.div>
+                    </motion.div>
 
-                <SectionCard
-                  title={selectedCommit ? selectedCommitSubject : "Commit details"}
-                  description={
-                    selectedCommit
-                      ? `Authored ${formatRelative(selectedCommit.author.date)} on ${selectedBranch || defaultBranchName}`
-                      : "Select a commit to view full diff and metadata."
-                  }
-                  className="min-w-0 border-border/50 shadow-sm rounded-[28px]"
-                  action={
-                    selectedCommit ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" size="sm" className="h-9 rounded-xl border-border/60 bg-background/50 text-foreground/80 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all" asChild>
-                          <a href={selectedCommit.htmlUrl ?? "#"} target="_blank" rel="noreferrer">
-                            <ExternalLink className="mr-2 h-4 w-4" />
-                            GitHub
-                          </a>
-                        </Button>
-                      </div>
-                    ) : undefined
-                  }
-                >
-                  {commitDetailLoading ? (
-                    <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
-                      <Loader2 className="h-8 w-8 animate-spin text-primary/20" />
-                      <span className="text-sm font-medium text-muted-foreground/60">Loading commit details...</span>
-                    </div>
-                  ) : selectedCommit ? (
-                    <motion.div initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-8">
-                      <div className="rounded-2xl border border-border/50 bg-muted/10 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border border-border/60">
-                              <AvatarImage src={selectedCommit.author.avatarUrl ?? undefined} alt={selectedCommit.author.login ?? undefined} />
-                              <AvatarFallback className="text-[10px] font-bold">{getInitials(selectedCommit.author.login ?? selectedCommit.author.name)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">@{selectedCommit.author.login || selectedCommit.author.name}</p>
-                              <p className="text-xs text-muted-foreground">{selectedCommit.sha.slice(0, 12)}</p>
-                            </div>
+                    {/* Security & Access Integrated Module */}
+                    <motion.div
+                      initial={ANIM_ENTRY_UP}
+                      animate={ANIM_FADE_IN_UP}
+                      transition={{ delay: 0.2 }}
+                      className="relative overflow-hidden rounded-[32px] border border-border/50 bg-background p-1 shadow-sm"
+                    >
+                      <div className="grid divide-y divide-border/40 md:grid-cols-2 md:divide-x md:divide-y-0">
+                        <div className="flex items-center gap-5 p-6 transition-colors hover:bg-muted/[0.02]">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20">
+                            <ShieldCheck className="h-6 w-6" />
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 rounded-lg"
-                            onClick={() => void handleCopy("Commit SHA", selectedCommit.sha, "copy-commit-sha")}
-                          >
-                            {copiedActionKey === "copy-commit-sha" ? <Check className="mr-2 h-3.5 w-3.5" /> : <Copy className="mr-2 h-3.5 w-3.5" />}
-                            {copiedActionKey === "copy-commit-sha" ? "Copied" : "Copy SHA"}
-                          </Button>
-                        </div>
-                        {selectedCommitBody ? (
-                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{selectedCommitBody}</p>
-                        ) : null}
-                      </div>
-                      {/* Commit Metadata Grid */}
-                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="rounded-2xl border border-border/40 bg-muted/[0.03] p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Total Changes</p>
-                          <p className="mt-1 text-xl font-bold text-foreground">{selectedCommit.stats.total}</p>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/40 p-4 dark:border-emerald-400/25 dark:bg-emerald-500/10">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700/70 dark:text-emerald-300/80">Additions</p>
-                          <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-300">+{selectedCommit.stats.additions}</p>
-                        </div>
-                        <div className="rounded-2xl border border-red-200/70 bg-red-50/40 p-4 dark:border-red-400/25 dark:bg-red-500/10">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-red-700/70 dark:text-red-300/80">Deletions</p>
-                          <p className="mt-1 text-xl font-bold text-red-700 dark:text-red-300">-{selectedCommit.stats.deletions}</p>
-                        </div>
-                        <div className="rounded-2xl border border-border/40 bg-muted/[0.03] p-4">
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Files Changed</p>
-                          <p className="mt-1 text-xl font-bold text-foreground">{selectedCommit.files.length}</p>
-                        </div>
-                      </div>
-
-                      {/* File Diffs */}
-                      <div className="space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Changed Files</h4>
-                          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                            <Badge variant="outline" className="rounded-full border-emerald-300/70 bg-emerald-50/70 px-2 py-0 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/10 dark:text-emerald-300">Added</Badge>
-                            <Badge variant="outline" className="rounded-full border-red-300/70 bg-red-50/70 px-2 py-0 text-red-700 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300">Deleted</Badge>
-                            <Badge variant="outline" className="rounded-full border-border/60 bg-muted/30 px-2 py-0 text-muted-foreground">Context</Badge>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/45">System Link</p>
+                              <Badge className="bg-emerald-500 text-[9px] font-semibold uppercase tracking-wider text-white shadow-lg shadow-emerald-500/20">Active</Badge>
+                            </div>
+                            <p className="mt-0.5 text-lg font-semibold tracking-tight text-foreground/90">Webhook Integrated</p>
                           </div>
                         </div>
-                        {selectedCommit.files.map((file: any) => (
-                          <div key={file.filename} className="overflow-hidden rounded-2xl border border-border/50 bg-background shadow-sm">
-                            <div className="flex items-center justify-between border-b border-border/40 bg-muted/5 px-5 py-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <FileCode2 className="h-4 w-4 text-primary/60 shrink-0" />
-                                <span className="truncate text-sm font-bold text-foreground/80">{file.filename}</span>
-                                <Badge className={cn("rounded-full px-2 py-0 border-none shadow-none text-[10px] font-bold uppercase tracking-wider", getCommitChangeBadgeClass(file.status))}>
-                                  {file.status}
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-3 text-[11px] font-mono font-bold">
-                                <span className="text-emerald-600">+{file.additions}</span>
-                                <span className="text-red-600">-{file.deletions}</span>
-                              </div>
-                            </div>
-                            {file.patch ? (
-                              <div className={cn("p-3 overflow-x-auto no-scrollbar", isDarkTheme ? "bg-slate-950/70" : "bg-slate-50")}>
-                                <div className="min-w-full space-y-0.5 font-mono text-xs leading-6">
-                                  {file.patch.split("\n").map((line: string, index: number) => {
-                                    const isAdded = line.startsWith("+") && !line.startsWith("+++")
-                                    const isDeleted = line.startsWith("-") && !line.startsWith("---")
-                                    const isHunk = line.startsWith("@@")
-                                    const isMeta = line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("+++ ") || line.startsWith("--- ")
 
-                                    return (
-                                      <div
-                                        key={`${file.filename}-patch-${index}`}
-                                        className={cn(
-                                          "grid grid-cols-[52px_20px_1fr] items-start rounded-md px-2",
-                                          isAdded && "bg-emerald-500/12",
-                                          isDeleted && "bg-red-500/12",
-                                          isHunk && "bg-primary/10",
-                                          isMeta && "bg-muted/30",
-                                        )}
-                                      >
-                                        <span className={cn("select-none text-right tabular-nums text-[10px]", isDarkTheme ? "text-slate-500" : "text-slate-400")}>
-                                          {index + 1}
-                                        </span>
-                                        <span
-                                          className={cn(
-                                            "text-center text-[10px] font-bold",
-                                            isAdded && "text-emerald-600 dark:text-emerald-300",
-                                            isDeleted && "text-red-600 dark:text-red-300",
-                                            isHunk && "text-primary",
-                                            !isAdded && !isDeleted && !isHunk && "text-muted-foreground/70",
-                                          )}
-                                        >
-                                          {isAdded ? "+" : isDeleted ? "-" : isHunk ? "@" : "·"}
-                                        </span>
-                                        <code
-                                          className={cn(
-                                            "whitespace-pre-wrap break-words",
-                                            isAdded && "text-emerald-700 dark:text-emerald-200",
-                                            isDeleted && "text-red-700 dark:text-red-200",
-                                            isHunk && "font-semibold text-primary",
-                                            isMeta && "text-muted-foreground",
-                                            !isAdded && !isDeleted && !isHunk && !isMeta && (isDarkTheme ? "text-slate-300" : "text-slate-700"),
-                                          )}
-                                        >
-                                          {line || " "}
-                                        </code>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="p-6 text-center text-xs text-muted-foreground italic bg-muted/5">
-                                No patch data available for this file.
-                              </div>
-                            )}
+                        <div className="flex items-center gap-5 p-6 transition-colors hover:bg-muted/[0.02]">
+                          <Avatar className="h-12 w-12 border-2 border-background ring-1 ring-border/50 shadow-sm">
+                            <AvatarImage src={workspace.githubConnection.avatarUrl ?? undefined} />
+                            <AvatarFallback className="bg-muted text-[10px] font-semibold">{getInitials(connectedGitHubIdentity)}</AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/45">Account Access</p>
+                              <Badge variant="outline" className={cn(
+                                "border-none px-0 text-[10px] font-semibold uppercase tracking-wider",
+                                hasConnectedGitHubWriteAccess ? "text-emerald-600" : "text-amber-600"
+                              )}>
+                                {hasConnectedGitHubWriteAccess ? "Full Write" : "Read Only"}
+                              </Badge>
+                            </div>
+                            <p className="mt-0.5 text-lg font-semibold tracking-tight text-foreground/90">@{workspace.githubConnection.login}</p>
                           </div>
-                        ))}
+                        </div>
                       </div>
                     </motion.div>
-                  ) : (
-                    <div className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center">
-                      <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/10 text-primary/35 ring-1 ring-primary/20">
-                        <GitCommitHorizontal className="h-12 w-12" />
-                      </div>
-                      <h4 className="text-xl font-bold tracking-tight text-foreground/80">Select a commit</h4>
-                      <p className="mx-auto mt-2 max-w-[280px] text-sm text-muted-foreground/60">
-                        Choose a commit from the history on the left to inspect its changes, metadata, and full file diffs.
-                      </p>
-                    </div>
-                  )}
-                </SectionCard>
-                </div>
-              </motion.div>
-            </TabsContent>)}
 
-            {activeTab === "code" && (<TabsContent value="code" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_SCALE_SOFT}
-                animate={ANIM_SCALE_IN}
-                transition={{ duration: 0.4 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <FileCode2 className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Code workspace</h3>
-                      <Badge variant="outline" className="rounded-full border-border/50 px-3 py-1 font-medium text-muted-foreground">
-                        <GitBranch className="mr-1.5 h-3.5 w-3.5" />
-                        {selectedBranch}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Browse, edit, and manage files in your team repository directly from GPMS.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {canAuthorRepositoryChanges && (
-                      <Button variant="outline" size="sm" className={tabActionButtonClass} onClick={handleOpenNewFileDialog}>
-                        <FilePlus2 className="mr-2 h-4 w-4" />
-                        New File
-                      </Button>
-                    )}
-                    {canAuthorRepositoryChanges && (
-                      <Button variant="outline" size="sm" className={tabActionButtonClass} onClick={handleOpenUploadFolderDialog}>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload Folder
-                      </Button>
-                    )}
-                    {canAuthorRepositoryChanges && (
-                      <Button variant="outline" size="sm" className={tabActionButtonClass} onClick={() => setBranchDialogOpen(true)}>
-                        <GitBranch className="mr-2 h-4 w-4" />
-                        New Branch
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" className={tabActionButtonClass} onClick={() => void handleSyncRepository()} disabled={busyAction === "sync"}>
-                      {busyAction === "sync" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                      Refresh
-                    </Button>
-                  </div>
-                </div>
-
-                {codeActionNotice && (
-                  <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP}>
-                    <InlineNotice tone={codeActionNotice.tone} title={codeActionNotice.title} message={codeActionNotice.message} />
-                  </motion.div>
-                )}
-                {treeError ? (
-                  <InlineNotice
-                    tone="error"
-                    title="Couldn't load repository tree"
-                    message={treeError}
-                    actionLabel="Retry"
-                    onAction={() => void loadTree(currentPath)}
-                  />
-                ) : null}
-                {blobError && selectedFilePath ? (
-                  <InlineNotice
-                    tone="error"
-                    title="Couldn't open this file"
-                    message={blobError}
-                    actionLabel="Retry"
-                    onAction={() => void openFile(selectedFilePath)}
-                  />
-                ) : null}
-                <input
-                  ref={folderInputRef}
-                  type="file"
-                  className="hidden"
-                  multiple
-                  {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
-                  onChange={(event) => {
-                    void handleFolderFileSelection(event)
-                  }}
-                />
-
-                <div className="grid gap-6 xl:grid-cols-[320px_1fr]">
-                  <div className="flex flex-col gap-6 xl:sticky xl:top-24 xl:self-start">
-                    {/* Modern Explorer */}
-                    <div className="flex flex-col overflow-hidden rounded-[28px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-sm transition-all hover:border-border/80 hover:shadow-md">
-                      <div className="border-b border-border/40 bg-muted/5 px-6 py-5">
-                        <div className="flex flex-col gap-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Explorer</span>
-                            <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-bold text-primary border-none shadow-none">
-                              {treeItems.length} items
-                            </Badge>
-                          </div>
-                          
-                          <div className="flex flex-col gap-2">
-                            <Select
-                              value={selectedBranch}
-                              onValueChange={(value) => {
-                                setSelectedBranch(value)
-                                setCurrentPath("")
-                                setSelectedFilePath("")
-                                setSelectedBlob(null)
-                                setCodeSearch("")
-                              }}
-                            >
-                              <SelectTrigger className="h-10 rounded-xl border-border/40 bg-background/80 hover:bg-background transition-colors">
-                                <SelectValue placeholder="Branch" />
-                              </SelectTrigger>
-                              <SelectContent className="rounded-xl border-border/50 shadow-2xl">
-                                {branches.map((branch) => (
-                                  <SelectItem key={branch.name} value={branch.name} className="rounded-lg">
-                                    <div className="flex items-center gap-2">
-                                      <GitBranch className="h-3.5 w-3.5 opacity-60" />
-                                      <span className="text-sm font-medium">{branch.name}</span>
+                    <motion.div
+                      initial={ANIM_ENTRY_UP}
+                      animate={ANIM_FADE_IN_UP}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <SectionCard
+                        title="Recent activity"
+                        description="Latest changes from the repository timeline."
+                        className="border-border/50 bg-background/50 shadow-sm backdrop-blur-sm"
+                      >
+                        {commits.length ? (
+                          <div className="space-y-6">
+                            <div className="grid gap-3">
+                              {commits.slice(0, 3).map((commit, idx) => (
+                                <motion.button
+                                  key={`overview-${commit.sha}`}
+                                  initial={{ opacity: 0, x: -10 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: 0.4 + idx * 0.1 }}
+                                  whileHover={{ x: 6, backgroundColor: "rgba(var(--primary-rgb), 0.03)" }}
+                                  onClick={() => {
+                                    setSelectedCommitSha(commit.sha)
+                                    setActiveTab("commits")
+                                  }}
+                                  className="group flex w-full items-center gap-4 rounded-2xl border border-border/40 bg-background/50 p-4 text-left transition-all hover:border-primary/20"
+                                >
+                                  <div className="relative">
+                                    <Avatar className="h-10 w-10 border-2 border-background ring-1 ring-border/40">
+                                      <AvatarImage src={commit.author.avatarUrl ?? undefined} />
+                                      <AvatarFallback className="bg-muted text-[10px] font-semibold">{getInitials(commit.author.login)}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-background ring-1 ring-border/40">
+                                      <GitCommitHorizontal className="h-2.5 w-2.5 text-muted-foreground/60" />
                                     </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <div className="relative">
-                              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/40" />
-                              <DeferredSearchInput
-                                value={codeSearch}
-                                onDeferredChange={setCodeSearch}
-                                placeholder="Search files..."
-                                aria-label="Search files in explorer"
-                                className="h-10 rounded-xl border-border/40 bg-background/80 pl-9 transition-all focus:bg-background"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Improved Breadcrumbs */}
-                      <div className="border-b border-border/40 bg-muted/[0.02] px-4 py-3">
-                        <div className="no-scrollbar flex items-center gap-1 overflow-x-auto pb-0.5">
-                          <button
-                            type="button"
-                            onClick={() => openDirectory("")}
-                            className={cn(
-                              "flex items-center gap-2 shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all",
-                              currentPathSegments.length === 0
-                                ? "bg-primary/10 text-primary"
-                                : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-                            )}
-                          >
-                            <FolderGit2 className="h-3.5 w-3.5" />
-                            root
-                          </button>
-                          {currentPathSegments.map((segment) => (
-                            <div key={segment.value} className="flex items-center gap-1">
-                              <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/30" />
-                              <button
-                                type="button"
-                                onClick={() => openDirectory(segment.value)}
-                                className={cn(
-                                  "rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all",
-                                  segment.value === currentPath
-                                    ? "bg-primary/10 text-primary"
-                                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground",
-                                )}
-                              >
-                                {segment.label}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/70">
-                          <span>{currentDirectoryTitle}</span>
-                          <span>•</span>
-                          <span>{visibleTreeItemLabel}</span>
-                          <span>•</span>
-                          <span>{totalTreeItemLabel}</span>
-                          {pathActivity.loading && pathActivity.path === currentPath ? (
-                            <>
-                              <span>•</span>
-                              <span>Checking last update...</span>
-                            </>
-                          ) : pathActivity.lastUpdatedAt && pathActivity.path === currentPath ? (
-                            <>
-                              <span>•</span>
-                              <span>Last updated {formatRelative(pathActivity.lastUpdatedAt)}</span>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      {/* Tree List */}
-                      <ScrollArea className="h-[52vh] min-h-[320px] sm:h-[460px] lg:h-[600px]">
-                        <div className="p-2">
-                          <AnimatePresence mode="wait">
-                            {treeLoading ? (
-                              <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center gap-3">
-                                <Loader2 className="h-5 w-5 animate-spin text-primary/30" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Reading tree...</span>
-                              </motion.div>
-                            ) : filteredTreeItems.length ? (
-                              <motion.div key="list" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="space-y-0.5">
-                                {visibleTreeItems.map((item, index) => (
-                                  <FileTreeItem
-                                    key={item.path}
-                                    item={item}
-                                    isSelected={selectedFilePath === item.path}
-                                    isLastRow={index === visibleTreeItems.length - 1}
-                                    canDelete={canAuthorRepositoryChanges}
-                                    busyAction={busyAction}
-                                    onOpenFile={openFile}
-                                    onOpenDirectory={openDirectory}
-                                    onRequestDelete={requestDeleteTreeItem}
-                                  />
-                                ))}
-                                {hasMoreTreeItems ? (
-                                  <div className="flex items-center justify-center py-3">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      className="h-8 rounded-lg text-xs"
-                                      onClick={() => setTreeRenderLimit((current) => current + 200)}
-                                    >
-                                      Load 200 more ({visibleTreeItems.length}/{filteredTreeItems.length})
-                                    </Button>
                                   </div>
-                                ) : null}
-                              </motion.div>
-                            ) : (
-                              <motion.div key="empty" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-32 flex-col items-center justify-center text-center p-6">
-                                <Search className="h-8 w-8 text-muted-foreground/10 mb-2" />
-                                <p className="text-xs font-medium text-muted-foreground/50">No items found</p>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      </ScrollArea>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col min-w-0">
-                    <SectionCard
-                      title={selectedBlob ? selectedBlob.name : "Code preview"}
-                      description={selectedBlob ? selectedBlob.path : "Select a file from the explorer to view its contents."}
-                      className="flex-1 overflow-hidden border-border/50 bg-background/50 shadow-sm backdrop-blur-sm rounded-[28px] hover:border-border/80 transition-all"
-                      action={
-                        selectedBlob ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            {selectedBlobIsEditable && !isEditingCode && (
-                              <Button size="sm" className="h-9 rounded-xl bg-primary px-5 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={handleOpenEditor}>
-                                <WandSparkles className="mr-2 h-4 w-4" />
-                                Edit Code
-                              </Button>
-                            )}
-                            <Button variant="outline" size="sm" className="h-9 rounded-xl border-border/50 bg-background/70 text-foreground/85 hover:border-primary/25 hover:bg-primary/10 hover:text-primary transition-all" asChild>
-                              <a href={selectedBlob.htmlUrl ?? "#"} target="_blank" rel="noreferrer">
-                                <Github className="mr-2 h-4 w-4" />
-                                Open on GitHub
-                              </a>
+                                  <div className="min-w-0 flex-1 space-y-0.5">
+                                    <p className="truncate text-sm font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
+                                      {getCommitSubject(commit.message)}
+                                    </p>
+                                    <p className="text-[11px] font-medium text-muted-foreground/60">
+                                      {formatRelative(commit.author.date)} · <span className="text-foreground/40">@{commit.author.login}</span>
+                                    </p>
+                                  </div>
+                                  <ChevronRight className="h-4 w-4 opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0 text-primary/40" />
+                                </motion.button>
+                              ))}
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              className="h-12 w-full rounded-2xl text-xs font-semibold text-primary hover:bg-primary/5" 
+                              onClick={() => setActiveTab("commits")}
+                            >
+                              Explore full commit history
+                              <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                           </div>
-                        ) : undefined
-                      }
-                    >
-                      <AnimatePresence mode="wait">
-                        {blobLoading ? (
-                          <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center gap-4">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary/20" />
-                            <span className="text-sm font-medium text-muted-foreground/60">Loading file contents...</span>
-                          </motion.div>
-                        ) : selectedBlob ? (
-                          <motion.div key="content" initial={ANIM_ENTRY_UP} animate={ANIM_FADE_IN_UP} className="space-y-6">
-                            {/* File Metadata */}
-                            <div className="flex flex-wrap items-center gap-3">
-                              <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                {getFileLanguage(selectedBlob.path)}
-                              </Badge>
-                              <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                {formatRepoSize(selectedBlob.size / 1024)}
-                              </Badge>
-                              {selectedBlob.readOnly ? (
-                                <Badge className="rounded-full bg-amber-500/10 text-amber-600 border-none shadow-none font-bold text-[10px] uppercase tracking-wider">
-                                  <Lock className="mr-1.5 h-3 w-3" /> Read Only
-                                </Badge>
-                              ) : (
-                                <Badge className="rounded-full bg-emerald-500/10 text-emerald-600 border-none shadow-none font-bold text-[10px] uppercase tracking-wider">
-                                  <ShieldCheck className="mr-1.5 h-3 w-3" /> Editable
-                                </Badge>
-                              )}
-                              {pathActivity.loading && pathActivity.path === selectedBlob.path ? (
-                                <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  Checking update time...
-                                </Badge>
-                              ) : pathActivity.lastUpdatedAt && pathActivity.path === selectedBlob.path ? (
-                                <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                  Updated {formatRelative(pathActivity.lastUpdatedAt)}
-                                </Badge>
-                              ) : null}
-                            </div>
-
-                            {isEditingCode ? (
-                              <div className="space-y-4">
-                                <div className="overflow-hidden rounded-2xl border border-border/50 bg-background shadow-[0_20px_40px_-34px_rgba(15,23,42,0.35)]">
-                                  <div className="flex items-center justify-between border-b border-border/40 bg-muted/5 px-4 py-2.5">
-                                    <div className="flex items-center gap-2">
-                                      <div className="h-2 w-2 rounded-full bg-red-500/45" />
-                                      <div className="h-2 w-2 rounded-full bg-amber-500/45" />
-                                      <div className="h-2 w-2 rounded-full bg-emerald-500/45" />
-                                      <span className="ml-1 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">Editor</span>
-                                    </div>
-                                    <Badge variant="outline" className="h-6 rounded-full px-2 text-[10px] font-semibold uppercase tracking-wider">
-                                      {getFileLanguage(selectedBlob.path)}
-                                    </Badge>
-                                  </div>
-                                  <MonacoEditor
-                                    height="520px"
-                                    language={getFileLanguage(selectedBlob.path)}
-                                    theme={monacoTheme}
-                                    value={editorValue}
-                                    onChange={(value) => setEditorValue(value ?? "")}
-                                    options={{
-                                      minimap: { enabled: false },
-                                      fontSize: 14,
-                                      wordWrap: "on",
-                                      scrollBeyondLastLine: false,
-                                      automaticLayout: true,
-                                      padding: { top: 16, bottom: 16 },
-                                      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                                    }}
-                                  />
-                                </div>
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <Button className="rounded-xl px-6 h-10 bg-primary shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={handleOpenSaveDialog} disabled={editorValue === (selectedBlob.content ?? "") || busyAction === "save-code"}>
-                                      {busyAction === "save-code" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                      Commit Changes
-                                    </Button>
-                                    <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/70 px-6 text-foreground/85 transition-all hover:border-primary/25 hover:bg-primary/10 hover:text-primary" onClick={() => setIsEditingCode(false)}>
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                  <div className="flex items-center gap-2 sm:justify-end">
-                                    <Button variant="ghost" size="sm" className="rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-500/15 dark:hover:text-red-300 transition-all" onClick={() => { setDeleteCommitMessage(`Delete ${selectedBlob.name}`); setDeleteDialogOpen(true) }}>
-                                      <Trash2 className="mr-2 h-4 w-4" />
-                                      Delete File
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div
-                                className={cn(
-                                  "overflow-hidden rounded-3xl border shadow-[0_26px_54px_-34px_rgba(2,6,23,0.78)]",
-                                  isDarkTheme
-                                    ? "border-slate-800/80 bg-[#0d1117]"
-                                    : "border-border/70 bg-muted/10 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.24)]",
-                                )}
-                              >
-                                <div
-                                  className={cn(
-                                    "flex items-center justify-between px-4 py-2.5 sm:px-6 sm:py-3",
-                                    isDarkTheme ? "border-b border-white/8 bg-white/2" : "border-b border-border/50 bg-background/85",
-                                  )}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-red-500/50" />
-                                    <div className="h-2 w-2 rounded-full bg-amber-500/50" />
-                                    <div className="h-2 w-2 rounded-full bg-emerald-500/50" />
-                                    <span className={cn("ml-1 truncate text-[10px] font-bold uppercase tracking-[0.18em]", isDarkTheme ? "text-slate-400" : "text-muted-foreground/80")}>
-                                      {selectedBlob.path}
-                                    </span>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className={cn(
-                                      "h-8 w-8",
-                                      isDarkTheme
-                                        ? "text-slate-400 hover:text-white hover:bg-white/5"
-                                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                                    )}
-                                    onClick={() => void handleCopy("File content", selectedBlobContent, "copy-file-content")}
-                                  >
-                                    <motion.span
-                                      key={copiedActionKey === "copy-file-content" ? "copied-file" : "copy-file"}
-                                      initial={ANIM_SCALE_OUT_90}
-                                      animate={ANIM_BADGE_IN}
-                                      transition={{ duration: 0.16 }}
-                                      className="inline-flex"
-                                    >
-                                      {copiedActionKey === "copy-file-content" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                                    </motion.span>
-                                  </Button>
-                                </div>
-                                <div className="h-[58vh] min-h-[320px] max-h-[560px] overflow-auto no-scrollbar">
-                                  <div className="min-w-full p-4 font-mono text-sm leading-relaxed sm:p-6">
-                                    {(selectedBlobContent ? selectedBlobLines : ["This file is empty."]).map((line, index) => (
-                                      <div key={`line-${index}`} className="grid grid-cols-[auto_1fr] items-start gap-4">
-                                        <span
-                                          className={cn(
-                                            "select-none text-right text-xs tabular-nums leading-6",
-                                            isDarkTheme ? "text-slate-500" : "text-slate-400",
-                                          )}
-                                        >
-                                          {index + 1}
-                                        </span>
-                                        <code className={cn("whitespace-pre-wrap break-words leading-6", isDarkTheme ? "text-slate-300" : "text-slate-700")}>
-                                          {line}
-                                        </code>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </motion.div>
                         ) : (
-                          <div className="flex min-h-[500px] flex-col items-center justify-center p-12 text-center">
-                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/10 text-primary/35 ring-1 ring-primary/20">
-                              <FolderGit2 className="h-12 w-12" />
+                          <div className="flex flex-col items-center justify-center py-12 text-center">
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted/20">
+                              <History className="h-8 w-8 text-muted-foreground/20" />
                             </div>
-                            <h4 className="text-xl font-bold tracking-tight text-foreground/80">Select a file to begin</h4>
-                            <p className="mx-auto mt-2 max-w-[280px] text-sm text-muted-foreground/60">
-                              Choose any file from the repository explorer on the left to view its contents, history, or make direct edits.
-                            </p>
-                            <div className="mt-8">
-                              <Button variant="outline" className="rounded-xl border-border/60 bg-background/50 px-8 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all" onClick={() => openDirectory("")}>
-                                Browse Root Directory
-                              </Button>
-                            </div>
+                            <p className="text-sm font-medium text-muted-foreground">No recent activity detected.</p>
                           </div>
                         )}
-                      </AnimatePresence>
-                    </SectionCard>
+                      </SectionCard>
+                    </motion.div>
                   </div>
-                </div>
-              </motion.div>
-            </TabsContent>)}
 
-            {activeTab === "issues" && (<TabsContent value="issues" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
-                        <AlertCircle className="h-5 w-5" />
+                  <div className="space-y-6">
+                    <motion.div
+                      initial={ANIM_ENTRY_UP}
+                      animate={ANIM_FADE_IN_UP}
+                      transition={{ delay: 0.4 }}
+                      className="rounded-[32px] border border-border/50 bg-background p-8 shadow-sm"
+                    >
+                      <div className="mb-8 flex items-center justify-between">
+                        <div className="space-y-1">
+                          <h4 className="text-base font-semibold tracking-tight text-foreground/90">Sync Engine</h4>
+                          <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">Automation</p>
+                        </div>
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <WandSparkles className="h-6 w-6" />
+                        </div>
                       </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Issues</h3>
-                      <Badge variant="secondary" className="rounded-full bg-amber-500/10 px-3 py-1 font-bold text-amber-600 border-none shadow-none">
-                        {openIssueCount} Open
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Track bugs, tasks, and feature requests from GitHub.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="outline" className="h-10 rounded-xl border-border/50 hover:bg-muted/50 transition-all" onClick={() => void handleSyncRepository()}>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Sync Issues
-                    </Button>
-                    {canManageIssueActions && (
-                      <Button className="h-10 rounded-xl bg-primary px-6 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={() => { setEditingIssue(null); setIssueForm(initialIssueForm); setIssueDialogOpen(true) }}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Issue
+                      
+                      <div className="space-y-3">
+                        <AutomationRow 
+                          icon={<CheckSquare className="h-4 w-4" />} 
+                          label="Issues → Tasks" 
+                          active={settingsDraft.syncIssuesToTasks} 
+                        />
+                        <AutomationRow 
+                          icon={<Upload className="h-4 w-4" />} 
+                          label="Releases → Submissions" 
+                          active={settingsDraft.syncReleasesToSubmissions} 
+                        />
+                      </div>
+                      
+                      <Button 
+                        variant="outline" 
+                        className="mt-8 h-12 w-full rounded-2xl border-border/60 text-xs font-semibold transition-all hover:bg-primary/5 hover:border-primary/20 hover:text-primary" 
+                        onClick={() => setActiveTab("settings")}
+                      >
+                        Configure Sync Engine
                       </Button>
-                    )}
+                    </motion.div>
                   </div>
                 </div>
+              </TabsContent>
+            )}
 
-                <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-                  <div className="space-y-4">
+            {activeTab === "commits" && (
+              <TabsContent value="commits" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <History className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-bold tracking-tight text-foreground/90">Commit Timeline</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                              {commits.length} Total
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• {selectedBranch || defaultBranchName} History</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2.5">
+                      <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/50 px-5 text-xs font-semibold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void loadCommitPage(1)}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Sync History
+                      </Button>
+                    </div>
+                  </div>
+
+                  {commitDetailError && selectedCommit ? (
+                    <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP}>
+                      <InlineNotice
+                        tone="error"
+                        title="Couldn't load full commit details"
+                        message={commitDetailError}
+                        actionLabel="Retry"
+                        onAction={() => void loadCommitDetails(selectedCommit.sha)}
+                      />
+                    </motion.div>
+                  ) : null}
+
+                  <div className="grid gap-8 xl:grid-cols-[400px_1fr]">
+                    <div className="flex flex-col gap-6 xl:sticky xl:top-24 xl:self-start">
+                      {/* Modern History List */}
+                      <div className="flex flex-col overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md transition-all hover:border-border/80">
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <div className="flex flex-col gap-5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Search className="h-3.5 w-3.5 text-primary/40" />
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Search History</span>
+                              </div>
+                              <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                                {filteredCommits.length}
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2.5">
+                              <Select
+                                value={selectedBranch}
+                                onValueChange={(value) => {
+                                  setSelectedBranch(value)
+                                  setCurrentPath("")
+                                  setSelectedFilePath("")
+                                  setSelectedBlob(null)
+                                }}
+                              >
+                                <SelectTrigger className="h-11 rounded-2xl border-border/40 bg-background/80 transition-all focus:ring-primary/20">
+                                  <SelectValue placeholder="Branch" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-border/50 shadow-2xl">
+                                  {branches.map((branch) => (
+                                    <SelectItem key={branch.name} value={branch.name} className="rounded-xl">
+                                      <div className="flex items-center gap-2">
+                                        <GitBranch className="h-3.5 w-3.5 opacity-60 text-primary" />
+                                        <span className="text-sm font-semibold">{branch.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              <div className="relative">
+                                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30" />
+                                <DeferredSearchInput
+                                  value={commitSearch}
+                                  onDeferredChange={setCommitSearch}
+                                  placeholder="Filter commits..."
+                                  className="h-11 rounded-2xl border-border/40 bg-background/80 pl-11 transition-all focus:bg-background focus:ring-primary/20"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {commitFeedError ? (
+                          <div className="p-8 text-center">
+                            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600">
+                              <AlertCircle className="h-6 w-6" />
+                            </div>
+                            <p className="text-sm font-medium text-muted-foreground">{commitFeedError}</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-4 rounded-xl"
+                              onClick={() => void loadCommitPage(commitPage)}
+                            >
+                              Retry
+                            </Button>
+                          </div>
+                        ) : commitFeedLoading && !commits.length ? (
+                          <div className="flex h-64 flex-col items-center justify-center gap-4">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/5 text-primary/30">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            </div>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/40">Loading history</span>
+                          </div>
+                        ) : filteredCommits.length ? (
+                          <ScrollArea className="h-[52vh] min-h-[320px] lg:h-[600px]">
+                            <div className="p-3">
+                              <motion.div 
+                                variants={{
+                                  show: { transition: { staggerChildren: 0.03 } }
+                                }}
+                                initial="hidden"
+                                animate="show"
+                                className="space-y-2"
+                              >
+                                {visibleCommits.map((commit) => (
+                                  <CommitListItem
+                                    key={commit.sha}
+                                    commit={commit}
+                                    isSelected={selectedCommitSha === commit.sha}
+                                    branchName={selectedBranch || defaultBranchName}
+                                    onSelect={setSelectedCommitSha}
+                                  />
+                                ))}
+                                {hasMoreCommits && (
+                                  <div className="pt-4 px-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-10 w-full rounded-2xl text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:bg-primary/5 hover:text-primary transition-all"
+                                      onClick={() => setCommitRenderLimit((current) => current + 60)}
+                                    >
+                                      Load more ({visibleCommits.length}/{filteredCommits.length})
+                                    </Button>
+                                  </div>
+                                )}
+                              </motion.div>
+                            </div>
+                          </ScrollArea>
+                        ) : (
+                          <div className="p-12 text-center">
+                            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[24px] bg-muted/5 text-muted-foreground/20">
+                              <GitCommitHorizontal className="h-8 w-8" />
+                            </div>
+                            <h4 className="text-sm font-semibold text-foreground/80">No commits found</h4>
+                            <p className="mt-1 text-xs text-muted-foreground/50">Try a different search term.</p>
+                          </div>
+                        )}
+
+                        <div className="border-t border-border/40 bg-muted/5 p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-border/40 bg-background/50 px-3 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                              onClick={() => void loadCommitPage(commitPage - 1)}
+                              disabled={!commitHasPreviousPage || commitFeedLoading}
+                            >
+                              <ChevronLeft className="mr-1 h-3 w-3" />
+                              Prev
+                            </Button>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+                              Page {commitPage}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-xl border-border/40 bg-background/50 px-3 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                              onClick={() => void loadCommitPage(commitPage + 1)}
+                              disabled={!commitHasNextPage || commitFeedLoading}
+                            >
+                              Next
+                              <ChevronRight className="ml-1 h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Commit Detail Content */}
+                    <div className="min-w-0 flex-1">
+                      <AnimatePresence mode="wait">
+                        {commitDetailLoading ? (
+                          <motion.div 
+                            key="detail-loading"
+                            initial={ANIM_ENTRY_FADE}
+                            animate={ANIM_FADE_IN}
+                            exit={ANIM_ENTRY_FADE}
+                            className="flex min-h-[600px] flex-col items-center justify-center gap-6 rounded-[40px] border border-border/50 bg-background/50 backdrop-blur-sm"
+                          >
+                            <div className="relative">
+                              <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+                              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                <Loader2 className="h-8 w-8 animate-spin" />
+                              </div>
+                            </div>
+                            <span className="text-sm font-semibold text-muted-foreground/60">Analyzing changes...</span>
+                          </motion.div>
+                        ) : selectedCommit ? (
+                          <motion.div 
+                            key="detail-content"
+                            initial={ANIM_ENTRY_SCALE_SOFT}
+                            animate={ANIM_SCALE_IN}
+                            className="space-y-6"
+                          >
+                            <div className="overflow-hidden rounded-[40px] border border-border/50 bg-background shadow-sm">
+                              {/* Commit Header Card */}
+                              <div className="border-b border-border/40 bg-muted/5 p-8">
+                                <div className="flex flex-col gap-8">
+                                  <div className="flex flex-wrap items-start justify-between gap-6">
+                                    <div className="space-y-4 min-w-0 flex-1">
+                                      <div className="flex items-center gap-3">
+                                        <Badge variant="outline" className="h-6 rounded-full border-primary/20 bg-primary/5 px-3 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-none">
+                                          {selectedCommit.sha.slice(0, 12)}
+                                        </Badge>
+                                        <span className="text-xs font-medium text-muted-foreground/40">• {formatRelative(selectedCommit.author.date)}</span>
+                                      </div>
+                                      <h2 className="text-2xl font-semibold tracking-tight text-foreground/90 leading-tight">
+                                        {selectedCommitSubject}
+                                      </h2>
+                                      {selectedCommitBody && (
+                                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground/70 font-medium max-w-2xl">
+                                          {selectedCommitBody}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 shrink-0">
+                                      <Button variant="outline" className="h-10 rounded-2xl border-border/50 bg-background px-5 text-xs font-semibold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void handleCopy("Commit SHA", selectedCommit.sha, "copy-commit-sha")}>
+                                        {copiedActionKey === "copy-commit-sha" ? <Check className="mr-2 h-3.5 w-3.5" /> : <Copy className="mr-2 h-3.5 w-3.5" />}
+                                        {copiedActionKey === "copy-commit-sha" ? "Copied" : "Copy SHA"}
+                                      </Button>
+                                      <Button variant="outline" className="h-10 rounded-2xl border-primary/20 bg-primary/5 px-5 text-xs font-semibold text-primary transition-all hover:bg-primary/20 hover:border-primary/40 hover:text-primary" asChild>
+                                        <a href={selectedCommit.htmlUrl ?? "#"} target="_blank" rel="noreferrer">
+                                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                          GitHub
+                                        </a>
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-8 border-t border-border/40 pt-8">
+                                    <div className="flex items-center gap-3">
+                                      <Avatar className="h-12 w-12 border-2 border-background ring-1 ring-border/50">
+                                        <AvatarImage src={selectedCommit.author.avatarUrl ?? undefined} />
+                                        <AvatarFallback className="text-xs font-semibold">{getInitials(selectedCommit.author.login ?? selectedCommit.author.name)}</AvatarFallback>
+                                      </Avatar>
+                                      <div className="space-y-0.5">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 leading-none">Authored By</p>
+                                        <p className="text-sm font-semibold text-foreground/80 leading-none">@{selectedCommit.author.login || selectedCommit.author.name}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="h-10 w-px bg-border/40 hidden sm:block" />
+
+                                    <div className="grid grid-cols-2 sm:flex sm:items-center gap-8">
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 leading-none">Changes</p>
+                                        <p className="text-lg font-semibold text-foreground/90 leading-none">{selectedCommit.stats.total}</p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500/50 leading-none">Additions</p>
+                                        <p className="text-lg font-semibold text-emerald-600 leading-none">+{selectedCommit.stats.additions}</p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500/50 leading-none">Deletions</p>
+                                        <p className="text-lg font-semibold text-red-600 leading-none">-{selectedCommit.stats.deletions}</p>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 leading-none">Files</p>
+                                        <p className="text-lg font-semibold text-foreground/90 leading-none">{selectedCommit.files.length}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* File Diffs View */}
+                              <div className="p-8">
+                                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                                  <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/40">Changed Files</h4>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 rounded-full border-emerald-500/20 bg-emerald-500/5 px-2.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-600 shadow-none">Added</Badge>
+                                    <Badge variant="outline" className="h-5 rounded-full border-red-500/20 bg-red-500/5 px-2.5 text-[9px] font-semibold uppercase tracking-wider text-red-600 shadow-none">Removed</Badge>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                  {selectedCommit.files.map((file: any) => (
+                                    <div key={file.filename} className="group overflow-hidden rounded-3xl border border-border/50 bg-background transition-all hover:border-border/80 hover:shadow-lg hover:shadow-current/5">
+                                      <div className="flex items-center justify-between border-b border-border/40 bg-muted/[0.02] px-6 py-4">
+                                        <div className="flex items-center gap-4 min-w-0">
+                                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-muted/10 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                            <FileCode2 className="h-5 w-5" />
+                                          </div>
+                                          <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-foreground/80 leading-none mb-1.5">{file.filename}</p>
+                                            <Badge className={cn("h-4 rounded-full px-2 py-0 border-none shadow-none text-[8px] font-semibold uppercase tracking-wider", getCommitChangeBadgeClass(file.status))}>
+                                              {file.status}
+                                            </Badge>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 text-xs font-mono font-semibold">
+                                          <span className="text-emerald-600">+{file.additions}</span>
+                                          <span className="text-red-600">-{file.deletions}</span>
+                                        </div>
+                                      </div>
+                                      {file.patch ? (
+                                        <div className={cn("p-4 overflow-x-auto no-scrollbar", isDarkTheme ? "bg-slate-950/40" : "bg-slate-50/50")}>
+                                          <div className="min-w-full space-y-0.5 font-mono text-[11px] leading-6">
+                                            {file.patch.split("\n").map((line: string, index: number) => {
+                                              const isAdded = line.startsWith("+") && !line.startsWith("+++")
+                                              const isDeleted = line.startsWith("-") && !line.startsWith("---")
+                                              const isHunk = line.startsWith("@@")
+                                              const isMeta = line.startsWith("diff ") || line.startsWith("index ") || line.startsWith("+++ ") || line.startsWith("--- ")
+
+                                              return (
+                                                <div
+                                                  key={`${file.filename}-patch-${index}`}
+                                                  className={cn(
+                                                    "grid grid-cols-[48px_24px_1fr] items-start rounded-md px-3",
+                                                    isAdded && "bg-emerald-500/10",
+                                                    isDeleted && "bg-red-500/10",
+                                                    isHunk && "bg-primary/5",
+                                                    isMeta && "opacity-40",
+                                                  )}
+                                                >
+                                                  <span className={cn("select-none text-right tabular-nums pr-4 opacity-30")}>
+                                                    {index + 1}
+                                                  </span>
+                                                  <span
+                                                    className={cn(
+                                                      "text-center font-semibold",
+                                                      isAdded && "text-emerald-600",
+                                                      isDeleted && "text-red-600",
+                                                      isHunk && "text-primary",
+                                                      !isAdded && !isDeleted && !isHunk && "opacity-20",
+                                                    )}
+                                                  >
+                                                    {isAdded ? "+" : isDeleted ? "-" : isHunk ? "@@" : " "}
+                                                  </span>
+                                                  <code
+                                                    className={cn(
+                                                      "whitespace-pre-wrap break-words px-2",
+                                                      isAdded && "text-emerald-700 dark:text-emerald-300",
+                                                      isDeleted && "text-red-700 dark:text-red-300",
+                                                      isHunk && "font-semibold text-primary",
+                                                      !isAdded && !isDeleted && !isHunk && "text-foreground/70",
+                                                    )}
+                                                  >
+                                                    {line || " "}
+                                                  </code>
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="p-8 text-center text-xs text-muted-foreground/40 italic">
+                                          Binary changes or no patch data available.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            key="detail-empty"
+                            initial={ANIM_ENTRY_FADE}
+                            animate={ANIM_FADE_IN}
+                            className="flex min-h-[600px] flex-col items-center justify-center p-12 text-center rounded-[40px] border border-dashed border-border/60 bg-muted/5"
+                          >
+                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                              <GitCommitHorizontal className="h-10 w-10" />
+                            </div>
+                            <h4 className="text-xl font-semibold tracking-tight text-foreground/80">No commit selected</h4>
+                            <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                              Choose a commit from the history on the left to inspect its full changes and metadata.
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </motion.div>
+              </TabsContent>
+            )}
+
+            {activeTab === "code" && (
+              <TabsContent value="code" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <FileCode2 className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-semibold tracking-tighter text-foreground/90">Code Workspace</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="rounded-full border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary shadow-none">
+                              <GitBranch className="mr-1.5 h-3 w-3" />
+                              {selectedBranch}
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• Team Repository</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {canAuthorRepositoryChanges && (
+                        <Button className="h-10 rounded-xl bg-primary px-5 text-xs font-semibold shadow-md shadow-primary/10 transition-all hover:bg-primary/90" onClick={handleOpenNewFileDialog}>
+                          <FilePlus2 className="mr-2 h-4 w-4" />
+                          New File
+                        </Button>
+                      )}
+                      <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/50 px-5 text-xs font-semibold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void handleSyncRepository()} disabled={busyAction === "sync"}>
+                        {busyAction === "sync" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                        Sync
+                      </Button>
+                    </div>
+                  </div>
+
+                  {codeActionNotice && (
+                    <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP}>
+                      <InlineNotice tone={codeActionNotice.tone} title={codeActionNotice.title} message={codeActionNotice.message} />
+                    </motion.div>
+                  )}
+                  
+                  <div className="grid gap-8 xl:grid-cols-[340px_1fr]">
+                    <div className="flex flex-col gap-6 xl:sticky xl:top-24 xl:self-start">
+                      {/* Modern Explorer */}
+                      <div className="flex flex-col overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md transition-all hover:border-border/80">
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <div className="flex flex-col gap-5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Search className="h-3.5 w-3.5 text-primary/40" />
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Explorer</span>
+                              </div>
+                              <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                                {treeItems.length}
+                              </Badge>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2.5">
+                              <Select
+                                value={selectedBranch}
+                                onValueChange={(value) => {
+                                  setSelectedBranch(value)
+                                  setCurrentPath("")
+                                  setSelectedFilePath("")
+                                  setSelectedBlob(null)
+                                  setCodeSearch("")
+                                }}
+                              >
+                                <SelectTrigger className="h-11 rounded-2xl border-border/40 bg-background/80 transition-all focus:ring-primary/20">
+                                  <SelectValue placeholder="Branch" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl border-border/50 shadow-2xl">
+                                  {branches.map((branch) => (
+                                    <SelectItem key={branch.name} value={branch.name} className="rounded-xl">
+                                      <div className="flex items-center gap-2">
+                                        <GitBranch className="h-3.5 w-3.5 opacity-60 text-primary" />
+                                        <span className="text-sm font-semibold">{branch.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              <div className="relative">
+                                <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30" />
+                                <DeferredSearchInput
+                                  value={codeSearch}
+                                  onDeferredChange={setCodeSearch}
+                                  placeholder="Filter files..."
+                                  className="h-11 rounded-2xl border-border/40 bg-background/80 pl-11 transition-all focus:bg-background focus:ring-primary/20"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Visual Breadcrumbs */}
+                        <div className="border-b border-border/40 bg-muted/[0.02] px-5 py-4">
+                          <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                            <button
+                              type="button"
+                              onClick={() => openDirectory("")}
+                              className={cn(
+                                "flex items-center gap-2 shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all",
+                                currentPathSegments.length === 0
+                                  ? "bg-primary/10 text-primary"
+                                  : "text-muted-foreground/60 hover:bg-muted hover:text-foreground",
+                              )}
+                            >
+                              <FolderGit2 className="h-3.5 w-3.5" />
+                              root
+                            </button>
+                            {currentPathSegments.map((segment) => (
+                              <div key={segment.value} className="flex items-center gap-1">
+                                <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/20" />
+                                <button
+                                  type="button"
+                                  onClick={() => openDirectory(segment.value)}
+                                  className={cn(
+                                    "rounded-xl px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-all",
+                                    segment.value === currentPath
+                                      ? "bg-primary/10 text-primary"
+                                      : "text-muted-foreground/60 hover:bg-muted hover:text-foreground",
+                                  )}
+                                >
+                                  {segment.label}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Tree List with Staggered Entry */}
+                        <ScrollArea className="h-[52vh] min-h-[320px] lg:h-[600px]">
+                          <div className="p-3">
+                            <AnimatePresence mode="wait">
+                              {treeLoading ? (
+                                <motion.div key="loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-48 flex-col items-center justify-center gap-4">
+                                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/5 text-primary/30">
+                                    <Loader2 className="h-6 w-6 animate-spin" />
+                                  </div>
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/40">Reading Tree</span>
+                                </motion.div>
+                              ) : filteredTreeItems.length ? (
+                                <motion.div 
+                                  key="list" 
+                                  variants={{
+                                    show: { transition: { staggerChildren: 0.03 } }
+                                  }}
+                                  initial="hidden"
+                                  animate="show"
+                                  className="space-y-1"
+                                >
+                                  {visibleTreeItems.map((item, index) => (
+                                    <motion.div key={item.path} variants={VARIANTS_FADE_IN_UP}>
+                                      <FileTreeItem
+                                        item={item}
+                                        isSelected={selectedFilePath === item.path}
+                                        isLastRow={index === visibleTreeItems.length - 1}
+                                        canDelete={canAuthorRepositoryChanges}
+                                        busyAction={busyAction}
+                                        onOpenFile={openFile}
+                                        onOpenDirectory={openDirectory}
+                                        onRequestDelete={requestDeleteTreeItem}
+                                      />
+                                    </motion.div>
+                                  ))}
+                                  {hasMoreTreeItems && (
+                                    <div className="pt-4 px-2">
+                                      <Button
+                                        variant="ghost"
+                                        className="h-10 w-full rounded-xl text-[11px] font-semibold uppercase tracking-wider text-primary/60 hover:text-primary hover:bg-primary/5"
+                                        onClick={() => setTreeRenderLimit((current) => current + 200)}
+                                      >
+                                        Load more items
+                                      </Button>
+                                    </div>
+                                  )}
+                                </motion.div>
+                              ) : (
+                                <motion.div key="empty" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex h-48 flex-col items-center justify-center text-center p-8">
+                                  <div className="h-12 w-12 flex items-center justify-center rounded-2xl bg-muted/20 text-muted-foreground/20 mb-4">
+                                    <Search className="h-6 w-6" />
+                                  </div>
+                                  <p className="text-xs font-semibold text-muted-foreground/40 uppercase tracking-wider">No matching files</p>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col min-w-0">
+                      <div className="relative flex-1">
+                        <AnimatePresence mode="wait">
+                          {blobLoading ? (
+                            <motion.div 
+                              key="loading" 
+                              initial={ANIM_ENTRY_FADE} 
+                              animate={ANIM_FADE_IN} 
+                              exit={ANIM_ENTRY_FADE}
+                              className="flex min-h-[500px] flex-col items-center justify-center rounded-[32px] border border-border/50 bg-background/50 backdrop-blur-sm"
+                            >
+                              <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-primary/10 text-primary shadow-inner">
+                                <Loader2 className="h-8 w-8 animate-spin" />
+                              </div>
+                              <span className="mt-4 text-sm font-semibold text-muted-foreground/60 uppercase tracking-wider">Loading Source</span>
+                            </motion.div>
+                          ) : selectedBlob ? (
+                            <motion.div 
+                              key="content" 
+                              initial={ANIM_ENTRY_UP} 
+                              animate={ANIM_FADE_IN_UP} 
+                              exit={ANIM_ENTRY_DOWN}
+                              className="space-y-6"
+                            >
+                              <div className="flex flex-col gap-6">
+                                <div className="flex flex-wrap items-center justify-between gap-4">
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                      {getFileLanguage(selectedBlob.path)}
+                                    </Badge>
+                                    <Badge variant="outline" className="rounded-full border-border/50 bg-muted/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                      {formatRepoSize(selectedBlob.size / 1024)}
+                                    </Badge>
+                                    {selectedBlob.readOnly ? (
+                                      <Badge className="rounded-full bg-amber-500/10 text-amber-600 border-none shadow-none font-semibold text-[10px] uppercase tracking-wider">
+                                        <Lock className="mr-1.5 h-3 w-3" /> Read Only
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="rounded-full bg-emerald-500/10 text-emerald-600 border-none shadow-none font-semibold text-[10px] uppercase tracking-wider">
+                                        <ShieldCheck className="mr-1.5 h-3 w-3" /> Editable
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2">
+                                    {selectedBlobIsEditable && !isEditingCode && (
+                                      <Button size="sm" className="h-10 rounded-xl bg-primary px-6 text-xs font-semibold uppercase tracking-wider shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={handleOpenEditor}>
+                                        <WandSparkles className="mr-2 h-4 w-4" />
+                                        Edit
+                                      </Button>
+                                    )}
+                                    <Button variant="outline" size="sm" className="h-10 rounded-xl border-border/60 bg-background/50 px-5 text-xs font-semibold uppercase tracking-wider hover:bg-muted/50 transition-all" asChild>
+                                      <a href={selectedBlob.htmlUrl ?? "#"} target="_blank" rel="noreferrer">
+                                        <Github className="mr-2 h-4 w-4" />
+                                        View on GitHub
+                                      </a>
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {isEditingCode ? (
+                                  <motion.div initial={ANIM_ENTRY_UP} animate={ANIM_FADE_IN_UP} className="space-y-4">
+                                    <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background shadow-2xl">
+                                      <div className="flex items-center justify-between border-b border-border/40 bg-muted/5 px-6 py-4">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className="h-3 w-3 rounded-full bg-red-500/40" />
+                                          <div className="h-3 w-3 rounded-full bg-amber-500/40" />
+                                          <div className="h-3 w-3 rounded-full bg-emerald-500/40" />
+                                          <span className="ml-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Source Editor</span>
+                                        </div>
+                                        <Badge variant="outline" className="h-6 rounded-full border-primary/20 bg-primary/5 px-2.5 text-[9px] font-semibold uppercase tracking-wider text-primary">
+                                          {getFileLanguage(selectedBlob.path)}
+                                        </Badge>
+                                      </div>
+                                      <MonacoEditor
+                                        height="600px"
+                                        language={getFileLanguage(selectedBlob.path)}
+                                        theme={monacoTheme}
+                                        value={editorValue}
+                                        onChange={(value) => setEditorValue(value ?? "")}
+                                        options={{
+                                          minimap: { enabled: false },
+                                          fontSize: 14,
+                                          lineHeight: 24,
+                                          wordWrap: "on",
+                                          scrollBeyondLastLine: false,
+                                          automaticLayout: true,
+                                          padding: { top: 24, bottom: 24 },
+                                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                                          smoothScrolling: true,
+                                          cursorSmoothCaretAnimation: "on",
+                                          roundedSelection: true,
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between px-2">
+                                      <div className="flex flex-wrap items-center gap-3">
+                                        <Button className="h-12 rounded-2xl bg-primary px-8 text-sm font-semibold shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={handleOpenSaveDialog} disabled={editorValue === (selectedBlob.content ?? "") || busyAction === "save-code"}>
+                                          {busyAction === "save-code" ? <Loader2 className="mr-2 h-4.5 w-4.5 animate-spin" /> : <Save className="mr-2 h-4.5 w-4.5" />}
+                                          Commit Changes
+                                        </Button>
+                                        <Button variant="outline" className="h-12 rounded-2xl border-border/60 bg-background/50 px-8 text-sm font-semibold transition-all hover:bg-muted/50" onClick={() => setIsEditingCode(false)}>
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                      <Button variant="ghost" className="h-12 rounded-2xl text-red-600 font-semibold hover:bg-red-500/5 transition-all" onClick={() => { setDeleteCommitMessage(`Delete ${selectedBlob.name}`); setDeleteDialogOpen(true) }}>
+                                        <Trash2 className="mr-2 h-4.5 w-4.5" />
+                                        Delete File
+                                      </Button>
+                                    </div>
+                                  </motion.div>
+                                ) : (
+                                  <div
+                                    className={cn(
+                                      "overflow-hidden rounded-[32px] border shadow-2xl transition-all duration-500",
+                                      isDarkTheme
+                                        ? "border-slate-800/80 bg-[#0d1117]"
+                                        : "border-border/70 bg-white shadow-[0_32px_64px_-24px_rgba(0,0,0,0.1)]",
+                                    )}
+                                  >
+                                    <div
+                                      className={cn(
+                                        "flex items-center justify-between px-6 py-4",
+                                        isDarkTheme ? "border-b border-white/8 bg-white/2" : "border-b border-border/40 bg-muted/5",
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="h-3 w-3 rounded-full bg-red-500/40" />
+                                        <div className="h-3 w-3 rounded-full bg-amber-500/40" />
+                                        <div className="h-3 w-3 rounded-full bg-emerald-500/40" />
+                                        <span className={cn("ml-2 truncate text-[11px] font-semibold uppercase tracking-[0.2em]", isDarkTheme ? "text-slate-500" : "text-muted-foreground/60")}>
+                                          {selectedBlob.path}
+                                        </span>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={cn(
+                                          "h-9 w-9 rounded-xl transition-all",
+                                          isDarkTheme
+                                            ? "text-slate-400 hover:text-white hover:bg-white/5"
+                                            : "text-muted-foreground hover:text-primary hover:bg-primary/5",
+                                        )}
+                                        onClick={() => void handleCopy("File content", selectedBlobContent, "copy-file-content")}
+                                      >
+                                        <motion.span
+                                          key={copiedActionKey === "copy-file-content" ? "copied-file" : "copy-file"}
+                                          initial={ANIM_SCALE_OUT_90}
+                                          animate={ANIM_BADGE_IN}
+                                          transition={{ duration: 0.16 }}
+                                          className="inline-flex"
+                                        >
+                                          {copiedActionKey === "copy-file-content" ? <Check className="h-4.5 w-4.5" /> : <Copy className="h-4.5 w-4.5" />}
+                                        </motion.span>
+                                      </Button>
+                                    </div>
+                                    <div className="h-[65vh] min-h-[400px] max-h-[800px] overflow-auto no-scrollbar selection:bg-primary/20">
+                                      <div className="min-w-full p-8 font-mono text-[13px] leading-[1.8] sm:text-sm">
+                                        {(selectedBlobContent ? selectedBlobLines : ["This file is empty."]).map((line, index) => (
+                                          <div key={`line-${index}`} className="group/line grid grid-cols-[3rem_1fr] items-start gap-6">
+                                            <span
+                                              className={cn(
+                                                "select-none text-right text-xs tabular-nums transition-colors group-hover/line:text-primary/60",
+                                                isDarkTheme ? "text-slate-600" : "text-slate-300",
+                                              )}
+                                            >
+                                              {index + 1}
+                                            </span>
+                                            <code className={cn("whitespace-pre-wrap break-words transition-colors group-hover/line:text-foreground", isDarkTheme ? "text-slate-300" : "text-slate-700")}>
+                                              {line}
+                                            </code>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          ) : (
+                            <motion.div 
+                              key="empty" 
+                              initial={ANIM_ENTRY_FADE} 
+                              animate={ANIM_FADE_IN}
+                              className="flex min-h-[600px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5"
+                            >
+                              <div className="relative mb-10 flex h-32 w-32 items-center justify-center">
+                                <div className="absolute inset-0 rounded-[42px] bg-primary/5 animate-pulse" />
+                                <div className="relative flex h-24 w-24 items-center justify-center rounded-[32px] bg-background shadow-xl ring-1 ring-primary/20 text-primary/30">
+                                  <FolderGit2 className="h-12 w-12" />
+                                </div>
+                                <div className="absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-background shadow-lg ring-1 ring-border/50">
+                                  <MousePointer2 className="h-5 w-5 text-primary/50 animate-bounce" />
+                                </div>
+                              </div>
+                              <h4 className="text-2xl font-semibold tracking-tighter text-foreground/80">Select a source file</h4>
+                              <p className="mx-auto mt-3 max-w-[320px] text-sm font-medium leading-relaxed text-muted-foreground/50">
+                                Choose any file from the explorer to preview its contents or make live changes to the repository.
+                              </p>
+                              <div className="mt-10">
+                                <Button 
+                                  variant="outline" 
+                                  className="h-12 rounded-2xl border-primary/20 bg-background/50 px-10 text-xs font-semibold uppercase tracking-wider text-primary hover:bg-primary/10 hover:border-primary/50 transition-all" 
+                                  onClick={() => openDirectory("")}
+                                >
+                                  Browse Root
+                                </Button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </TabsContent>
+            )}
+
+            {activeTab === "issues" && (
+              <TabsContent value="issues" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600 shadow-inner">
+                          <AlertCircle className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-semibold tracking-tight text-foreground/90">Issues</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="h-5 rounded-full bg-amber-500/5 px-2 text-[10px] font-semibold text-amber-600 border-none shadow-none">
+                              {openIssueCount} Open
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• Project Tracking</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/50 px-5 text-xs font-semibold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void handleSyncRepository()}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Sync Issues
+                      </Button>
+                      {canManageIssueActions && (
+                        <Button className="h-10 rounded-xl bg-primary px-6 text-xs font-semibold shadow-md shadow-primary/10 transition-all hover:bg-primary/90" onClick={() => { setEditingIssue(null); setIssueForm(initialIssueForm); setIssueDialogOpen(true) }}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          New Issue
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-8 xl:grid-cols-[1fr_320px]">
+                    <div className="space-y-6">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30" />
+                          <DeferredSearchInput
+                            value={issueSearch}
+                            onDeferredChange={setIssueSearch}
+                            placeholder="Search issues by title, number, or keyword..." 
+                            className="h-12 rounded-2xl border-border/40 bg-background/50 pl-11 backdrop-blur-sm transition-all focus:bg-background focus:ring-primary/20" 
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 rounded-2xl border border-border/40 bg-background/50 p-1 backdrop-blur-sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={cn(
+                              "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                              issueStateFilter === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            )}
+                            onClick={() => { setIssueStateFilter("all"); setIssuePage(1) }}
+                          >
+                            All
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={cn(
+                              "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                              issueStateFilter === "open" ? "bg-emerald-600 text-white shadow-sm" : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700"
+                            )}
+                            onClick={() => { setIssueStateFilter("open"); setIssuePage(1) }}
+                          >
+                            Open
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={cn(
+                              "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                              issueStateFilter === "closed" ? "bg-purple-600 text-white shadow-sm" : "text-muted-foreground hover:bg-purple-50 hover:text-purple-700"
+                            )}
+                            onClick={() => { setIssueStateFilter("closed"); setIssuePage(1) }}
+                          >
+                            Closed
+                          </Button>
+                        </div>
+                      </div>
+
+                      <AnimatePresence mode="wait">
+                        {filteredIssues.length ? (
+                          <motion.div 
+                            key="issue-list"
+                            variants={{
+                              show: { transition: { staggerChildren: 0.05 } }
+                            }}
+                            initial="hidden"
+                            animate="show"
+                            className="grid gap-4"
+                          >
+                            {filteredIssues.map((issue) => (
+                              <IssueListItem
+                                key={issue.id}
+                                issue={issue}
+                                canManageActions={canManageIssueActions}
+                                busyAction={busyAction}
+                                isDarkTheme={isDarkTheme}
+                                onEdit={openIssueEditor}
+                                onToggleState={requestToggleIssueState}
+                              />
+                            ))}
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            key="issue-empty"
+                            initial={ANIM_ENTRY_FADE}
+                            animate={ANIM_FADE_IN}
+                            className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5"
+                          >
+                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-amber-500/5 text-amber-500/20 ring-1 ring-amber-500/10">
+                              <AlertCircle className="h-10 w-10" />
+                            </div>
+                            <h4 className="text-xl font-semibold tracking-tight text-foreground/80">No issues found</h4>
+                            <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                              {issueSearch.trim() 
+                                ? "Try searching for a different keyword or issue number." 
+                                : "There are no issues in this repository yet."}
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="flex items-center justify-between gap-4 pt-4 border-t border-border/40">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+                          Showing page {issuePage}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 rounded-xl border-border/40 bg-background/50 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                            onClick={() => void loadIssuePage(issuePage - 1)}
+                            disabled={!issueHasPreviousPage}
+                          >
+                            Previous
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 rounded-xl border-border/40 bg-background/50 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                            onClick={() => void loadIssuePage(issuePage + 1)}
+                            disabled={!issueHasNextPage}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-8">
+                      <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md">
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80">Insights</h4>
+                          <p className="text-xs font-medium text-muted-foreground/50">Repository health metrics.</p>
+                        </div>
+                        <div className="p-6 space-y-8">
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Open Issues</span>
+                              <span className="text-sm font-semibold text-foreground/90">{openIssueCount}</span>
+                            </div>
+                            <Progress value={issues.length ? (openIssueCount / issues.length) * 100 : 0} className="h-1.5 bg-muted/30" />
+                          </div>
+                          
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Collaborators</span>
+                              <span className="text-sm font-semibold text-foreground/90">{collaboratorCount} Active</span>
+                            </div>
+                            <div className="flex -space-x-3 overflow-hidden">
+                              {issues.slice(0, 6).map((issue, i) => (
+                                <Avatar key={i} className="inline-block h-10 w-10 rounded-full ring-4 ring-background border border-border/40 shadow-sm">
+                                  <AvatarImage src={issue.author.avatarUrl ?? undefined} />
+                                  <AvatarFallback className="text-[9px] font-semibold">{getInitials(issue.author.login)}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {collaboratorCount > 6 && (
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-[10px] font-semibold ring-4 ring-background border border-border/40">
+                                  +{collaboratorCount - 6}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </TabsContent>
+            )}
+
+            {activeTab === "pulls" && (
+              <TabsContent value="pulls" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <GitPullRequest className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-semibold tracking-tighter text-foreground/90">Pull Requests</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                              {openPullRequestCount} Active
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• Team Collaboration</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <Button variant="outline" className="h-10 rounded-xl border-border/50 bg-background/50 px-5 text-xs font-semibold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" onClick={() => void handleSyncRepository()}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Sync PRs
+                      </Button>
+                      {canManagePullRequestActions && (
+                        <Button className="h-10 rounded-xl bg-primary px-6 text-xs font-semibold shadow-md shadow-primary/10 transition-all hover:bg-primary/90" onClick={() => { setPullRequestForm((current) => ({ ...current, base: workspace?.repositoryRecord?.defaultBranch ?? "main", head: selectedBranch || "" })); setPullRequestDialogOpen(true) }}>
+                          <GitPullRequest className="mr-2 h-4 w-4" />
+                          New PR
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
+                        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30" />
                         <DeferredSearchInput
-                          value={issueSearch}
-                          onDeferredChange={setIssueSearch}
-                          placeholder="Filter issues by title or number..." 
-                            aria-label="Filter issues"
-                          className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
+                          value={pullSearch}
+                          onDeferredChange={setPullSearch}
+                          placeholder="Search PRs by title, number, or author..." 
+                          className="h-12 rounded-2xl border-border/40 bg-background/50 pl-11 backdrop-blur-sm transition-all focus:bg-background focus:ring-primary/20" 
                         />
                       </div>
                       <div className="flex items-center gap-1 rounded-2xl border border-border/40 bg-background/50 p-1 backdrop-blur-sm">
@@ -5758,12 +6255,10 @@ export function GitHubWorkspaceClient() {
                           variant="ghost" 
                           size="sm" 
                           className={cn(
-                            "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                            issueStateFilter === "all" 
-                              ? "bg-primary text-primary-foreground shadow-sm" 
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                            pullStateFilter === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                           )}
-                          onClick={() => { setIssueStateFilter("all"); setIssuePage(1) }}
+                          onClick={() => { setPullStateFilter("all"); setPullPage(1) }}
                         >
                           All
                         </Button>
@@ -5771,12 +6266,10 @@ export function GitHubWorkspaceClient() {
                           variant="ghost" 
                           size="sm" 
                           className={cn(
-                            "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                            issueStateFilter === "open" 
-                              ? "bg-emerald-600 text-white shadow-sm" 
-                              : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700"
+                            "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                            pullStateFilter === "open" ? "bg-emerald-600 text-white shadow-sm" : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700"
                           )}
-                          onClick={() => { setIssueStateFilter("open"); setIssuePage(1) }}
+                          onClick={() => { setPullStateFilter("open"); setPullPage(1) }}
                         >
                           Open
                         </Button>
@@ -5784,1295 +6277,746 @@ export function GitHubWorkspaceClient() {
                           variant="ghost" 
                           size="sm" 
                           className={cn(
-                            "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                            issueStateFilter === "closed" 
-                              ? "bg-purple-600 text-white shadow-sm" 
-                              : "text-muted-foreground hover:bg-purple-50 hover:text-purple-700"
+                            "h-10 rounded-xl px-5 text-[11px] font-semibold uppercase tracking-wider transition-all", 
+                            pullStateFilter === "closed" ? "bg-purple-600 text-white shadow-sm" : "text-muted-foreground hover:bg-purple-50 hover:text-purple-700"
                           )}
-                          onClick={() => { setIssueStateFilter("closed"); setIssuePage(1) }}
+                          onClick={() => { setPullStateFilter("closed"); setPullPage(1) }}
                         >
                           Closed
                         </Button>
                       </div>
                     </div>
 
-                    {filteredIssues.length ? (
-                      <div className="grid gap-4">
-                        {filteredIssues.map((issue) => (
-                          <motion.div
-                            key={issue.id}
-                            whileHover={ANIM_HOVER_LIFT}
-                            className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
-                          >
-                            <div className="flex items-start gap-4">
-                              <div className={cn(
-                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors",
-                                issue.state === "open" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-purple-50 text-purple-600 border-purple-100"
-                              )}>
-                                <AlertCircle className="h-5 w-5" />
-                              </div>
-                              <div className="min-w-0 flex-1 space-y-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-muted-foreground/50">#{issue.number}</span>
-                                    <Badge variant="outline" className="rounded-full border-border/50 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                      {issue.state}
-                                    </Badge>
-                                    {issue.linkedTask && (
-                                      <a href={`/dashboard/tasks?taskId=${issue.linkedTask.id}`} className="inline-flex">
-                                        <Badge className="rounded-full border-none bg-primary/10 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-primary shadow-none hover:bg-primary/15">
-                                          Linked Task
-                                        </Badge>
-                                      </a>
-                                    )}
-                                  </div>
-                                  <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(issue.createdAt)}</span>
-                                </div>
-                                <h4 className="text-lg font-bold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
-                                  {issue.title}
-                                </h4>
-                                {issue.body && (
-                                  <p className="line-clamp-2 text-sm text-muted-foreground/80 leading-relaxed">
-                                    {issue.body}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap items-center gap-4 pt-1">
-                                  {issue.labels.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {issue.labels.map(label => (
-                                        <Badge 
-                                          key={label.name} 
-                                          style={{ 
-                                            backgroundColor: isDarkTheme ? `#${label.color}15` : `#${label.color}25`, 
-                                            color: isDarkTheme ? `#${label.color}` : "rgba(0,0,0,0.8)", 
-                                            borderColor: isDarkTheme ? `#${label.color}30` : `#${label.color}50` 
-                                          }}
-                                          className={cn(
-                                            "rounded-full px-2.5 py-0.5 text-[10px] font-bold border transition-all shadow-sm ring-1 ring-inset",
-                                            isDarkTheme ? "ring-white/5" : "ring-black/5"
-                                          )}
-                                        >
-                                          <span 
-                                            className="mr-1.5 h-1.5 w-1.5 rounded-full shadow-sm" 
-                                            style={{ backgroundColor: `#${label.color}` }}
-                                          />
-                                          <span className="tracking-tight">
-                                            {label.name}
-                                          </span>
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" asChild>
-                                  <a href={issue.htmlUrl} target="_blank" rel="noreferrer">
-                                    <ExternalLink className="h-4 w-4" />
-                                  </a>
-                                </Button>
-                                {canManageIssueActions && (
-                                  <>
-                                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => openIssueEditor(issue)}>
-                                      <Settings2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      title={issue.state === "open" ? "Close issue" : "Reopen issue"}
-                                      className={cn(
-                                        "h-9 w-9 rounded-xl transition-all",
-                                        issue.state === "open" 
-                                          ? "text-red-600 hover:bg-red-100/80 hover:text-red-700" 
-                                          : "text-emerald-600 hover:bg-emerald-100/80 hover:text-emerald-700",
-                                        busyAction === `issue-${issue.number}` ? "opacity-100" : "opacity-40 group-hover:opacity-100"
-                                      )} 
-                                      onClick={() => requestToggleIssueState(issue)} 
-                                      disabled={busyAction === `issue-${issue.number}`}
-                                    >
-                                      {busyAction === `issue-${issue.number}` ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : issue.state === "open" ? (
-                                        <XCircle className="h-4 w-4" />
-                                      ) : (
-                                        <RefreshCw className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
+                    <AnimatePresence mode="wait">
+                      {filteredPullRequests.length ? (
+                        <motion.div 
+                          key="pr-list"
+                          variants={{
+                            show: { transition: { staggerChildren: 0.05 } }
+                          }}
+                          initial="hidden"
+                          animate="show"
+                          className="grid gap-4"
+                        >
+                          {filteredPullRequests.map((pullRequest) => (
+                            <PullRequestListItem
+                              key={pullRequest.id}
+                              pullRequest={pullRequest}
+                              canManageActions={canManagePullRequestActions}
+                              canRunLeaderActions={canRunLeaderWriteActions}
+                              busyAction={busyAction}
+                              onRefresh={refreshPullRequest}
+                              onReview={setReviewingPullRequest}
+                              onToggleState={requestTogglePullRequestState}
+                              onMerge={openMergeDialog}
+                            />
+                          ))}
+                        </motion.div>
+                      ) : (
+                        <motion.div 
+                          key="pr-empty"
+                          initial={ANIM_ENTRY_FADE}
+                          animate={ANIM_FADE_IN}
+                          className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5"
+                        >
+                          <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                            <GitPullRequest className="h-10 w-10" />
+                          </div>
+                          <h4 className="text-xl font-semibold tracking-tight text-foreground/80">No pull requests found</h4>
+                          <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                            {pullSearch.trim() 
+                              ? "Try searching for a different keyword or author." 
+                              : "There are no pull requests in this repository yet."}
+                          </p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <div className="flex items-center justify-between gap-4 pt-4 border-t border-border/40">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+                        Showing page {pullPage}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-xl border-border/40 bg-background/50 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                          onClick={() => void loadPullPage(pullPage - 1)}
+                          disabled={!pullHasPreviousPage}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-xl border-border/40 bg-background/50 text-[10px] font-semibold uppercase tracking-wider hover:bg-muted"
+                          onClick={() => void loadPullPage(pullPage + 1)}
+                          disabled={!pullHasNextPage}
+                        >
+                          Next
+                        </Button>
                       </div>
-                    ) : (
-                      <EmptySection
-                        title="No issues found"
-                        description="There are currently no issues matching your search."
-                        icon={<AlertCircle className="h-6 w-6" />}
-                      />
-                    )}
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 rounded-xl"
-                        onClick={() => void loadIssuePage(issuePage - 1)}
-                        disabled={!issueHasPreviousPage}
-                      >
-                        Previous
-                      </Button>
-                      <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                        Page {issuePage}
-                      </Badge>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-9 rounded-xl"
-                        onClick={() => void loadIssuePage(issuePage + 1)}
-                        disabled={!issueHasNextPage}
-                      >
-                        Next
-                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              </TabsContent>
+            )}
+
+            {activeTab === "branches" && (
+              <TabsContent value="branches" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <GitBranch className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-semibold tracking-tighter text-foreground/90">Branches</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                              {branches.length} Total
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• Repository Versioning</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {canAuthorRepositoryChanges && (
+                        <Button className="h-10 rounded-xl bg-primary px-6 text-xs font-semibold shadow-md shadow-primary/10 transition-all hover:bg-primary/90" onClick={handleOpenBranchDialog}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          New Branch
+                        </Button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="space-y-8">
-                    <SectionCard
-                      title="Insights"
-                      description="Repository health metrics."
-                      className="border-border/50 shadow-sm rounded-[28px]"
-                    >
-                      <div className="space-y-6">
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-muted-foreground">Open Issues</span>
-                            <span className="text-sm font-bold text-foreground">{openIssueCount}</span>
-                          </div>
-                          <Progress value={issues.length ? (openIssueCount / issues.length) * 100 : 0} className="h-1.5 bg-muted/50" />
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-muted-foreground">Collaborators</span>
-                            <span className="text-sm font-bold text-foreground">{collaboratorCount} active</span>
-                          </div>
-                          <div className="flex -space-x-2 overflow-hidden">
-                            {issues.slice(0, 5).map((issue, i) => (
-                              <Avatar key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-background border border-border/50">
-                                <AvatarImage src={issue.author.avatarUrl ?? undefined} />
-                                <AvatarFallback className="text-[10px] font-bold">{getInitials(issue.author.login)}</AvatarFallback>
-                              </Avatar>
+                  <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+                    <div className="space-y-6">
+                      {canWriteCode && !hasConnectedGitHubWriteAccess && (
+                        <motion.div initial={ANIM_ENTRY_SCALE} animate={ANIM_SCALE_IN}>
+                          <InlineNotice 
+                            tone="warning" 
+                            title="Limited write access" 
+                            message={workspace.githubConnection.isConnected
+                              ? "Your connected GitHub account can view this repository, but it still cannot create branches. Please ask your team leader to invite you as a collaborator."
+                              : "Connect your personal GitHub account in settings to enable branch management."} 
+                          />
+                        </motion.div>
+                      )}
+
+                      <AnimatePresence mode="wait">
+                        {branches.length ? (
+                          <motion.div 
+                            key="branch-list"
+                            variants={{
+                              show: { transition: { staggerChildren: 0.05 } }
+                            }}
+                            initial="hidden"
+                            animate="show"
+                            className="grid gap-4"
+                          >
+                            {branches.map((branch) => (
+                              <BranchListItem
+                                key={branch.name}
+                                branch={branch}
+                                selectedBranch={selectedBranch}
+                                defaultBranchName={defaultBranchName}
+                                isTeamLeader={isTeamLeader}
+                                busyAction={busyAction}
+                                canAuthorRepositoryChanges={canAuthorRepositoryChanges}
+                                onSetDefault={handleSetDefaultBranch}
+                                onCompare={(name) => {
+                                  setCompareState((current) => ({
+                                    ...current,
+                                    base: defaultBranchName,
+                                    head: name,
+                                    error: "",
+                                  }))
+                                }}
+                                onDelete={(b) => setBranchToDelete(b)}
+                              />
                             ))}
-                          </div>
-                        </div>
-                      </div>
-                    </SectionCard>
-                  </div>
-                </div>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "pulls" && (<TabsContent value="pulls" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <GitPullRequest className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Pull requests</h3>
-                      <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 py-1 font-bold text-primary border-none shadow-none">
-                        {openPullRequestCount} Active
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Review, discuss, and merge code changes.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="outline" className="h-10 rounded-xl border-border/50 hover:bg-muted/50 transition-all" onClick={() => void handleSyncRepository()}>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      Sync PRs
-                    </Button>
-                    {canManagePullRequestActions && (
-                      <Button className="h-10 rounded-xl bg-primary px-6 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={() => { setPullRequestForm((current) => ({ ...current, base: workspace?.repositoryRecord?.defaultBranch ?? "main", head: selectedBranch || "" })); setPullRequestDialogOpen(true) }}>
-                        <GitPullRequest className="mr-2 h-4 w-4" />
-                        New PR
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <DeferredSearchInput
-                        value={pullSearch}
-                        onDeferredChange={setPullSearch}
-                        placeholder="Filter pull requests by title, number or author..." 
-                          aria-label="Filter pull requests"
-                        className="h-12 rounded-2xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background" 
-                      />
-                    </div>
-                    <div className="flex items-center gap-1 rounded-2xl border border-border/40 bg-background/50 p-1 backdrop-blur-sm">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={cn(
-                          "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                          pullStateFilter === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        )}
-                        onClick={() => { setPullStateFilter("all"); setPullPage(1) }}
-                      >
-                        All
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={cn(
-                          "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                          pullStateFilter === "open" ? "bg-emerald-600 text-white shadow-sm" : "text-muted-foreground hover:bg-emerald-50 hover:text-emerald-700"
-                        )}
-                        onClick={() => { setPullStateFilter("open"); setPullPage(1) }}
-                      >
-                        Open
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className={cn(
-                          "h-9 rounded-xl px-4 text-xs font-bold transition-all", 
-                          pullStateFilter === "closed" ? "bg-purple-600 text-white shadow-sm" : "text-muted-foreground hover:bg-purple-50 hover:text-purple-700"
-                        )}
-                        onClick={() => { setPullStateFilter("closed"); setPullPage(1) }}
-                      >
-                        Closed
-                      </Button>
-                    </div>
-                  </div>
-
-                  {filteredPullRequests.length ? (
-                    <div className="grid gap-4">
-                      {filteredPullRequests.map((pullRequest) => {
-                        const mergeGuidance = getPullRequestMergeGuidance(pullRequest)
-                        return (
-                          <motion.div
-                            key={pullRequest.id}
-                            whileHover={ANIM_HOVER_LIFT}
-                            className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-6 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+                          </motion.div>
+                        ) : (
+                          <motion.div 
+                            key="branch-empty"
+                            initial={ANIM_ENTRY_FADE}
+                            animate={ANIM_FADE_IN}
+                            className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5"
                           >
-                          <div className="flex flex-col gap-6 md:flex-row md:items-start">
-                            <div className={cn(
-                              "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition-colors",
-                              pullRequest.state === "open" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-purple-50 text-purple-600 border-purple-100"
-                            )}>
-                              <GitPullRequest className="h-6 w-6" />
+                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                              <GitBranch className="h-10 w-10" />
                             </div>
-                            
-                            <div className="min-w-0 flex-1 space-y-4">
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold text-muted-foreground/50">#{pullRequest.number}</span>
-                                    <Badge variant="outline" className={cn(
-                                      "rounded-full px-2 py-0 text-[10px] font-bold uppercase tracking-wider",
-                                      pullRequest.merged 
-                                        ? "bg-purple-600 text-white border-purple-200 shadow-sm" 
-                                        : pullRequest.state === "open"
-                                          ? "bg-emerald-600 text-white border-emerald-200 shadow-sm"
-                                          : "bg-red-600 text-white border-red-200 shadow-sm"
-                                    )}>
-                                      {pullRequest.merged ? "merged" : pullRequest.state}
-                                    </Badge>
-                                    {pullRequest.draft && (
-                                      <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-amber-600">
-                                        Draft
-                                      </Badge>
-                                    )}
+                            <h4 className="text-xl font-semibold tracking-tight text-foreground/80">No branches found</h4>
+                            <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                              There are no working branches in this repository yet.
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md">
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80">Merge Branches</h4>
+                          <p className="text-xs font-medium text-muted-foreground/50">Combine changes between branches directly.</p>
+                        </div>
+                        <div className="p-6 space-y-8">
+                          <div className="grid gap-8 md:grid-cols-[1fr_auto_1fr] items-center">
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 flex items-center gap-2">
+                                Base Branch
+                                <span className="text-[9px] font-medium lowercase text-muted-foreground/20 italic">(target)</span>
+                              </label>
+                              <Select value={compareState.base} onValueChange={(value) => setCompareState((current) => ({ ...current, base: value }))}>
+                                <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/80 transition-all focus:ring-primary/20">
+                                  <SelectValue placeholder="Base branch" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  {branches.map((branch) => <SelectItem key={`base-${branch.name}`} value={branch.name} className="rounded-lg">{branch.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="hidden lg:flex flex-col items-center gap-1 opacity-20 mt-6">
+                              <ArrowRight className="h-5 w-5" />
+                            </div>
+
+                            <div className="space-y-3">
+                              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40 flex items-center gap-2">
+                                Head Branch
+                                <span className="text-[9px] font-medium lowercase text-muted-foreground/20 italic">(source)</span>
+                              </label>
+                              <Select value={compareState.head} onValueChange={(value) => setCompareState((current) => ({ ...current, head: value }))}>
+                                <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/80 transition-all focus:ring-primary/20">
+                                  <SelectValue placeholder="Head branch" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-xl">
+                                  {branches.map((branch) => <SelectItem key={`head-${branch.name}`} value={branch.name} className="rounded-lg">{branch.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <Button 
+                            className="w-full h-12 rounded-2xl bg-primary text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 font-semibold text-sm" 
+                            onClick={() => void handleCompareBranches()} 
+                            disabled={compareState.loading}
+                          >
+                            {compareState.loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                            Check Merge Status
+                          </Button>
+
+                          {compareState.result && (
+                            <motion.div initial={ANIM_ENTRY_DOWN} animate={ANIM_FADE_IN_UP} className="space-y-4 pt-2">
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="flex items-start gap-4 rounded-[24px] border border-emerald-500/10 bg-emerald-500/5 p-5 transition-all">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 shadow-sm">
+                                    <ArrowRight className="h-5 w-5 -rotate-45" />
                                   </div>
-                                  <span className="text-[10px] font-semibold text-muted-foreground/60">{formatRelative(pullRequest.createdAt)}</span>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Ahead by {compareState.result.aheadBy} commits</p>
+                                    <p className="text-[11px] font-medium leading-relaxed text-muted-foreground/70">
+                                      New changes ready to be merged into target.
+                                    </p>
+                                  </div>
                                 </div>
-                                <h4 className="text-xl font-bold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">
-                                  {pullRequest.title}
-                                </h4>
-                                {pullRequest.body && (
-                                  <p className="line-clamp-2 text-sm text-muted-foreground/80 leading-relaxed">
-                                    {pullRequest.body}
-                                  </p>
-                                )}
+
+                                <div className="flex items-start gap-4 rounded-[24px] border border-red-500/10 bg-red-500/5 p-5 transition-all">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 text-red-600 shadow-sm">
+                                    <ArrowRight className="h-5 w-5 rotate-[135deg]" />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-red-700 dark:text-red-400">Behind by {compareState.result.behindBy} commits</p>
+                                    <p className="text-[11px] font-medium leading-relaxed text-muted-foreground/70">
+                                      Target has changes missing in source.
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
 
-                              <div className="flex flex-wrap items-center gap-6">
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-6 w-6 border border-border/50">
-                                    <AvatarImage src={pullRequest.author.avatarUrl ?? undefined} />
-                                    <AvatarFallback className="text-[8px]">{getInitials(pullRequest.author.login)}</AvatarFallback>
-                                  </Avatar>
-                                  <span className="text-xs font-bold text-foreground/70">@{pullRequest.author.login}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                                  <GitBranch className="h-3.5 w-3.5" />
-                                  <span className="rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[10px]">{pullRequest.head}</span>
-                                  <ArrowRight className="h-3 w-3" />
-                                  <span className="rounded-md bg-muted/50 px-1.5 py-0.5 font-mono text-[10px]">{pullRequest.base}</span>
-                                </div>
-                                <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                                  <span className="flex items-center gap-1.5">
-                                    <FileCode2 className="h-3.5 w-3.5" />
-                                    {pullRequest.changedFiles} files
-                                  </span>
-                                  <span className="flex items-center gap-1.5">
-                                    <GitCommitHorizontal className="h-3.5 w-3.5" />
-                                    {pullRequest.commits} commits
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-3 md:items-end">
-                              <div className="flex flex-col items-end gap-2">
-                                <div
-                                  className={cn(
-                                    "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border",
-                                    mergeGuidance.tone === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-500/15 dark:text-emerald-300",
-                                    mergeGuidance.tone === "warning" && "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/15 dark:text-amber-300",
-                                    mergeGuidance.tone === "danger" && "border-red-200 bg-red-50 text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-300",
-                                    mergeGuidance.tone === "muted" && "border-border/60 bg-muted/40 text-muted-foreground",
-                                  )}
-                                >
-                                  {mergeGuidance.label}
-                                </div>
-                                <p className="max-w-[220px] text-right text-[11px] text-muted-foreground">
-                                  {mergeGuidance.detail}
-                                </p>
-                              </div>
-
-                              <div className="flex flex-wrap items-center justify-end gap-2">
+                              <div className="flex flex-col gap-3">
                                 <Button 
                                   variant="outline" 
-                                  size="icon" 
-                                  className="h-9 w-9 rounded-xl border-border/50 transition-all shadow-sm hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                                  onClick={() => void refreshPullRequest(pullRequest.number)}
-                                  disabled={busyAction === `pull-refresh-${pullRequest.number}`}
-                                  title="Refresh PR status"
+                                  className="w-full h-11 rounded-2xl border-border/50 bg-background/50 text-xs font-semibold transition-all hover:bg-muted"
+                                  onClick={() => setShowCompareDetails(true)}
                                 >
-                                  <RefreshCw className={cn("h-4 w-4", busyAction === `pull-refresh-${pullRequest.number}` && "animate-spin")} />
+                                  <BookOpen className="mr-2 h-4 w-4 opacity-60" />
+                                  View Detailed Changes
                                 </Button>
 
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="h-9 rounded-xl border-border/50 transition-all shadow-sm px-4 font-bold hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 text-foreground/80" 
-                                  asChild
-                                >
-                                  <a href={pullRequest.htmlUrl} target="_blank" rel="noreferrer">
-                                    <Github className="mr-2 h-4 w-4" />
-                                    View
-                                  </a>
-                                </Button>
-
-                                {canManagePullRequestActions && pullRequest.state === "open" && (
+                                {isTeamLeader && compareState.result.aheadBy > 0 && (
                                   <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    className="h-9 rounded-xl border-border/60 bg-background/50 text-foreground/80 hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all" 
-                                    onClick={() => setReviewingPullRequest(pullRequest)}
+                                    className="w-full h-12 rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30 font-bold text-sm"
+                                    onClick={() => requestMergeBranch(compareState.base, compareState.head)}
+                                    disabled={busyAction === "merge-branch"}
                                   >
-                                    Review
-                                  </Button>
-                                )}
-
-                                {canRunLeaderWriteActions && !pullRequest.merged && (
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    title={pullRequest.state === "open" ? "Close PR" : "Reopen PR"}
-                                    className={cn(
-                                      "h-9 rounded-xl transition-all",
-                                      pullRequest.state === "open" 
-                                        ? "text-red-600 hover:bg-red-100 hover:text-red-700 hover:border-red-200" 
-                                        : "text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-200",
-                                    )} 
-                                    onClick={() => requestTogglePullRequestState(pullRequest)} 
-                                    disabled={busyAction === `pull-${pullRequest.number}`}
-                                  >
-                                    {busyAction === `pull-${pullRequest.number}` ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : pullRequest.state === "open" ? (
-                                      <XCircle className="mr-2 h-4 w-4" />
-                                    ) : (
-                                      <RefreshCw className="mr-2 h-4 w-4" />
-                                    )}
-                                    {pullRequest.state === "open" ? "Close" : "Reopen"}
-                                  </Button>
-                                )}
-
-                                {canRunLeaderWriteActions && pullRequest.state === "open" && !pullRequest.draft && (
-                                  <Button
-                                    size="sm"
-                                    className="h-9 rounded-xl bg-emerald-600 px-4 text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30"
-                                    onClick={() => openMergeDialog(pullRequest)}
-                                    disabled={busyAction === `merge-${pullRequest.number}` || !mergeGuidance.canMerge}
-                                  >
-                                    {busyAction === `merge-${pullRequest.number}` ? (
+                                    {busyAction === "merge-branch" ? (
                                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     ) : (
                                       <GitMerge className="mr-2 h-4 w-4" />
                                     )}
-                                    {mergeGuidance.canMerge ? "Merge" : "Can't Merge"}
+                                    Merge {compareState.head} into {compareState.base}
                                   </Button>
                                 )}
                               </div>
-
-                              {mergeGuidance.tone === "danger" ? (
-                                <div className="max-w-[240px] rounded-xl border border-red-200/60 bg-red-50/70 p-2 text-left text-[11px] text-red-900 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-100">
-                                  <p className="font-semibold">How to unblock:</p>
-                                  <ul className="mt-1 list-inside list-disc space-y-0.5 opacity-80">
-                                    <li>Resolve branch conflicts</li>
-                                    <li>Complete required checks</li>
-                                    <li>Wait for required approvals</li>
-                                  </ul>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                          </motion.div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <EmptySection
-                      title="No pull requests found"
-                      description="There are currently no pull requests matching your search."
-                      icon={<GitPullRequest className="h-6 w-6" />}
-                    />
-                  )}
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-xl"
-                      onClick={() => void loadPullPage(pullPage - 1)}
-                      disabled={!pullHasPreviousPage}
-                    >
-                      Previous
-                    </Button>
-                    <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                      Page {pullPage}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-xl"
-                      onClick={() => void loadPullPage(pullPage + 1)}
-                      disabled={!pullHasNextPage}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "branches" && (<TabsContent value="branches" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <GitBranch className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Branches</h3>
-                      <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 py-1 font-bold text-primary border-none shadow-none">
-                        {branches.length} Total
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Manage working branches and compare changes across your repository.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {canAuthorRepositoryChanges && (
-                      <Button className="h-10 rounded-xl bg-primary px-6 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={handleOpenBranchDialog}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        New Branch
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-8 lg:grid-cols-3">
-                  <div className="lg:col-span-2 space-y-8">
-                    {canWriteCode && !hasConnectedGitHubWriteAccess && (
-                      <motion.div initial={ANIM_ENTRY_SCALE} animate={ANIM_SCALE_IN}>
-                        <InlineNotice 
-                          tone="warning" 
-                          title="Limited write access" 
-                          message={workspace.githubConnection.isConnected
-                            ? "Your connected GitHub account can view this repository, but it still cannot create branches. Please ask your team leader to invite you as a collaborator."
-                            : "Connect your personal GitHub account in settings to enable branch management."} 
-                        />
-                      </motion.div>
-                    )}
-
-                    <div className="grid gap-4">
-                      {branches.map((branch) => (
-                        <motion.div
-                          key={branch.name}
-                          whileHover={ANIM_HOVER_LIFT}
-                          className={cn(
-                            "group relative overflow-hidden rounded-[24px] border p-6 transition-all",
-                            selectedBranch === branch.name 
-                              ? "border-primary/30 bg-primary/[0.02] shadow-lg shadow-primary/5 ring-1 ring-primary/10" 
-                              : "border-border/50 bg-background hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+                            </motion.div>
                           )}
-                        >
-                          <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                            <div className={cn(
-                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors",
-                              selectedBranch === branch.name ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-border/50"
-                            )}>
-                              <GitBranch className="h-5 w-5" />
-                            </div>
-                            
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <div className="flex flex-wrap items-center gap-3">
-                                <h4 className="text-lg font-bold tracking-tight text-foreground/90">{branch.name}</h4>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {branch.name === defaultBranchName && (
-                                    <Badge className="rounded-full bg-emerald-500/10 text-emerald-600 border-none shadow-none font-bold text-[10px] uppercase tracking-wider">
-                                      Default
-                                    </Badge>
-                                  )}
-                                  {branch.protected && (
-                                    <Badge variant="outline" className="rounded-full border-border/50 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                      <Lock className="mr-1.5 h-3 w-3" /> Protected
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              <p className="font-mono text-[11px] text-muted-foreground/60">
-                                {branch.commitSha ? `Latest commit: ${branch.commitSha.slice(0, 7)}` : "No commits found"}
-                              </p>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                              {isTeamLeader && branch.name !== defaultBranchName && (
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="h-9 rounded-xl px-5 transition-all border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
-                                  onClick={() => void handleSetDefaultBranch(branch.name)}
-                                  disabled={busyAction === `set-default-${branch.name}`}
-                                >
-                                  {busyAction === `set-default-${branch.name}` ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Check className="mr-2 h-4 w-4" />
-                                  )}
-                                  Make Default
-                                </Button>
-                              )}
-
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-9 rounded-xl border-border/50 hover:bg-muted/50 transition-all"
-                                onClick={() => {
-                                  setCompareState((current) => ({
-                                    ...current,
-                                    base: defaultBranchName,
-                                    head: branch.name,
-                                    error: "",
-                                  }))
-                                }}
-                              >
-                                Compare
-                              </Button>
-                              {canAuthorRepositoryChanges && isTeamLeader && !branch.protected && branch.name !== defaultBranchName && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-9 w-9 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition-all"
-                                  onClick={() => {
-                                    setBranchToDelete(branch)
-                                  }}
-                                  disabled={busyAction === `delete-branch-${branch.name}`}
-                                >
-                                  {busyAction === `delete-branch-${branch.name}` ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Trash2 className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
+                        </div>
+                      </div>
                     </div>
 
-                    <SectionCard title="Merge Branches" description="Combine changes from one branch into another directly." className="border-border/50 shadow-sm rounded-[28px]">
-                      <div className="space-y-6">
-                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-[1fr_auto_1fr] items-center">
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
-                              Base Branch
-                              <span className="text-[9px] font-medium lowercase text-muted-foreground/40 italic">(target)</span>
-                            </label>
-                            <Select value={compareState.base} onValueChange={(value) => setCompareState((current) => ({ ...current, base: value }))}>
-                              <SelectTrigger className="h-11 rounded-2xl border-border/40 bg-background/50"><SelectValue placeholder="Base branch" /></SelectTrigger>
-                              <SelectContent className="rounded-xl">{branches.map((branch) => <SelectItem key={`base-${branch.name}`} value={branch.name}>{branch.name}</SelectItem>)}</SelectContent>
-                            </Select>
-                          </div>
+                    <div className="space-y-8">
+                      <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md">
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80">Branch Policy</h4>
+                          <p className="text-xs font-medium text-muted-foreground/50">Safety rules for branch management.</p>
+                        </div>
+                        <div className="p-6">
+                          <ul className="space-y-5">
+                            {[
+                              { icon: ShieldCheck, text: "Protected branches cannot be deleted or renamed.", color: "text-emerald-500" },
+                              { icon: ShieldCheck, text: "Default branch is always protected by GPMS.", color: "text-emerald-500" },
+                              { icon: ShieldCheck, text: "Only teammates with write access can create branches.", color: "text-emerald-500" }
+                            ].map((rule, i) => (
+                              <li key={i} className="flex items-start gap-4">
+                                <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted/20", rule.color.replace("text-", "bg-").replace("500", "500/10"))}>
+                                  <rule.icon className={cn("h-4 w-4", rule.color)} />
+                                </div>
+                                <span className="text-[13px] font-semibold text-muted-foreground/70 leading-relaxed">{rule.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </TabsContent>
+            )}
 
-                          <div className="hidden lg:flex flex-col items-center gap-1 opacity-40 mt-4">
-                            <ArrowRight className="h-5 w-5" />
-                          </div>
-
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-2">
-                              Head Branch
-                              <span className="text-[9px] font-medium lowercase text-muted-foreground/40 italic">(source)</span>
-                            </label>
-                            <Select value={compareState.head} onValueChange={(value) => setCompareState((current) => ({ ...current, head: value }))}>
-                              <SelectTrigger className="h-11 rounded-2xl border-border/40 bg-background/50"><SelectValue placeholder="Head branch" /></SelectTrigger>
-                              <SelectContent className="rounded-xl">{branches.map((branch) => <SelectItem key={`head-${branch.name}`} value={branch.name}>{branch.name}</SelectItem>)}</SelectContent>
-                            </Select>
+            {activeTab === "members" && (
+              <TabsContent value="members" forceMount className="mt-0 outline-none">
+                <motion.div
+                  initial={ANIM_ENTRY_SCALE_SOFT}
+                  animate={ANIM_SCALE_IN}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-8"
+                >
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                          <Users className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-semibold tracking-tighter text-foreground/90">Team Access</h3>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="h-5 rounded-full bg-primary/5 px-2 text-[10px] font-semibold text-primary border-none shadow-none">
+                              {collaboratorCount} Collaborators
+                            </Badge>
+                            <span className="text-[11px] font-medium text-muted-foreground/50">• Repository Permissions</span>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/30" />
+                        <DeferredSearchInput
+                          value={memberSearch}
+                          onDeferredChange={setMemberSearch}
+                          placeholder="Search team members..." 
+                          className="h-11 rounded-2xl border-border/40 bg-background/50 pl-11 backdrop-blur-sm transition-all focus:bg-background w-full sm:w-[240px]" 
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                        <Button className="w-full h-12 rounded-2xl bg-primary shadow-lg shadow-primary/20 transition-all font-bold text-base" onClick={() => void handleCompareBranches()} disabled={compareState.loading}>
-                          {compareState.loading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <RefreshCw className="mr-2 h-5 w-5" />}
-                          Check Merge Status
-                        </Button>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <MetaCard label="Team Members" value={String(teamMemberCount)} hint="In this workspace team" />
+                    <MetaCard label="Linked GitHub" value={String(teamMembersWithGitHubCount)} hint={missingGitHubCount ? `${missingGitHubCount} still missing` : "All members linked"} />
+                    <MetaCard label="Collaborators" value={String(collaboratorCount)} hint={`${collaboratorWriteCount} with write access`} />
+                    <MetaCard label="Pending Invites" value={String(pendingInvitationCount)} hint="Awaiting acceptance on GitHub" />
+                  </div>
 
-                        {compareState.result && (
-                          <div className="space-y-4 pt-2">
-                            <div className="grid gap-4 sm:grid-cols-2">
-                              <div className="flex items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4 transition-all dark:border-emerald-500/10 dark:bg-emerald-500/5">
-                                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20">
-                                  <ArrowRight className="h-4 w-4 -rotate-45" />
+                  <div className="grid gap-4">
+                    {filteredMembers.length ? (
+                      <motion.div 
+                        variants={{
+                          show: { transition: { staggerChildren: 0.05 } }
+                        }}
+                        initial="hidden"
+                        animate="show"
+                        className="grid gap-4"
+                      >
+                        {visibleMembers.map((member) => {
+                          const githubUsername = member.user?.githubUsername ?? null
+                          const collaborator = githubUsername
+                            ? collaboratorByLogin.get(normalizeGitHubMatchValue(githubUsername))
+                            : undefined
+                          const invitation = githubUsername
+                            ? invitationByLogin.get(normalizeGitHubMatchValue(githubUsername))
+                            : undefined
+                          const accessState = getMemberRepositoryAccessState({
+                            githubUsername,
+                            repositoryOwnerLogin: workspace?.repositoryRecord?.ownerLogin,
+                            repositoryVisibility: workspace?.repository?.visibility ?? workspace?.repositoryRecord?.visibility,
+                            collaborator,
+                            invitation,
+                          })
+                          const canInviteMember =
+                            canRunLeaderWriteActions &&
+                            Boolean(githubUsername) &&
+                            !collaborator &&
+                            !invitation &&
+                            normalizeGitHubMatchValue(githubUsername) !== normalizeGitHubMatchValue(workspace?.repositoryRecord?.ownerLogin)
+
+                          return (
+                            <motion.div
+                              key={member.id}
+                              variants={VARIANTS_FADE_IN_UP}
+                              whileHover={ANIM_HOVER_LIFT}
+                              className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+                            >
+                              <div className="flex flex-col gap-5 md:flex-row md:items-center">
+                                <Avatar className="h-12 w-12 border border-border/40 shadow-sm transition-transform duration-300 group-hover:scale-110">
+                                  <AvatarImage src={member.user?.avatarUrl || undefined} />
+                                  <AvatarFallback className="font-semibold">{getInitials(member.user?.fullName)}</AvatarFallback>
+                                </Avatar>
+                                
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-lg font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors">{member.user?.fullName}</h4>
+                                    <Badge variant="outline" className="rounded-full border-none bg-muted/60 px-2 py-0 text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 shadow-none">
+                                      {member.teamRole === "LEADER" ? "Team leader" : "Team member"}
+                                    </Badge>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-sm text-muted-foreground/80 font-semibold">
+                                    {githubUsername ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <Github className="h-3.5 w-3.5 opacity-70" />
+                                        <span>@{githubUsername}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="italic text-amber-600/80 flex items-center gap-1.5">
+                                        <AlertCircle className="h-3.5 w-3.5" />
+                                        No GitHub account linked
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">Ahead by {compareState.result.aheadBy} commits</p>
-                                  <p className="text-xs leading-relaxed text-muted-foreground">
-                                    {compareState.head} has new changes for {compareState.base}.
-                                  </p>
+
+                                <div className="flex flex-wrap items-center gap-6 md:min-w-[240px] md:justify-end">
+                                  <div className="flex flex-col items-end gap-2">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/40">Access Status</span>
+                                    <Badge className={cn(
+                                      "rounded-full px-3 py-1 border-none shadow-none font-bold text-[10px] uppercase tracking-wider transition-all",
+                                      accessState.tone === "success" ? "bg-emerald-500/20 text-emerald-700 ring-1 ring-emerald-500/30" :
+                                      accessState.tone === "warning" ? "bg-amber-500/20 text-amber-700 ring-1 ring-amber-500/30" :
+                                      accessState.tone === "danger" ? "bg-red-500/20 text-red-700 ring-1 ring-red-500/30" :
+                                      "bg-muted/80 text-muted-foreground ring-1 ring-border/60"
+                                    )}>
+                                      {accessState.label}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {canInviteMember && (
+                                    <Button 
+                                      size="sm" 
+                                      className="h-10 rounded-xl bg-primary px-6 shadow-xl shadow-primary/25 transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] font-bold text-xs" 
+                                      onClick={() => void handleInviteCollaborator(githubUsername!)} 
+                                      disabled={busyAction === `invite-${githubUsername}`}
+                                    >
+                                      {busyAction === `invite-${githubUsername}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+                                      Invite Member
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
+                            </motion.div>
+                          )
+                        })}
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        initial={ANIM_ENTRY_FADE}
+                        animate={ANIM_FADE_IN}
+                        className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5"
+                      >
+                        <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                          <Users className="h-10 w-10" />
+                        </div>
+                        <h4 className="text-xl font-semibold tracking-tight text-foreground/80">No members found</h4>
+                        <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                          Try a different search keyword or clear the current filter.
+                        </p>
+                      </motion.div>
+                    )}
+                    {filteredMembers.length && hasMoreMembers ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-10 w-full rounded-2xl text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 hover:bg-primary/5 hover:text-primary transition-all"
+                        onClick={() => setMemberRenderLimit((current) => current + 30)}
+                      >
+                        Load more members ({visibleMembers.length}/{filteredMembers.length})
+                      </Button>
+                    ) : null}
+                  </div>
 
-                              <div className="flex items-start gap-3 rounded-2xl border border-red-100 bg-red-50/30 p-4 transition-all dark:border-red-500/10 dark:bg-red-500/5">
-                                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600 dark:bg-red-500/20">
-                                  <ArrowRight className="h-4 w-4 rotate-[135deg]" />
+                  <div className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
+                    <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md">
+                      <div className="border-b border-border/40 bg-muted/5 p-6">
+                        <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80 leading-none">Invite Contributors</h4>
+                        <p className="mt-2 text-xs font-medium text-muted-foreground/50">
+                          {repositoryIsPublic
+                            ? "Public repositories are read-only. Invite collaborators for branch and PR access."
+                            : "Private repositories need invitations for any team contributions."}
+                        </p>
+                      </div>
+
+                      <div className="p-6">
+                        {canRunLeaderWriteActions ? (
+                          <div className="space-y-6">
+                            <div className="rounded-[22px] border border-primary/10 bg-primary/5 p-5 text-xs font-medium leading-relaxed text-foreground/70">
+                              Invite by GitHub username, or use quick team suggestions. GitHub handles acceptance for private repositories.
+                            </div>
+                            
+                            <div className="grid gap-5">
+                              <div className="grid gap-5 md:grid-cols-2">
+                                <div className="space-y-2.5">
+                                  <label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">GitHub Username</label>
+                                  <Input
+                                    value={inviteForm.login}
+                                    onChange={(event) => setInviteForm((current) => ({ ...current, login: event.target.value }))}
+                                    placeholder="teammate-github-login"
+                                    className="h-11 rounded-xl border-border/40 bg-background/80 transition-all focus:ring-primary/20"
+                                  />
                                 </div>
-                                <div className="space-y-1">
-                                  <p className="text-sm font-bold text-red-700 dark:text-red-400">Behind by {compareState.result.behindBy} commits</p>
-                                  <p className="text-xs leading-relaxed text-muted-foreground">
-                                    {compareState.base} has changes missing in {compareState.head}.
-                                  </p>
-                                </div>
+                                
+                                {workspace?.repositoryRecord?.ownerType === "ORGANIZATION" && (
+                                  <div className="space-y-2.5">
+                                    <label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">Permission Role</label>
+                                    <Select
+                                      value={inviteForm.permission}
+                                      onValueChange={(value: "pull" | "triage" | "push" | "maintain" | "admin") =>
+                                        setInviteForm((current) => ({ ...current, permission: value }))
+                                      }
+                                    >
+                                      <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/80 transition-all focus:ring-primary/20">
+                                        <SelectValue placeholder="Choose permission" />
+                                      </SelectTrigger>
+                                      <SelectContent className="rounded-xl">
+                                        <SelectItem value="pull" className="rounded-lg">Read</SelectItem>
+                                        <SelectItem value="triage" className="rounded-lg">Triage</SelectItem>
+                                        <SelectItem value="push" className="rounded-lg">Write</SelectItem>
+                                        <SelectItem value="maintain" className="rounded-lg">Maintain</SelectItem>
+                                        <SelectItem value="admin" className="rounded-lg">Admin</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
                               </div>
+
+                              <Button
+                                className="h-11 w-full rounded-xl bg-primary text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 font-semibold text-xs"
+                                onClick={() => void handleInviteCollaborator()}
+                                disabled={!inviteForm.login.trim() || busyAction === "invite-collaborator"}
+                              >
+                                {busyAction === "invite-collaborator" ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <UserPlus className="mr-2 h-4 w-4" />
+                                )}
+                                Send Invitation
+                              </Button>
                             </div>
 
-                            <Button 
-                              variant="outline" 
-                              className="w-full h-10 rounded-xl border-border/60 transition-all shadow-sm font-bold hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                              onClick={() => setShowCompareDetails(true)}
-                            >
-                              <BookOpen className="mr-2 h-4 w-4" />
-                              View Detailed Changes
-                            </Button>
-
-                            {isTeamLeader && compareState.result.aheadBy > 0 && (
-                              <div className="pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                                <Button 
-                                  className="w-full h-12 rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-700 hover:shadow-emerald-500/30 font-bold text-base"
-                                  onClick={() => requestMergeBranch(compareState.base, compareState.head)}
-                                  disabled={busyAction === "merge-branch"}
-                                >
-                                  {busyAction === "merge-branch" ? (
-                                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                  ) : (
-                                    <GitMerge className="mr-2 h-5 w-5" />
-                                  )}
-                                  Merge {compareState.head} into {compareState.base}
-                                </Button>
-                                <p className="mt-3 text-center text-xs text-muted-foreground px-4">
-                                  This will bring all {compareState.result.aheadBy} new commits from <span className="font-semibold text-foreground">{compareState.head}</span> into <span className="font-semibold text-foreground">{compareState.base}</span>.
+                            {repositoryAccessLoading ? (
+                              <div className="flex h-20 items-center justify-center rounded-[22px] border border-dashed border-border/50 bg-muted/5 text-[11px] font-medium text-muted-foreground/40 uppercase tracking-wider">
+                                <Loader2 className="mr-3 h-3.5 w-3.5 animate-spin" />
+                                Checking collaborator access...
+                              </div>
+                            ) : teamInviteCandidates.length ? (
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-px flex-1 bg-border/40" />
+                                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/30">Quick Suggestions</span>
+                                  <div className="h-px flex-1 bg-border/40" />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {teamInviteCandidates.slice(0, 8).map((member) => {
+                                    const githubUsername = member.user?.githubUsername
+                                    if (!githubUsername) return null
+                                    return (
+                                      <Button
+                                        key={`invite-${member.id}`}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 rounded-lg border-border/40 bg-background/50 text-[11px] font-semibold transition-all hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                                        onClick={() => void handleInviteCollaborator(githubUsername)}
+                                        disabled={busyAction === "invite-collaborator"}
+                                      >
+                                        <UserPlus className="mr-2 h-3.5 w-3.5 opacity-40" />
+                                        {member.user?.fullName ?? githubUsername}
+                                      </Button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center p-6 text-center rounded-[22px] border border-emerald-500/10 bg-emerald-500/5">
+                                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+                                  <CheckCircle2 className="h-5 w-5" />
+                                </div>
+                                <h4 className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">Team is covered</h4>
+                                <p className="mt-1 text-[11px] font-medium text-emerald-700/60 dark:text-emerald-300/60">
+                                  All eligible team members already have access.
                                 </p>
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    </SectionCard>
-                  </div>
-
-                  <div className="lg:col-span-1 space-y-8">
-                    <SectionCard
-                      title="Branch policy"
-                      description="GPMS enforces safety rules for branch management."
-                      className="border-border/50 shadow-sm rounded-[28px]"
-                    >
-                      <ul className="space-y-4 text-sm text-muted-foreground">
-                        <li className="flex items-start gap-3">
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                          <span>Protected branches cannot be deleted or renamed.</span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                          <span>Default branch is always protected by GPMS.</span>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                          <span>Only teammates with write access can create branches.</span>
-                        </li>
-                      </ul>
-                    </SectionCard>
-                  </div>
-                </div>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "actions" && (<TabsContent value="actions" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <Rocket className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Actions</h3>
-                      <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 py-1 font-bold text-primary border-none shadow-none">
-                        {workflowRuns.length} Runs
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Monitor your CI/CD pipelines and automated workflows.
-                    </p>
-                  </div>
-                </div>
-
-                <SectionCard 
-                  title="Workflow history" 
-                  description="Recent automated runs on GitHub."
-                  className="border-border/50 shadow-sm rounded-[28px]"
-                >
-                  {workflowRuns.length ? (
-                    <div className="grid gap-3">
-                      {workflowRuns.map((run) => (
-                        <div key={run.id} className="flex flex-col gap-4 rounded-2xl border border-border/40 bg-muted/[0.03] p-5 lg:flex-row lg:items-center lg:justify-between transition-all hover:border-border/60 hover:bg-muted/[0.06]">
-                          <div className="flex items-center gap-4 min-w-0">
-                            <div className={cn(
-                              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-                              run.status === "completed" && run.conclusion === "success" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
-                              run.status === "completed" && run.conclusion === "failure" ? "bg-red-50 text-red-600 border-red-100" :
-                              "bg-amber-50 text-amber-600 border-amber-100 animate-pulse"
-                            )}>
-                              <Rocket className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-foreground/90 truncate">{run.name}</p>
-                              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                <GitBranch className="h-3 w-3" />
-                                <span className="font-medium">{run.branch || "unknown"}</span>
-                                <span>·</span>
-                                <span>{formatRelative(run.createdAt)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" className="h-9 rounded-xl border-border/50 hover:bg-muted/50" onClick={() => void handleOpenLogs(run.id)} disabled={busyAction === `logs-${run.id}`}>
-                              View Logs
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-9 rounded-xl border-border/50 hover:bg-muted/50" asChild>
-                              <a href={run.htmlUrl} target="_blank" rel="noreferrer">
-                                <Github className="mr-2 h-4 w-4" />
-                                GitHub
-                              </a>
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptySection 
-                      title="No workflows found" 
-                      description="Workflows will appear here once they are triggered on GitHub." 
-                      icon={<Rocket className="h-6 w-6" />} 
-                    />
-                  )}
-                </SectionCard>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "releases" && (<TabsContent value="releases" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                        <Plus className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Releases</h3>
-                      <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 py-1 font-bold text-primary border border-primary/20 shadow-none">
-                        {releases.length} Total
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Track production-ready versions and project milestones.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    {canRunLeaderWriteActions && (
-                      <Button className="h-10 rounded-xl bg-primary px-6 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" onClick={() => setReleaseDialogOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Release
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-6">
-                  {releases.length ? (
-                    releases.map((release) => (
-                      <motion.div
-                        key={release.id}
-                        whileHover={ANIM_HOVER_LIFT}
-                        className="group relative overflow-hidden rounded-[28px] border border-border/50 bg-background p-8 transition-all hover:border-primary/25 hover:shadow-xl hover:shadow-primary/10"
-                      >
-                        <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-                          <div className="space-y-4 flex-1">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <h4 className="text-2xl font-bold tracking-tight text-foreground/90">{release.name}</h4>
-                              <Badge variant="outline" className="rounded-full border-primary/25 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                                {release.tagName}
-                              </Badge>
-                              <span className="text-xs font-semibold text-muted-foreground/60">{formatRelative(release.createdAt)}</span>
-                            </div>
-                            {release.body ? (
-                              <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
-                                {release.body}
-                              </div>
-                            ) : (
-                              <p className="text-sm italic text-muted-foreground/50">No release notes provided.</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" className="h-10 rounded-xl border-border/50 hover:bg-muted/50 transition-all" asChild>
-                              <a href={release.htmlUrl} target="_blank" rel="noreferrer">
-                                <Github className="mr-2 h-4 w-4" />
-                                View on GitHub
-                              </a>
-                            </Button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))
-                  ) : (
-                    <EmptySection 
-                      title="No releases yet" 
-                      description="Create your first release to mark a project milestone." 
-                      icon={<Rocket className="h-6 w-6" />} 
-                    />
-                  )}
-                </div>
-              </motion.div>
-            </TabsContent>)}
-
-            {activeTab === "members" && (<TabsContent value="members" forceMount className="mt-0 outline-none">
-              <motion.div
-                initial={ANIM_ENTRY_UP}
-                animate={ANIM_FADE_IN_UP}
-                transition={{ duration: 0.4 }}
-                className="space-y-8"
-              >
-                <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                        <Users className="h-5 w-5" />
-                      </div>
-                      <h3 className="text-2xl font-bold tracking-tight text-foreground">Team access</h3>
-                      <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 py-1 font-bold text-primary border border-primary/20 shadow-none">
-                        {collaboratorCount} Collaborators
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Manage repository permissions and GitHub account links for your team.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
-                      <DeferredSearchInput
-                        value={memberSearch}
-                        onDeferredChange={setMemberSearch}
-                        placeholder="Search team members..." 
-                        aria-label="Search team members"
-                        className="h-10 rounded-xl border-border/40 bg-background/50 pl-10 backdrop-blur-sm transition-all focus:bg-background w-full sm:w-[240px]" 
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <MetaCard label="Team members" value={String(teamMemberCount)} hint="In this workspace team" />
-                  <MetaCard label="Linked GitHub" value={String(teamMembersWithGitHubCount)} hint={missingGitHubCount ? `${missingGitHubCount} still missing` : "All members linked"} />
-                  <MetaCard label="Collaborators" value={String(collaboratorCount)} hint={`${collaboratorWriteCount} with write access`} />
-                  <MetaCard label="Pending invites" value={String(pendingInvitationCount)} hint="Awaiting acceptance on GitHub" />
-                </div>
-
-                <div className="grid gap-4">
-                  {filteredMembers.length ? visibleMembers.map((member) => {
-                    const githubUsername = member.user?.githubUsername ?? null
-                    const collaborator = githubUsername
-                      ? collaboratorByLogin.get(normalizeGitHubMatchValue(githubUsername))
-                      : undefined
-                    const invitation = githubUsername
-                      ? invitationByLogin.get(normalizeGitHubMatchValue(githubUsername))
-                      : undefined
-                    const accessState = getMemberRepositoryAccessState({
-                      githubUsername,
-                      repositoryOwnerLogin: workspace?.repositoryRecord?.ownerLogin,
-                      repositoryVisibility: workspace?.repository?.visibility ?? workspace?.repositoryRecord?.visibility,
-                      collaborator,
-                      invitation,
-                    })
-                    const canInviteMember =
-                      canRunLeaderWriteActions &&
-                      Boolean(githubUsername) &&
-                      !collaborator &&
-                      !invitation &&
-                      normalizeGitHubMatchValue(githubUsername) !== normalizeGitHubMatchValue(workspace?.repositoryRecord?.ownerLogin)
-
-                    return (
-                      <motion.div
-                        key={member.id}
-                        whileHover={ANIM_HOVER_LIFT}
-                        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                        className="group relative overflow-hidden rounded-[24px] border border-border/50 bg-background p-5 transition-all hover:border-primary/25 hover:shadow-lg hover:shadow-primary/8"
-                      >
-                        <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                          <Avatar className="h-12 w-12 border border-border/50 shadow-sm">
-                            <AvatarImage src={member.user?.avatarUrl || undefined} />
-                            <AvatarFallback className="font-bold">{getInitials(member.user?.fullName)}</AvatarFallback>
-                          </Avatar>
-                          
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-foreground/90 truncate">{member.user?.fullName}</h4>
-                              <Badge variant="outline" className="rounded-full border-border/50 px-2 py-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                {member.teamRole === "LEADER" ? "Team leader" : "Team member"}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              {githubUsername ? (
-                                <div className="flex items-center gap-1.5">
-                                  <Github className="h-3.5 w-3.5" />
-                                  <span className="font-medium">@{githubUsername}</span>
-                                </div>
-                              ) : (
-                                <span className="italic text-amber-600/60 flex items-center gap-1.5">
-                                  <AlertCircle className="h-3.5 w-3.5" />
-                                  No GitHub account linked
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-6">
-                            <div className="flex flex-col items-end gap-1">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 text-right">Access Status</span>
-                              <Badge className={cn(
-                                "rounded-full px-3 py-0.5 border-none shadow-none font-bold text-[10px] uppercase tracking-wider",
-                                accessState.tone === "success" ? "bg-emerald-500/10 text-emerald-600" :
-                                accessState.tone === "warning" ? "bg-amber-500/10 text-amber-600" :
-                                accessState.tone === "danger" ? "bg-red-500/10 text-red-600" :
-                                "bg-muted text-muted-foreground"
-                              )}>
-                                {accessState.label}
-                              </Badge>
-                            </div>
-                            
-                            {canInviteMember && (
-                              <Button 
-                                size="sm" 
-                                className="h-9 rounded-xl bg-primary px-5 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" 
-                                onClick={() => void handleInviteCollaborator(githubUsername!)} 
-                                disabled={busyAction === `invite-${githubUsername}`}
-                              >
-                                {busyAction === `invite-${githubUsername}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
-                                Invite
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  }) : (
-                    <EmptySection
-                      title="No members found"
-                      description="Try a different search keyword or clear the current filter."
-                      icon={<Users className="h-5 w-5" />}
-                      compact
-                    />
-                  )}
-                  {filteredMembers.length && hasMoreMembers ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 rounded-xl text-xs"
-                      onClick={() => setMemberRenderLimit((current) => current + 30)}
-                    >
-                      Load more members ({visibleMembers.length}/{filteredMembers.length})
-                    </Button>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                  <SectionCard
-                    title="Invite contributors"
-                    description={
-                      repositoryIsPublic
-                        ? "Public repositories are still read-only for other accounts. Invite collaborators here when teammates should create branches, commit, or open pull requests from GPMS."
-                        : "Private repositories need collaborator invitations before teammates can contribute from GPMS."
-                    }
-                    className="border-border/50 shadow-sm rounded-[28px]"
-                  >
-
-                    {canRunLeaderWriteActions ? (
-                      <div className="space-y-4">
-                        <div className="rounded-[22px] border border-border/70 bg-muted/15 p-4 text-sm leading-6 text-muted-foreground">
-                          Invite by GitHub username, or use the quick team suggestions below. GitHub will handle the acceptance step for private repositories.
-                        </div>
-                        <div
-                          className={cn(
-                            "grid gap-4",
-                            workspace?.repositoryRecord?.ownerType === "ORGANIZATION"
-                              ? "md:grid-cols-[minmax(0,1fr)_180px_auto]"
-                              : "md:grid-cols-[minmax(0,1fr)_auto]",
-                          )}
-                        >
-                          <Field
-                            label="GitHub username"
-                            description="Enter the exact GitHub login that should get write access to this repository."
-                          >
-                            <Input
-                              value={inviteForm.login}
-                              onChange={(event) =>
-                                setInviteForm((current) => ({ ...current, login: event.target.value }))
-                              }
-                              placeholder="teammate-github-login"
-                              className="h-11 rounded-2xl"
-                            />
-                          </Field>
-                          {workspace?.repositoryRecord?.ownerType === "ORGANIZATION" ? (
-                            <Field label="Permission" description="Choose the repository role for this organization invitation.">
-                              <Select
-                                value={inviteForm.permission}
-                                onValueChange={(value: "pull" | "triage" | "push" | "maintain" | "admin") =>
-                                  setInviteForm((current) => ({ ...current, permission: value }))
-                                }
-                              >
-                                <SelectTrigger className="h-11 rounded-2xl">
-                                  <SelectValue placeholder="Choose permission" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pull">Read</SelectItem>
-                                  <SelectItem value="triage">Triage</SelectItem>
-                                  <SelectItem value="push">Write</SelectItem>
-                                  <SelectItem value="maintain">Maintain</SelectItem>
-                                  <SelectItem value="admin">Admin</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </Field>
-                          ) : null}
-                          <div className="flex items-end">
-                            <Button
-                              className="h-11 w-full md:w-auto"
-                              onClick={() => void handleInviteCollaborator()}
-                              disabled={!inviteForm.login.trim() || busyAction === "invite-collaborator"}
-                            >
-                              {busyAction === "invite-collaborator" ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <UserPlus className="mr-2 h-4 w-4" />
-                              )}
-                              Send Invite
-                            </Button>
-                          </div>
-                        </div>
-                        {repositoryAccessLoading ? (
-                          <div className="flex items-center rounded-[22px] border border-dashed border-border/70 bg-muted/10 px-4 py-5 text-sm text-muted-foreground">
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Checking current collaborator access...
-                          </div>
-                        ) : teamInviteCandidates.length ? (
-                          <div className="space-y-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                              Quick invite from team
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {teamInviteCandidates.slice(0, 8).map((member) => {
-                                const githubUsername = member.user?.githubUsername
-                                if (!githubUsername) return null
-                                return (
-                                  <Button
-                                    key={`invite-${member.id}`}
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => void handleInviteCollaborator(githubUsername)}
-                                    disabled={busyAction === "invite-collaborator"}
-                                  >
-                                    <UserPlus className="mr-2 h-4 w-4" />
-                                    {member.user?.fullName ?? githubUsername}
-                                  </Button>
-                                )
-                              })}
-                            </div>
-                          </div>
                         ) : (
-                          <EmptySection
-                            title="Everyone is already covered"
-                            description="Team members with GitHub usernames already have collaborator access, a pending invitation, or they own the repository."
-                            icon={<CheckCircle2 className="h-5 w-5" />}
-                            compact
-                          />
+                          <div className="flex flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5">
+                            <Lock className="mb-6 h-10 w-10 text-muted-foreground/20" />
+                            <h4 className="text-lg font-semibold text-foreground/70">Restricted Access</h4>
+                            <p className="mx-auto mt-2 max-w-[240px] text-sm font-medium text-muted-foreground/40 leading-relaxed">
+                              Team leader or admin write access is required to send invitations.
+                            </p>
+                          </div>
                         )}
                       </div>
-                    ) : (
-                      <EmptySection
-                        title="Invite access needs verified GitHub write access"
-                        description="The team leader or an admin must also have write access to the connected repository before sending invitations from this page."
-                        icon={<UserPlus className="h-5 w-5" />}
-                        compact
-                      />
-                    )}
-                  </SectionCard>
+                    </div>
 
-                  <div className="space-y-6">
-                    <SectionCard title="Who already has access" description="People GitHub currently recognizes as collaborators on this repository.">
-                    {repositoryAccessLoading ? (
-                      <div className="flex items-center justify-center rounded-[24px] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-sm text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading collaborator access...
+                    <div className="overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md">
+                      <div className="border-b border-border/40 bg-muted/5 p-6">
+                        <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80 leading-none">Collaborator List</h4>
+                        <p className="mt-2 text-xs font-medium text-muted-foreground/50">Current GitHub collaborators.</p>
                       </div>
-                    ) : repositoryAccessError ? (
-                      <div className="rounded-[24px] border border-red-200 bg-red-50/50 p-4 text-sm text-red-900 dark:border-red-500/20 dark:bg-red-500/5 dark:text-red-200">{repositoryAccessError}</div>
-                    ) : repositoryAccessState.collaborators.length ? (
-                      <div className="space-y-3">
-                        {repositoryAccessState.collaborators.map((collaborator) => (
-                          <div key={collaborator.id} className="rounded-[24px] border border-border/70 bg-muted/20 p-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-11 w-11 border border-border/70">
-                                  <AvatarImage src={collaborator.avatarUrl ?? undefined} alt={collaborator.login} />
-                                  <AvatarFallback>{getInitials(collaborator.login)}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium">{collaborator.login}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {collaborator.isOwner
-                                      ? "Repository owner"
-                                      : collaborator.roleName || collaborator.permission || "Collaborator"}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {collaborator.profileUrl ? (
-                                  <Button variant="ghost" size="icon" asChild>
-                                    <a href={collaborator.profileUrl} target="_blank" rel="noreferrer">
-                                      <ExternalLink className="h-4 w-4" />
-                                    </a>
-                                  </Button>
-                                ) : null}
-                                {canRunLeaderWriteActions && !collaborator.isOwner ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => void requestRemoveCollaborator(collaborator)}
-                                    disabled={busyAction === `remove-collaborator-${collaborator.login}`}
-                                  >
-                                    <UserMinus className="mr-2 h-4 w-4" />
-                                    Remove
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
+                      
+                      <div className="p-6">
+                        {repositoryAccessLoading ? (
+                          <div className="flex h-64 flex-col items-center justify-center gap-4">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary/20" />
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">Loading collaborators</span>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptySection title="No collaborators yet" description="Invite teammates here if they should contribute directly from GPMS." icon={<Users className="h-5 w-5" />} compact />
-                    )}
-                  </SectionCard>
-
-                    <SectionCard title="Pending invites" description="Collaborator invites waiting to be accepted on GitHub.">
-                    {repositoryAccessLoading ? (
-                      <div className="flex items-center justify-center rounded-[24px] border border-dashed border-border/70 bg-muted/10 px-4 py-10 text-sm text-muted-foreground">
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Loading invitations...
-                      </div>
-                    ) : repositoryAccessState.invitations.length ? (
-                      <div className="space-y-3">
-                        {repositoryAccessState.invitations.map((invitation) => {
-                          const inviteeLabel = invitation.inviteeLogin ?? invitation.inviteeEmail ?? "Pending invite"
-                          return (
-                            <div key={invitation.id} className="rounded-[24px] border border-border/70 bg-muted/20 p-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="space-y-1">
-                                  <p className="font-medium">{inviteeLabel}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {invitation.permission || "write"} access · sent {formatRelative(invitation.createdAt)}
-                                  </p>
+                        ) : repositoryAccessError ? (
+                          <div className="rounded-[24px] border border-red-500/10 bg-red-500/5 p-6 text-sm font-semibold text-red-600 text-center">{repositoryAccessError}</div>
+                        ) : repositoryAccessState.collaborators.length ? (
+                          <motion.div 
+                            variants={{
+                              show: { transition: { staggerChildren: 0.05 } }
+                            }}
+                            initial="hidden"
+                            animate="show"
+                            className="space-y-3"
+                          >
+                            {repositoryAccessState.collaborators.map((collaborator) => (
+                              <motion.div 
+                                key={collaborator.id} 
+                                variants={VARIANTS_FADE_IN_UP}
+                                className="flex items-center justify-between rounded-[22px] border border-border/40 bg-background/80 p-3.5 transition-all hover:border-border/80 hover:bg-background"
+                              >
+                                <div className="flex items-center gap-4 min-w-0">
+                                  <Avatar className="h-10 w-10 border border-border/40 shadow-sm transition-transform duration-300">
+                                    <AvatarImage src={collaborator.avatarUrl ?? undefined} alt={collaborator.login} />
+                                    <AvatarFallback className="text-[10px] font-semibold">{getInitials(collaborator.login)}</AvatarFallback>
+                                  </Avatar>
+                                  <div className="min-w-0 space-y-1">
+                                    <p className="text-sm font-semibold text-foreground/90 leading-none truncate">{collaborator.login}</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">
+                                      {collaborator.isOwner ? (
+                                        <span className="text-primary/70">Repository Owner</span>
+                                      ) : (
+                                        collaborator.roleName || collaborator.permission || "Collaborator"
+                                      )}
+                                    </p>
+                                  </div>
                                 </div>
-                                {canRunLeaderWriteActions ? (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => void requestCancelInvitation(invitation)}
-                                    disabled={busyAction === `cancel-invitation-${invitation.id}`}
-                                  >
-                                    Cancel invite
-                                  </Button>
-                                ) : null}
-                              </div>
-                            </div>
-                          )
-                        })}
+                                <div className="flex items-center gap-2">
+                                  {collaborator.profileUrl && (
+                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl border-border/40 bg-background/50 text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" asChild>
+                                      <a href={collaborator.profileUrl} target="_blank" rel="noreferrer">
+                                        <Github className="h-4 w-4" />
+                                      </a>
+                                    </Button>
+                                  )}
+                                  {canRunLeaderWriteActions && !collaborator.isOwner && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-8 w-8 rounded-xl border-red-200/40 bg-red-50/30 text-red-600 transition-all hover:bg-red-500 hover:text-white hover:border-red-500 dark:bg-red-500/10 dark:hover:bg-red-600" 
+                                      onClick={() => void requestRemoveCollaborator(collaborator)}
+                                      disabled={busyAction === `remove-collaborator-${collaborator.login}`}
+                                    >
+                                      {busyAction === `remove-collaborator-${collaborator.login}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserMinus className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  )}
+                                </div>
+                              </motion.div>
+                            ))}
+                          </motion.div>
+                        ) : (
+                          <div className="p-12 text-center text-sm font-medium text-muted-foreground/40">
+                            No collaborators found.
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <EmptySection title="No pending invites" description="Once you send collaborator invitations, they will appear here until the target account accepts them." icon={<Link2 className="h-5 w-5" />} compact />
-                    )}
-                    </SectionCard>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            </TabsContent>)}
+
+                  <AnimatePresence mode="wait">
+                    {repositoryAccessState.invitations.length > 0 && (
+                      <motion.div
+                        initial={ANIM_ENTRY_SCALE_SOFT}
+                        animate={ANIM_SCALE_IN}
+                        className="mt-8 overflow-hidden rounded-[32px] border border-border/50 bg-background/50 shadow-sm backdrop-blur-md"
+                      >
+                        <div className="border-b border-border/40 bg-muted/5 p-6">
+                          <h4 className="text-sm font-semibold uppercase tracking-wider text-foreground/80 leading-none">Pending Invitations</h4>
+                          <p className="mt-2 text-xs font-medium text-muted-foreground/50">Teammates awaiting acceptance on GitHub.</p>
+                        </div>
+                        <div className="p-6">
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {repositoryAccessState.invitations.map((invitation) => {
+                              const inviteeLabel = invitation.inviteeLogin ?? invitation.inviteeEmail ?? "Pending invite"
+                              return (
+                                <div key={invitation.id} className="flex items-center justify-between rounded-[22px] border border-border/40 bg-background/80 p-4 transition-all hover:border-border/80 hover:bg-background">
+                                  <div className="min-w-0 space-y-1">
+                                    <p className="text-sm font-semibold text-foreground/90 leading-none truncate">{inviteeLabel}</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 leading-none">
+                                      {invitation.permission || "write"} access
+                                    </p>
+                                  </div>
+                                  {canRunLeaderWriteActions && (
+                                    <Button 
+                                      variant="outline" 
+                                      size="sm" 
+                                      className="h-8 rounded-xl border-red-200/40 bg-red-50/30 text-red-600 font-bold text-[10px] uppercase tracking-wider transition-all hover:bg-red-500 hover:text-white hover:border-red-500" 
+                                      onClick={() => void requestCancelInvitation(invitation)}
+                                      disabled={busyAction === `cancel-invitation-${invitation.id}`}
+                                    >
+                                      Cancel
+                                    </Button>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              </TabsContent>
+            )}
 
             {activeTab === "settings" && (<TabsContent value="settings" forceMount className="mt-0 outline-none">
               <motion.div
@@ -7093,17 +7037,17 @@ export function GitHubWorkspaceClient() {
                   <SectionCard 
                     title="Repository settings" 
                     description="Control visibility, branch defaults, and automation behavior."
-                    className="border-border/50 bg-background/90 shadow-sm rounded-[28px]"
+                    className="border-border/50 bg-background/90 shadow-sm rounded-[32px]"
                   >
                     <div className="space-y-8">
-                      <div className="rounded-[24px] border border-primary/20 bg-primary/7 p-5">
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary ring-1 ring-primary/20">
+                      <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-6">
+                        <div className="flex items-start gap-5">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
                             <Globe className="h-5 w-5" />
                           </div>
-                          <div className="space-y-1">
-                            <p className="text-sm font-bold text-foreground">Visibility & Access</p>
-                            <p className="text-xs leading-relaxed text-muted-foreground">
+                          <div className="space-y-1.5">
+                            <p className="text-sm font-semibold tracking-tight text-foreground">Visibility & Access</p>
+                            <p className="text-xs leading-relaxed text-muted-foreground/75">
                               Changing visibility affects who can see the code. Private repositories require explicit collaborator invitations for team members to contribute.
                             </p>
                           </div>
@@ -7112,7 +7056,7 @@ export function GitHubWorkspaceClient() {
 
                       <div className="grid gap-6 md:grid-cols-2">
                         <div className="space-y-3">
-                          <label className="px-1 text-xs font-semibold text-muted-foreground">Visibility</label>
+                          <label className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Visibility</label>
                           <Select
                             value={settingsDraft.visibility}
                             onValueChange={(value) =>
@@ -7123,7 +7067,7 @@ export function GitHubWorkspaceClient() {
                             }
                             disabled={!canRunLeaderWriteActions}
                           >
-                            <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/90 transition-all hover:border-primary/25">
+                            <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/80 transition-all hover:border-primary/20 hover:bg-background">
                               <SelectValue placeholder="Choose visibility" />
                             </SelectTrigger>
                             <SelectContent className="rounded-2xl">
@@ -7133,7 +7077,7 @@ export function GitHubWorkspaceClient() {
                           </Select>
                         </div>
                         <div className="space-y-3">
-                          <label className="px-1 text-xs font-semibold text-muted-foreground">Default branch</label>
+                          <label className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Default branch</label>
                           <Select
                             value={settingsDraft.defaultBranch}
                             onValueChange={(value) =>
@@ -7144,7 +7088,7 @@ export function GitHubWorkspaceClient() {
                             }
                             disabled={!canRunLeaderWriteActions || !branches.length}
                           >
-                            <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/90 transition-all hover:border-primary/25">
+                            <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/80 transition-all hover:border-primary/20 hover:bg-background">
                               <SelectValue placeholder="Choose default branch" />
                             </SelectTrigger>
                             <SelectContent className="rounded-2xl">
@@ -7167,7 +7111,7 @@ export function GitHubWorkspaceClient() {
                       <Separator className="opacity-40" />
 
                       <div className="space-y-6">
-                        <h4 className="px-1 text-xs font-semibold text-muted-foreground">Automation & sync</h4>
+                        <h4 className="px-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/50">Automation & sync</h4>
                         <div className="grid gap-4">
                           <ToggleRow 
                             title="Issue Synchronization" 
@@ -7183,31 +7127,26 @@ export function GitHubWorkspaceClient() {
                             onCheckedChange={(checked) => setSettingsDraft((current) => ({ ...current, syncActivityToWeeklyReports: checked }))} 
                             disabled={!canRunLeaderWriteActions}
                           />
-                          <ToggleRow 
-                            title="Release Tracking" 
-                            description="Track GitHub releases as project milestones in your delivery history." 
-                            checked={settingsDraft.syncReleasesToSubmissions} 
-                            onCheckedChange={(checked) => setSettingsDraft((current) => ({ ...current, syncReleasesToSubmissions: checked }))} 
-                            disabled={!canRunLeaderWriteActions}
-                          />
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-3 border-t border-border/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs text-muted-foreground">Changes apply to your connected GitHub repository immediately after saving.</p>
+                      <div className="flex flex-col gap-4 border-t border-border/40 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-medium text-muted-foreground/60 leading-relaxed max-w-sm">Changes apply to your connected GitHub repository immediately after saving.</p>
+                          {!canRunLeaderWriteActions && (
+                            <p className="text-[10px] text-amber-600/70 font-semibold italic">
+                              * Team leaders and admins need verified write access on the connected repository before changing this configuration.
+                            </p>
+                          )}
+                        </div>
                         <Button 
-                          className="h-11 rounded-xl bg-primary px-8 shadow-lg shadow-primary/20 transition-all hover:bg-primary/90" 
+                          className="h-11 rounded-xl bg-primary px-8 shadow-xl shadow-primary/20 transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98] font-bold text-xs" 
                           onClick={() => void requestUpdateSettings()} 
                           disabled={!canRunLeaderWriteActions || busyAction === "update-settings"}
                         >
                           {busyAction === "update-settings" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                           Save Configuration
                         </Button>
-                        {!canRunLeaderWriteActions && (
-                          <p className="text-xs text-muted-foreground italic">
-                            * Team leaders and admins need verified write access on the connected repository before changing this configuration.
-                          </p>
-                        )}
                       </div>
                     </div>
                   </SectionCard>
@@ -7218,18 +7157,18 @@ export function GitHubWorkspaceClient() {
                       description="Irreversible actions for this repository connection."
                       className="overflow-hidden rounded-[28px] border-red-200/70 shadow-sm"
                     >
-                      <div className="rounded-[24px] border border-red-200/60 bg-red-50/55 p-6 dark:border-red-400/20 dark:bg-red-500/10">
+                      <div className="rounded-[24px] border border-red-200/50 bg-red-50/30 p-6 dark:border-red-500/10 dark:bg-red-500/5">
                         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                           <div className="space-y-2">
-                            <h5 className="text-lg font-bold text-red-900 dark:text-red-200">Disconnect repository</h5>
-                            <p className="max-w-md text-sm leading-relaxed text-red-800/75 dark:text-red-200/80">
+                            <h5 className="text-lg font-semibold text-red-800 dark:text-red-200">Disconnect repository</h5>
+                            <p className="max-w-md text-sm leading-relaxed text-red-700/70 dark:text-red-200/60">
                               This will remove the link between GPMS and this GitHub repository. 
                               Your code on GitHub will not be affected.
                             </p>
                           </div>
                           <Button 
                             variant="outline" 
-                            className="h-11 shrink-0 rounded-xl border-red-300/70 bg-background text-red-700 transition-all hover:bg-red-600 hover:text-white dark:border-red-400/40 dark:bg-background/80 dark:text-red-300 dark:hover:bg-red-500 dark:hover:text-red-50" 
+                            className="h-11 shrink-0 rounded-xl border-red-200/60 bg-background text-red-600 transition-all hover:bg-red-50 hover:text-red-700 dark:border-red-500/20 dark:bg-background/80 dark:text-red-400 dark:hover:bg-red-500/10" 
                             onClick={() => void requestDisconnectRepository()} 
                             disabled={busyAction === "disconnect-repository"}
                           >
@@ -7238,17 +7177,17 @@ export function GitHubWorkspaceClient() {
                           </Button>
                         </div>
                         {isTeamLeader ? (
-                          <div className="mt-5 rounded-2xl border border-red-300/70 bg-red-100/70 p-4 dark:border-red-400/30 dark:bg-red-500/15">
+                          <div className="mt-5 rounded-2xl border border-red-200/60 bg-red-50/50 p-4 dark:border-red-500/10 dark:bg-red-500/10">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                               <div className="space-y-1">
-                                <p className="text-sm font-semibold text-red-900 dark:text-red-100">Delete repository permanently</p>
-                                <p className="text-xs text-red-800/90 dark:text-red-200/90">
+                                <p className="text-sm font-semibold text-red-800 dark:text-red-100">Delete repository permanently</p>
+                                <p className="text-xs text-red-700/80 dark:text-red-200/80">
                                   Permanently removes this repository from GitHub. This action cannot be undone.
                                 </p>
                               </div>
                               <Button
                                 variant="destructive"
-                                className="h-10 rounded-xl"
+                                className="h-10 rounded-xl bg-red-600 hover:bg-red-700 shadow-lg shadow-red-500/20"
                                 onClick={() => void requestDeleteRepositoryPermanently()}
                                 disabled={busyAction === "delete-repository-permanent"}
                               >
@@ -7258,7 +7197,7 @@ export function GitHubWorkspaceClient() {
                             </div>
                           </div>
                         ) : (
-                          <p className="mt-4 text-xs italic text-red-700/80 dark:text-red-200/80">
+                          <p className="mt-4 text-xs italic text-red-600/70 dark:text-red-200/60">
                             Only the team leader can permanently delete the repository.
                           </p>
                         )}
@@ -7271,7 +7210,7 @@ export function GitHubWorkspaceClient() {
                   <SectionCard 
                     title="Resources" 
                     description="Reference links and clone URLs for this repository."
-                    className="border-border/50 bg-background/90 shadow-sm rounded-[28px]"
+                    className="border-border/50 bg-background/90 shadow-sm rounded-[32px]"
                   >
                     <div className="space-y-4">
                       <ActionRow 
@@ -7301,16 +7240,16 @@ export function GitHubWorkspaceClient() {
                     <SectionCard 
                       title="System sync" 
                       description="Trigger a fresh fetch from GitHub when needed."
-                      className="border-border/50 bg-background/90 shadow-sm rounded-[28px]"
+                      className="border-border/50 bg-background/90 shadow-sm rounded-[32px]"
                     >
-                      <div className="space-y-4">
-                        <p className="text-xs text-muted-foreground leading-relaxed">
+                      <div className="space-y-5">
+                        <p className="text-[11px] font-medium text-muted-foreground/60 leading-relaxed">
                           Last synchronized {formatRelative(workspace?.repositoryRecord?.lastSyncAt)}. 
                           GPMS normally syncs automatically, but you can trigger it manually.
                         </p>
                         <Button 
                           variant="outline" 
-                          className="w-full h-10 rounded-xl border-border/50 hover:bg-muted/50 transition-all" 
+                          className="w-full h-10 rounded-xl border-border/40 bg-background/50 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" 
                           onClick={() => void handleSyncRepository()} 
                           disabled={busyAction === "sync"}
                         >
@@ -7760,7 +7699,7 @@ export function GitHubWorkspaceClient() {
                   </div>
 
                   <div className="space-y-3">
-                    <Label className="text-sm font-bold text-foreground/90">Merge method</Label>
+                    <Label className="text-sm font-semibold text-foreground/90">Merge method</Label>
                     <div className="grid gap-3">
                       <button
                         type="button"
@@ -7773,7 +7712,7 @@ export function GitHubWorkspaceClient() {
                         )}
                       >
                         <div className="flex w-full items-center justify-between">
-                          <span className="text-sm font-bold text-foreground">Squash and merge</span>
+                          <span className="text-sm font-semibold text-foreground">Squash and merge</span>
                           {mergeMethod === "squash" && <Check className="h-4 w-4 text-primary" />}
                         </div>
                         <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -7793,7 +7732,7 @@ export function GitHubWorkspaceClient() {
                         )}
                       >
                         <div className="flex w-full items-center justify-between">
-                          <span className="text-sm font-bold text-foreground">Create a merge commit</span>
+                          <span className="text-sm font-semibold text-foreground">Create a merge commit</span>
                           {mergeMethod === "merge" && <Check className="h-4 w-4 text-primary" />}
                         </div>
                         <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -7813,7 +7752,7 @@ export function GitHubWorkspaceClient() {
                         )}
                       >
                         <div className="flex w-full items-center justify-between">
-                          <span className="text-sm font-bold text-foreground">Rebase and merge</span>
+                          <span className="text-sm font-semibold text-foreground">Rebase and merge</span>
                           {mergeMethod === "rebase" && <Check className="h-4 w-4 text-primary" />}
                         </div>
                         <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -7826,8 +7765,8 @@ export function GitHubWorkspaceClient() {
 
                    <div className="space-y-3">
                      <div className="flex items-center justify-between">
-                       <Label className="text-sm font-bold text-foreground/90">Commit message</Label>
-                       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">Optional</span>
+                       <Label className="text-sm font-semibold text-foreground/90">Commit message</Label>
+                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Optional</span>
                      </div>
                      <Textarea
                        value={mergeCommitMessage}
@@ -7985,36 +7924,36 @@ export function GitHubWorkspaceClient() {
                 <div className="space-y-6">
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="rounded-2xl border border-border/50 bg-muted/5 p-4 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Ahead</p>
-                      <p className="mt-1 text-2xl font-bold text-emerald-600">{compareState.result.aheadBy}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Ahead</p>
+                      <p className="mt-1 text-2xl font-semibold text-emerald-600">{compareState.result.aheadBy}</p>
                       <p className="text-[10px] text-muted-foreground">New commits</p>
                     </div>
                     <div className="rounded-2xl border border-border/50 bg-muted/5 p-4 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Behind</p>
-                      <p className="mt-1 text-2xl font-bold text-red-600">{compareState.result.behindBy}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Behind</p>
+                      <p className="mt-1 text-2xl font-semibold text-red-600">{compareState.result.behindBy}</p>
                       <p className="text-[10px] text-muted-foreground">Missing commits</p>
                     </div>
                     <div className="rounded-2xl border border-border/50 bg-muted/5 p-4 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">Files</p>
-                      <p className="mt-1 text-2xl font-bold text-primary">{compareState.result.files.length}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Files</p>
+                      <p className="mt-1 text-2xl font-semibold text-primary">{compareState.result.files.length}</p>
                       <p className="text-[10px] text-muted-foreground">Modified files</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-sm font-bold text-foreground/90 px-1">Files Changed</h4>
+                    <h4 className="text-sm font-semibold text-foreground/90 px-1">Files Changed</h4>
                     <div className="grid gap-3">
                       {compareState.result.files.map((file) => (
                         <div key={file.filename} className="overflow-hidden rounded-2xl border border-border/40 bg-background shadow-sm">
                           <div className="flex items-center justify-between border-b border-border/40 bg-muted/5 px-4 py-3">
                             <div className="flex items-center gap-3 min-w-0">
                               <FileCode2 className="h-4 w-4 text-primary/60 shrink-0" />
-                              <span className="truncate text-xs font-bold text-foreground/80">{file.filename}</span>
-                              <Badge className={cn("rounded-full px-2 py-0 border-none shadow-none text-[9px] font-bold uppercase tracking-wider", getCommitChangeBadgeClass(file.status))}>
+                              <span className="truncate text-xs font-semibold text-foreground/80">{file.filename}</span>
+                              <Badge className={cn("rounded-full px-2 py-0 border-none shadow-none text-[9px] font-semibold uppercase tracking-wider", getCommitChangeBadgeClass(file.status))}>
                                 {file.status}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-3 text-[10px] font-mono font-bold">
+                            <div className="flex items-center gap-3 text-[10px] font-mono font-semibold">
                               <span className="text-emerald-600">+{file.additions}</span>
                               <span className="text-red-600">-{file.deletions}</span>
                             </div>
@@ -8244,15 +8183,15 @@ export function GitHubWorkspaceClient() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-border/60 bg-muted/10 p-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Ready files</p>
-                    <p className="mt-1 text-xl font-bold text-foreground">{uploadFolderEntries.length}</p>
+                    <p className="mt-1 text-xl font-semibold text-foreground">{uploadFolderEntries.length}</p>
                   </div>
                   <div className="rounded-2xl border border-border/60 bg-muted/10 p-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Skipped files</p>
-                    <p className="mt-1 text-xl font-bold text-foreground">{uploadFolderRejectedEntries.length}</p>
+                    <p className="mt-1 text-xl font-semibold text-foreground">{uploadFolderRejectedEntries.length}</p>
                   </div>
                   <div className="rounded-2xl border border-border/60 bg-muted/10 p-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Commit parts</p>
-                    <p className="mt-1 text-xl font-bold text-foreground">
+                    <p className="mt-1 text-xl font-semibold text-foreground">
                       {uploadFolderEntries.length ? chunkArray(uploadFolderEntries, MAX_FILES_PER_COMMIT).length : 0}
                     </p>
                   </div>
@@ -8663,7 +8602,7 @@ function WorkspaceShell({
                 Real Team Repository Workspace
               </Badge>
               <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{title}</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-4xl">{title}</h1>
                 <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">{subtitle}</p>
               </div>
             </div>
@@ -8774,108 +8713,127 @@ function NoTeamGitHubState({
   const supportNeedsTeamState = currentRole === "doctor" || currentRole === "ta"
 
   return (
-    <Card className="rounded-[32px] border border-border/70 bg-background shadow-[0_24px_70px_-48px_rgba(15,23,42,0.28)]">
-      <CardContent className="space-y-8 p-6 sm:p-7 lg:p-8">
-        <div className="max-w-3xl space-y-3">
-          <Badge className="rounded-full bg-primary/10 px-3 py-1 text-primary shadow-none hover:bg-primary/10">
-            <FolderGit2 className="mr-2 h-3.5 w-3.5" />
-            Team required first
-          </Badge>
-          <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            {isSupportRole ? "Choose a team to inspect its GitHub workspace" : "Create or join a team before opening GitHub"}
-          </h2>
-          <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-            {isSupportRole
-              ? supportNeedsTeamState
-                ? "GitHub is scoped to teams assigned to you. Pick one of your supervised teams first to load its connected repository, pull requests, releases, and code tree."
-                : "GitHub is scoped to a real team workspace. Pick a team first to load its connected repository, pull requests, releases, and code tree."
-              : "GPMS keeps one shared GitHub workspace per team. Once your team exists, the repository, code browser, issues, pull requests, and releases all become available here."}
-          </p>
-        </div>
-
-        {isSupportRole ? (
-          <div className="space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              Available teams
+    <div className="mx-auto max-w-5xl space-y-8 py-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="relative overflow-hidden rounded-[40px] border border-border/50 bg-background p-8 shadow-[0_32px_80px_-48px_rgba(15,23,42,0.3)] sm:p-12 lg:p-16"
+      >
+        <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/5 blur-[100px]" />
+        
+        <div className="relative z-10 space-y-12">
+          <div className="max-w-3xl space-y-6">
+            <Badge className="rounded-full bg-primary/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+              Team Required
+            </Badge>
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+              {isSupportRole ? "Choose a team" : "Join a team first"}
+            </h2>
+            <p className="text-lg leading-relaxed text-muted-foreground">
+              {isSupportRole
+                ? "GitHub workspaces are scoped to teams. Select one of your supervised teams to load their repository and activity."
+                : "GPMS keeps one shared GitHub workspace per team. Once you're part of a team, everything becomes available here."}
             </p>
-            <Input
-              value={teamOptionsSearch}
-              onChange={(event) => onTeamOptionsSearchChange(event.target.value)}
-              placeholder="Search teams by name"
-              className="h-11 rounded-2xl"
-            />
-            {teamOptionsLoading ? (
-              <div className="rounded-[24px] border border-dashed border-border/70 bg-muted/20 p-6 text-sm text-muted-foreground">
-                Loading team list...
+          </div>
+
+          {isSupportRole ? (
+            <div className="space-y-8">
+              <div className="relative max-w-md">
+                <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/40" />
+                <Input
+                  value={teamOptionsSearch}
+                  onChange={(event) => onTeamOptionsSearchChange(event.target.value)}
+                  placeholder="Search teams by name..."
+                  className="h-14 rounded-2xl border-border/50 bg-background/50 pl-12 text-lg transition-all focus:bg-background"
+                />
               </div>
-            ) : teamOptions.length ? (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {teamOptions.map((team) => (
-                  <button
-                    key={team.id}
-                    type="button"
-                    onClick={() => onSelectTeam(team.id)}
-                    className="rounded-[24px] border border-border/70 bg-muted/15 p-5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-primary/[0.04]"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold">{team.name}</p>
-                        <Badge variant="outline" className="rounded-full px-3 py-1">
+
+              {teamOptionsLoading ? (
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="h-48 rounded-[32px] border border-dashed border-border/50 bg-muted/10 animate-pulse" />
+                  ))}
+                </div>
+              ) : teamOptions.length ? (
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {teamOptions.map((team) => (
+                    <motion.button
+                      key={team.id}
+                      whileHover={{ y: -4 }}
+                      onClick={() => onSelectTeam(team.id)}
+                      className="group flex flex-col items-start gap-4 rounded-[32px] border border-border/50 bg-background p-8 text-left transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <Badge variant="secondary" className="rounded-full bg-muted/50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider">
                           {team.memberCount} members
                         </Badge>
                       </div>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {team.bio || "No team bio added yet."}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <EmptySection
-                title="No teams available yet"
-                description="Once teams exist in GPMS, you can open their connected GitHub workspaces from here."
-                icon={<Users className="h-5 w-5" />}
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-semibold text-foreground/90 group-hover:text-primary transition-colors">{team.name}</h4>
+                        <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground/70">
+                          {team.bio || "No team bio added yet."}
+                        </p>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              ) : (
+                <EmptySection
+                  title="No teams found"
+                  description="Try a different search term or check your supervised teams."
+                  icon={<Users className="h-6 w-6" />}
+                />
+              )}
+              
+              {teamOptions.length > 0 && canLoadMoreTeams && (
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  className="rounded-2xl px-8"
+                  onClick={onLoadMoreTeams} 
+                  disabled={teamOptionsLoading}
+                >
+                  Load More Teams
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-3">
+              <SetupCard
+                icon={<FolderGit2 className="h-6 w-6" />}
+                title="Shared Repository"
+                description="Everything is tied to your team instead of personal accounts."
               />
-            )}
-            {teamOptions.length > 0 && !supportNeedsTeamState ? (
-              <Button variant="outline" onClick={onLoadMoreTeams} disabled={!canLoadMoreTeams || teamOptionsLoading}>
-                {canLoadMoreTeams ? "Load more teams" : "All matching teams loaded"}
-              </Button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-3">
-            <SetupCard
-              icon={<Users className="h-5 w-5 text-primary" />}
-              title="One repo per team"
-              description="GitHub becomes available when your team workspace exists and can own a shared repository."
-            />
-            <SetupCard
-              icon={<GitPullRequest className="h-5 w-5 text-primary" />}
-              title="Real collaboration"
-              description="Issues, pull requests, releases, and code changes are all tied to your team instead of personal repos."
-            />
-            <SetupCard
-              icon={<ShieldCheck className="h-5 w-5 text-primary" />}
-              title="Academic oversight"
-              description="Assigned doctors and TAs can review the same connected repository through the team workspace."
-            />
-          </div>
-        )}
+              <SetupCard
+                icon={<GitPullRequest className="h-6 w-6" />}
+                title="Full Integration"
+                description="PRs, issues, and releases are automatically synced."
+              />
+              <SetupCard
+                icon={<ShieldCheck className="h-6 w-6" />}
+                title="Supervised Workspace"
+                description="Doctors and TAs can review your team's code directly."
+              />
+            </div>
+          )}
 
-        {!isSupportRole ? (
-          <div className="flex flex-wrap gap-3">
-            <Button asChild>
-              <Link href="/dashboard/my-team">Go to My Team</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/dashboard/teams">Browse Teams</Link>
-            </Button>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+          {!isSupportRole && (
+            <div className="flex flex-wrap gap-4 pt-4">
+              <Button size="lg" className="h-12 rounded-xl px-8 font-semibold shadow-lg shadow-primary/20" asChild>
+                <Link href="/dashboard/my-team">Go to My Team</Link>
+              </Button>
+              <Button size="lg" variant="outline" className="h-12 rounded-xl px-8 font-semibold" asChild>
+                <Link href="/dashboard/teams">Browse All Teams</Link>
+              </Button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
   )
 }
 
@@ -8966,582 +8924,538 @@ function NoRepositoryState({
 
   return (
     <>
-      <div className="space-y-6">
-        <div className="space-y-6">
-          <Card className="rounded-[32px] border border-border/70 bg-background shadow-[0_24px_70px_-48px_rgba(15,23,42,0.3)]">
-            <CardContent className="space-y-6 p-6 sm:p-7 lg:p-8">
-              <div className="max-w-3xl space-y-3">
-                <Badge className="rounded-full bg-primary/10 px-3 py-1 text-primary shadow-none hover:bg-primary/10">
-                  <Github className="mr-2 h-3.5 w-3.5" />
-                  GitHub setup
-                </Badge>
-                <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                  {isMemberRole
-                    ? `Repository setup is managed by ${teamLeaderLabel}`
-                    : `Connect one shared repository for ${workspace.team?.name ?? "this team"}`}
-                </h2>
-                <p className="text-sm leading-7 text-muted-foreground sm:text-base">
-                  {isMemberRole
-                    ? "A team leader must create or connect the shared GitHub repository first. Once it is connected, you can browse code, create branches, and contribute from this workspace."
-                    : "This page links one real GitHub repository to your team. After setup, code, pull requests, issues, releases, and sync all happen here."}
+      <div className="mx-auto max-w-4xl space-y-6 py-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-[40px] border border-border/50 bg-background p-6 shadow-[0_32px_80px_-48px_rgba(15,23,42,0.3)] sm:p-8 lg:p-10"
+        >
+          {/* Decorative Background Elements */}
+          <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/5 blur-[100px]" />
+          <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-primary/3 blur-[100px]" />
+          
+          <div className="relative z-10 flex flex-col items-center text-center">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-[22px] bg-primary/10 text-primary shadow-inner">
+              <Github className="h-7 w-7" />
+            </div>
+
+            <Badge variant="outline" className="mb-4 rounded-full border-primary/20 bg-primary/5 px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
+              GitHub Workspace Setup
+            </Badge>
+
+            <h2 className="mb-3 text-2xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              {isMemberRole
+                ? `Waiting for ${teamLeaderLabel}`
+                : "Connect your repository"}
+            </h2>
+
+            <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-muted-foreground">
+              {isMemberRole
+                ? "Your team leader is responsible for setting up the shared GitHub repository. Once connected, the workspace will automatically activate for everyone."
+                : `Link a shared GitHub repository to ${setupTeamName}. Manage code, PRs, and releases all in one place.`}
+            </p>
+
+            {!isMemberRole && (
+              <div className="mb-8 w-full max-w-3xl space-y-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <motion.div 
+                    whileHover={!personalConnectionReady ? { y: -4 } : {}}
+                    whileTap={!personalConnectionReady ? { scale: 0.98 } : {}}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={!personalConnectionReady && busyAction !== "connect-user" ? () => void onConnectGitHub() : undefined}
+                    className={cn(
+                      "group relative flex flex-col items-start gap-4 rounded-[32px] border p-6 transition-all duration-300",
+                      personalConnectionReady 
+                        ? "border-emerald-500/20 bg-emerald-500/[0.02] shadow-sm" 
+                        : "border-border/50 bg-muted/10 hover:border-primary/20 hover:bg-muted/20 cursor-pointer"
+                    )}
+                  >
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors",
+                      personalConnectionReady ? "bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20" : "bg-background text-muted-foreground border-border/50"
+                    )}>
+                      {personalConnectionReady ? <Check className="h-5 w-5" /> : <Link2 className="h-5 w-5" />}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Requirement 01</p>
+                      <h4 className="mt-1 text-base font-semibold text-foreground/90">Personal Account</h4>
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {personalConnectionReady 
+                          ? `Connected as @${connectedGitHubIdentity}`
+                          : "Connect your account to enable code authoring and creation."}
+                      </p>
+                    </div>
+                    {!personalConnectionReady && (
+                      <span className="mt-auto text-xs font-semibold text-primary transition-colors group-hover:text-primary/80">
+                        {busyAction === "connect-user" ? "Connecting..." : "Connect now →"}
+                      </span>
+                    )}
+                  </motion.div>
+
+                  <motion.div 
+                    whileHover={!installationReady ? { y: -4 } : {}}
+                    whileTap={!installationReady ? { scale: 0.98 } : {}}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    onClick={!installationReady && busyAction !== "install-app" ? () => void onInstallGitHubApp() : undefined}
+                    className={cn(
+                      "group relative flex flex-col items-start gap-4 rounded-[32px] border p-6 transition-all duration-300",
+                      installationReady 
+                        ? "border-emerald-500/20 bg-emerald-500/[0.02] shadow-sm" 
+                        : "border-border/50 bg-muted/10 hover:border-primary/20 hover:bg-muted/20 cursor-pointer"
+                    )}
+                  >
+                    <div className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors",
+                      installationReady ? "bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20" : "bg-background text-muted-foreground border-border/50"
+                    )}>
+                      {installationReady ? <Check className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">Requirement 02</p>
+                      <h4 className="mt-1 text-base font-semibold text-foreground/90">GPMS GitHub App</h4>
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        {installationReady 
+                          ? installationStatusHint
+                          : "Install the app on your account or organization to bridge GPMS."}
+                      </p>
+                    </div>
+                    {!installationReady && (
+                      <span className="mt-auto text-xs font-semibold text-primary transition-colors group-hover:text-primary/80">
+                        {busyAction === "install-app" ? "Installing..." : "Install now →"}
+                      </span>
+                    )}
+                  </motion.div>
+                </div>
+
+                <div className="flex flex-col items-center gap-4">
+                  {canConfigureWorkspace && (
+                    <Button 
+                      size="lg"
+                      className="h-12 rounded-full bg-primary px-8 text-base font-semibold shadow-xl shadow-primary/25 transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-[0.98]"
+                      onClick={() => setSetupDialogOpen(true)}
+                    >
+                      <Github className="mr-3 h-5 w-5" />
+                      Configure Workspace
+                    </Button>
+                  )}
+                  
+                  {!personalConnectionReady && canConfigureWorkspace && (
+                    <p className="text-xs text-muted-foreground/60">
+                      We recommend connecting your personal account first.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isMemberRole && (
+              <div className="w-full max-w-md rounded-[32px] border border-amber-500/10 bg-amber-500/[0.02] p-6 text-center">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <h4 className="text-base font-semibold text-amber-900/90 dark:text-amber-100">Pending Configuration</h4>
+                <p className="mt-1 text-xs leading-relaxed text-amber-800/60 dark:text-amber-300/60">
+                  {teamLeaderLabel} needs to complete the setup before you can start contributing.
                 </p>
               </div>
-
-              <div className="rounded-[24px] border border-border/70 bg-muted/15 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-foreground">Setup progress</p>
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-xs">
-                    {setupReadyCount}/2 requirements completed
-                  </Badge>
-                </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-border/60 bg-background/85 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Personal account</p>
-                    <p className="mt-1 text-sm font-semibold">{personalConnectionReady ? connectedGitHubIdentity : "Not connected"}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {personalConnectionReady ? "Ready for create flow and author actions." : "Required for creating a repository and writing code from GPMS."}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border/60 bg-background/85 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">GitHub App</p>
-                    <p className="mt-1 text-sm font-semibold">{installationReady ? "Installed" : "Install needed"}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {installationReady ? installationStatusHint : "Install GPMS GitHub App on the repo owner account or organization."}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-4 rounded-xl border border-primary/20 bg-primary/7 px-4 py-3 text-sm text-foreground/90">
-                  <span className="font-medium">Next step:</span>{" "}
-                  {isMemberRole ? `Wait for ${teamLeaderLabel} to create or connect the team repository.` : nextSetupStep}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                {canConfigureWorkspace ? (
-                  <Button onClick={() => setSetupDialogOpen(true)}>
-                    <Github className="mr-2 h-4 w-4" />
-                    Open setup
-                  </Button>
-                ) : null}
-                {!workspace.githubConnection.isConnected && canConfigureWorkspace ? (
-                  <Button variant="outline" onClick={() => void onConnectGitHub()} disabled={busyAction === "connect-user"}>
-                    {busyAction === "connect-user" ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Link2 className="mr-2 h-4 w-4" />
-                    )}
-                    Connect Personal GitHub
-                  </Button>
-                ) : null}
-              </div>
-
-              {!canConfigureWorkspace ? (
-                <div className="rounded-[20px] border border-amber-200/70 bg-amber-50/80 p-4 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-100">
-                  <p className="font-semibold">Waiting for leader action</p>
-                  <p className="mt-1 leading-6">
-                    Repository setup is restricted to leaders/admins. Please wait for {teamLeaderLabel} to complete the connection.
-                  </p>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </div>
+        </motion.div>
       </div>
 
       <Dialog open={setupDialogOpen && canConfigureWorkspace} onOpenChange={setSetupDialogOpen}>
-        <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] !max-w-none gap-0 overflow-y-auto overscroll-contain rounded-[30px] border border-border/70 bg-background p-0 shadow-[0_28px_80px_-40px_rgba(15,23,42,0.42)] sm:w-[min(960px,calc(100vw-2rem))] sm:!max-w-[960px]">
+        <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] !max-w-none gap-0 overflow-y-auto overscroll-contain rounded-[40px] border border-border/70 bg-background p-0 shadow-[0_32px_100px_-40px_rgba(15,23,42,0.4)] sm:w-[min(960px,calc(100vw-2rem))]">
           <Tabs
             value={setupMode}
             onValueChange={(value) => setSetupMode(value as RepositorySetupMode)}
             className="flex min-h-full flex-col gap-0"
           >
             <div className="flex-1">
-              <div className="space-y-4 border-b border-border/70 px-5 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-7">
-                <DialogHeader className="space-y-3 pr-10 text-left">
-                  <DialogTitle className="text-2xl tracking-tight">Repository setup</DialogTitle>
-                  <DialogDescription className="max-w-3xl text-sm leading-6">
-                    Finish the two requirements, then choose either create a new repository or connect an existing one.
-                  </DialogDescription>
+              <div className="relative border-b border-border/50 px-8 pb-8 pt-10 sm:px-12">
+                <div className="absolute -right-12 -top-12 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+                
+                <DialogHeader className="relative z-10 space-y-4 text-left">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <Settings2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-2xl font-semibold tracking-tight">Repository setup</DialogTitle>
+                      <DialogDescription className="text-base text-muted-foreground">
+                        Configure how GPMS connects to your team's code.
+                      </DialogDescription>
+                    </div>
+                  </div>
                 </DialogHeader>
 
-                <div className="flex flex-wrap gap-2.5">
-                  <MetaCard label="Team" value={setupTeamName} />
-                  <MetaCard
-                    label="GitHub"
-                    value={workspace.githubConnection.isConnected ? connectedGitHubIdentity : "Not connected"}
-                    hint={personalConnectionReady ? "Ready for create flow" : "Needed for create flow"}
-                  />
-                  <MetaCard
-                    label="App"
-                    value={installationReady ? "Installed" : "Install needed"}
-                    hint={installationReady ? installationStatusHint : "Install required first"}
-                  />
-                </div>
-
-                <div className="space-y-4 rounded-[24px] border border-border/70 bg-muted/20 p-4 sm:p-5">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Requirements first: connect your personal GitHub account and install GPMS GitHub App. After that, choose the setup mode below.
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-[20px] border border-border/60 bg-background/90 p-4">
-                      <p className="text-sm font-medium text-foreground">Create repository mode</p>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {createRepositoryReady ? "Ready to create and connect a new team repository." : "Needs personal account + app installation."}
-                      </p>
-                    </div>
-                    <div className="rounded-[20px] border border-border/60 bg-background/90 p-4">
-                      <p className="text-sm font-medium text-foreground">Connect existing mode</p>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        {connectExistingReady ? "Ready to connect an existing GitHub repository." : "Needs app installation first."}
-                      </p>
-                    </div>
+                <div className="mt-10 flex flex-wrap gap-3">
+                  <div className="rounded-2xl border border-border/50 bg-muted/5 px-5 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Active Team</p>
+                    <p className="mt-1 font-semibold text-foreground/90">{setupTeamName}</p>
                   </div>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    {!workspace.githubConnection.isConnected ? (
-                      <Button
-                        variant="outline"
-                        className="w-full sm:w-auto"
-                        onClick={() => void onConnectGitHub()}
-                        disabled={busyAction === "connect-user"}
-                      >
-                        {busyAction === "connect-user" ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Link2 className="mr-2 h-4 w-4" />
-                        )}
-                        Connect Personal GitHub
-                      </Button>
-                    ) : null}
-                    {!installationReady ? (
-                      <>
-                        <Button
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={() => void onInstallGitHubApp()}
-                          disabled={busyAction === "install-app"}
-                        >
-                          {busyAction === "install-app" ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Bot className="mr-2 h-4 w-4" />
-                          )}
-                          Install GPMS GitHub App
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                          onClick={() => void onCheckInstallationStatus()}
-                          disabled={workspaceLoading}
-                        >
-                          {workspaceLoading ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                          )}
-                          Check installation status
-                        </Button>
-                      </>
-                    ) : null}
+                  <div className="rounded-2xl border border-border/50 bg-muted/5 px-5 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Personal Connection</p>
+                    <p className={cn("mt-1 font-semibold", personalConnectionReady ? "text-emerald-600" : "text-amber-600")}>
+                      {personalConnectionReady ? `@${connectedGitHubIdentity}` : "Not Connected"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/50 bg-muted/5 px-5 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">App Installation</p>
+                    <p className={cn("mt-1 font-semibold", installationReady ? "text-emerald-600" : "text-amber-600")}>
+                      {installationReady ? "Ready" : "Required"}
+                    </p>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Setup mode</p>
-                  <TabsList className="grid h-auto w-full grid-cols-1 rounded-2xl bg-muted/30 p-1 sm:h-12 sm:max-w-md sm:grid-cols-2">
-                    <TabsTrigger value="create" className="rounded-xl">
+                <div className="mt-10">
+                  <TabsList className="grid h-14 w-full grid-cols-2 rounded-[20px] bg-muted/30 p-1.5 sm:max-w-md">
+                    <TabsTrigger value="create" className="rounded-[14px] text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-lg">
                       Create repository
                     </TabsTrigger>
-                    <TabsTrigger value="connect" className="rounded-xl">
+                    <TabsTrigger value="connect" className="rounded-[14px] text-sm font-semibold data-[state=active]:bg-background data-[state=active]:shadow-lg">
                       Connect existing
                     </TabsTrigger>
                   </TabsList>
                 </div>
               </div>
 
-              <div className="px-5 py-5 sm:px-8 sm:py-7">
-                <TabsContent value="create" className="mt-0">
-                  <div className="space-y-6">
-                    {!personalConnectionReady ? (
-                      <div className="flex items-start gap-3 rounded-[22px] border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-950">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+              <div className="px-8 py-10 sm:px-12">
+                <TabsContent value="create" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="space-y-8">
+                    {!personalConnectionReady && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex items-center gap-4 rounded-[28px] border border-amber-500/20 bg-amber-500/[0.03] p-6"
+                      >
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600">
+                          <AlertCircle className="h-6 w-6" />
+                        </div>
                         <div className="space-y-1">
-                          <p className="font-medium">Create repository is locked until personal GitHub is connected.</p>
-                          <p className="leading-6 text-amber-900/80">
-                            You can still test the GitHub App installation right now by switching to `Connect existing`
-                            after the app is installed.
+                          <p className="font-semibold text-amber-900/90 dark:text-amber-100">Personal GitHub Required</p>
+                          <p className="text-sm text-amber-800/60 dark:text-amber-300/60 leading-relaxed">
+                            To create a repository on your behalf, we need your personal GitHub connection.
                           </p>
                         </div>
-                      </div>
-                    ) : null}
-                    <div className="space-y-6">
-                    <SetupSection
-                      title="GitHub access"
-                      description="Choose the GitHub account or organization that should receive the new repository."
-                    >
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <Field
-                          label={availableInstallations.length > 0 ? "Installed account" : "Installation ID"}
-                          hint="Required"
-                          description={
-                            availableInstallations.length > 0
-                              ? "Choose the GitHub account or organization where the GPMS app is installed. GPMS will use the correct installation ID for you."
-                              : "This is usually filled in for you right after a successful GPMS GitHub App installation."
-                          }
+                        <Button 
+                          className="ml-auto rounded-xl bg-amber-600 text-white hover:bg-amber-700"
+                          onClick={() => void onConnectGitHub()}
+                          disabled={busyAction === "connect-user"}
                         >
+                          Connect
+                        </Button>
+                      </motion.div>
+                    )}
+
+                    <div className="grid gap-8">
+                      <SetupSection
+                        title="Owner & Access"
+                        description="Where should this repository live on GitHub?"
+                      >
+                        <div className="grid gap-6 md:grid-cols-2">
+                          <Field
+                            label="App Installation"
+                            description="Select the GitHub account where GPMS is installed."
+                          >
+                            {availableInstallations.length > 0 ? (
+                              <Select
+                                value={createRepositoryForm.installationId}
+                                onValueChange={(value) => {
+                                  const selectedInstallation = availableInstallations.find(
+                                    (installation) => installation.id === value,
+                                  )
+                                  setCreateRepositoryForm((current) => ({
+                                    ...current,
+                                    installationId: value,
+                                    owner: selectedInstallation?.accountLogin ?? current.owner,
+                                    ownerType: selectedInstallation?.accountType ?? current.ownerType,
+                                  }))
+                                }}
+                              >
+                                <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/50 backdrop-blur-sm">
+                                  <SelectValue placeholder="Choose installation" />
+                                </SelectTrigger>
+                                <SelectContent className="rounded-2xl">
+                                  {availableInstallations.map((installation) => (
+                                    <SelectItem key={installation.id} value={installation.id}>
+                                      <div className="flex items-center gap-2">
+                                        <Github className="h-4 w-4 opacity-40" />
+                                        <span>{installation.accountLogin}</span>
+                                        <span className="text-[10px] font-mono text-muted-foreground/60">#{installation.id}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="flex gap-2">
+                                <Input
+                                  value={createRepositoryForm.installationId}
+                                  onChange={(event) =>
+                                    setCreateRepositoryForm((current) => ({ ...current, installationId: event.target.value }))
+                                  }
+                                  placeholder="Installation ID"
+                                  className="h-12 rounded-2xl border-border/50 bg-background/50"
+                                />
+                                <Button variant="outline" className="h-12 rounded-2xl" onClick={() => void onInstallGitHubApp()}>
+                                  Install App
+                                </Button>
+                              </div>
+                            )}
+                          </Field>
+                          <Field
+                            label="Owner Login"
+                            description="The GitHub username or organization name."
+                          >
+                            <Input
+                              value={createRepositoryForm.owner}
+                              onChange={(event) =>
+                                setCreateRepositoryForm((current) => ({ ...current, owner: event.target.value }))
+                              }
+                              placeholder="e.g. team-alpha"
+                              className="h-12 rounded-2xl border-border/50 bg-background/50"
+                              disabled={createOwnerLockedToInstallation}
+                            />
+                          </Field>
+                        </div>
+                        
+                        <div className="grid gap-6 md:grid-cols-3">
+                          <Field label="Owner Type">
+                            <Select
+                              value={createRepositoryForm.ownerType}
+                              disabled={createOwnerLockedToInstallation}
+                              onValueChange={(value: "USER" | "ORGANIZATION") =>
+                                setCreateRepositoryForm((current) => ({ ...current, ownerType: value }))
+                              }
+                            >
+                              <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-2xl">
+                                <SelectItem value="USER">User</SelectItem>
+                                <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                          <Field label="Visibility">
+                            <Select
+                              value={createRepositoryForm.visibility}
+                              onValueChange={(value: ApiGitHubRepositoryVisibility) =>
+                                setCreateRepositoryForm((current) => ({ ...current, visibility: value }))
+                              }
+                            >
+                              <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/50">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="rounded-2xl">
+                                <SelectItem value="PRIVATE">Private (Recommended)</SelectItem>
+                                <SelectItem value="PUBLIC">Public</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Field>
+                          <Field label="Default Branch">
+                            <Input
+                              value={createRepositoryForm.defaultBranch}
+                              onChange={(event) =>
+                                setCreateRepositoryForm((current) => ({ ...current, defaultBranch: event.target.value }))
+                              }
+                              placeholder="main"
+                              className="h-12 rounded-2xl border-border/50 bg-background/50"
+                            />
+                          </Field>
+                        </div>
+                      </SetupSection>
+
+                      <SetupSection
+                        title="Repository Details"
+                        description="How should your repository be named?"
+                      >
+                        <Field
+                          label="Repository Name"
+                          description="Letters, numbers, and dashes only."
+                        >
+                          <Input
+                            value={createRepositoryForm.repoName}
+                            onChange={(event) =>
+                              setCreateRepositoryForm((current) => ({ ...current, repoName: event.target.value }))
+                            }
+                            placeholder="gpms-team-workspace"
+                            className="h-12 rounded-2xl border-border/50 bg-background/50"
+                          />
+                        </Field>
+
+                        <Field label="Description (Optional)">
+                          <Textarea
+                            value={createRepositoryForm.description}
+                            onChange={(event) =>
+                              setCreateRepositoryForm((current) => ({ ...current, description: event.target.value }))
+                            }
+                            placeholder="Shared workspace for our graduation project..."
+                            className="min-h-[100px] rounded-2xl border-border/50 bg-background/50"
+                          />
+                        </Field>
+                      </SetupSection>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="connect" className="mt-0 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <div className="space-y-8">
+                    {!installationReady && (
+                      <div className="flex items-center gap-4 rounded-[28px] border border-primary/20 bg-primary/[0.03] p-6">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                          <Bot className="h-6 w-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="font-semibold text-foreground/90">Install GPMS App</p>
+                          <p className="text-sm text-muted-foreground leading-relaxed">
+                            The GitHub App must be installed on the repository owner's account first.
+                          </p>
+                        </div>
+                        <Button 
+                          className="ml-auto rounded-xl bg-primary text-white hover:bg-primary/90"
+                          onClick={() => void onInstallGitHubApp()}
+                          disabled={busyAction === "install-app"}
+                        >
+                          Install Now
+                        </Button>
+                      </div>
+                    )}
+
+                    <SetupSection
+                      title="Connect Existing Repository"
+                      description="Link a repository that already exists on GitHub."
+                    >
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <Field label="App Installation">
                           {availableInstallations.length > 0 ? (
                             <Select
-                              value={createRepositoryForm.installationId}
+                              value={connectRepositoryForm.installationId}
                               onValueChange={(value) => {
                                 const selectedInstallation = availableInstallations.find(
                                   (installation) => installation.id === value,
                                 )
-                                setCreateRepositoryForm((current) => ({
+                                setConnectRepositoryForm((current) => ({
                                   ...current,
                                   installationId: value,
                                   owner: selectedInstallation?.accountLogin ?? current.owner,
-                                  ownerType: selectedInstallation?.accountType ?? current.ownerType,
                                 }))
                               }}
                             >
-                              <SelectTrigger className="h-11 rounded-2xl">
-                                <SelectValue placeholder="Choose an installed GitHub account" />
+                              <SelectTrigger className="h-12 rounded-2xl border-border/50 bg-background/50">
+                                <SelectValue placeholder="Choose installation" />
                               </SelectTrigger>
-                              <SelectContent>
+                              <SelectContent className="rounded-2xl">
                                 {availableInstallations.map((installation) => (
                                   <SelectItem key={installation.id} value={installation.id}>
-                                    {(installation.accountLogin ?? "Unknown owner") + ` · #${installation.id}`}
+                                    <div className="flex items-center gap-2">
+                                      <Github className="h-4 w-4 opacity-40" />
+                                      <span>{installation.accountLogin}</span>
+                                      <span className="text-[10px] font-mono text-muted-foreground/60">#{installation.id}</span>
+                                    </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           ) : (
                             <Input
-                              value={createRepositoryForm.installationId}
+                              value={connectRepositoryForm.installationId}
                               onChange={(event) =>
-                                setCreateRepositoryForm((current) => ({ ...current, installationId: event.target.value }))
+                                setConnectRepositoryForm((current) => ({ ...current, installationId: event.target.value }))
                               }
-                              placeholder="GitHub App installation ID"
-                              className="h-11 rounded-2xl"
+                              placeholder="Installation ID"
+                              className="h-12 rounded-2xl border-border/50 bg-background/50"
                             />
                           )}
                         </Field>
-                        <Field
-                          label="Owner login"
-                          hint="Required"
-                          description={
-                            createOwnerLockedToInstallation
-                              ? "Personal repositories are created under the selected GitHub account. Switch Owner type to Organization if the repo should live inside a GitHub organization."
-                              : "Enter the exact GitHub username or organization name that should own the new repository."
-                          }
-                        >
+                        <Field label="Owner Login">
                           <Input
-                            value={createRepositoryForm.owner}
+                            value={connectRepositoryForm.owner}
                             onChange={(event) =>
-                              setCreateRepositoryForm((current) => ({ ...current, owner: event.target.value }))
+                              setConnectRepositoryForm((current) => ({ ...current, owner: event.target.value }))
                             }
-                            placeholder="team-org or owner account"
-                            className="h-11 rounded-2xl"
-                            disabled={createOwnerLockedToInstallation}
+                            disabled={connectOwnerLockedToInstallation}
+                            placeholder="e.g. team-alpha"
+                            className="h-12 rounded-2xl border-border/50 bg-background/50"
                           />
                         </Field>
                       </div>
-                      {selectedCreateInstallation ? (
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Using installation #{selectedCreateInstallation.id} on{" "}
-                          {selectedCreateInstallation.accountLogin ?? "the selected GitHub account"}.
-                        </p>
-                      ) : null}
-                      {createOwnerMismatch && selectedCreateInstallation?.accountLogin ? (
-                        <p className="text-sm leading-6 text-destructive">
-                          Selected installation belongs to {selectedCreateInstallation.accountLogin}, so the owner login must also be {selectedCreateInstallation.accountLogin}.
-                        </p>
-                      ) : null}
 
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <Field
-                          label="Owner type"
-                          description={
-                            selectedCreateInstallation?.accountLogin
-                              ? "Locked to the account type of the selected GitHub App installation."
-                              : "Choose `Organization` only if the repository should live inside a GitHub organization."
-                          }
-                        >
-                          <Select
-                            value={createRepositoryForm.ownerType}
-                            disabled={Boolean(selectedCreateInstallation?.accountLogin)}
-                            onValueChange={(value: "USER" | "ORGANIZATION") =>
-                              setCreateRepositoryForm((current) => ({
-                                ...current,
-                                ownerType: value,
-                                owner:
-                                  value === "USER" && selectedCreateInstallation?.accountLogin
-                                    ? selectedCreateInstallation.accountLogin
-                                    : current.owner,
-                              }))
-                            }
-                          >
-                            <SelectTrigger className="h-11 rounded-2xl">
-                              <SelectValue placeholder="Owner type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="USER">User</SelectItem>
-                              <SelectItem value="ORGANIZATION">Organization</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field
-                          label="Visibility"
-                          description="Most student teams should keep the repository private."
-                        >
-                          <Select
-                            value={createRepositoryForm.visibility}
-                            onValueChange={(value: ApiGitHubRepositoryVisibility) =>
-                              setCreateRepositoryForm((current) => ({ ...current, visibility: value }))
-                            }
-                          >
-                            <SelectTrigger className="h-11 rounded-2xl">
-                              <SelectValue placeholder="Repository visibility" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PRIVATE">Private</SelectItem>
-                              <SelectItem value="PUBLIC">Public</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </Field>
-                        <Field
-                          label="Default branch"
-                          hint="Optional"
-                          description="Most teams keep this as `main` unless you already follow a different branch naming rule."
-                        >
-                          <Input
-                            value={createRepositoryForm.defaultBranch}
-                            onChange={(event) =>
-                              setCreateRepositoryForm((current) => ({ ...current, defaultBranch: event.target.value }))
-                            }
-                            placeholder="main"
-                            className="h-11 rounded-2xl"
-                          />
-                        </Field>
-                      </div>
-                    </SetupSection>
-
-                    <SetupSection
-                      title="Repository details"
-                      description="Pick a clear repository name, then set visibility and an optional description."
-                    >
-                      <Field
-                        label="Repository name"
-                        hint="Required"
-                        description="Use a short slug like `gpms-team-alpha`. Only letters, numbers, `.`, `_`, and `-` are accepted."
-                      >
+                      <Field label="Repository Name">
                         <Input
-                          value={createRepositoryForm.repoName}
+                          value={connectRepositoryForm.repoName}
                           onChange={(event) =>
-                            setCreateRepositoryForm((current) => ({ ...current, repoName: event.target.value }))
+                            setConnectRepositoryForm((current) => ({ ...current, repoName: event.target.value }))
                           }
-                          placeholder="gpms-smart-campus"
-                          className="h-11 rounded-2xl"
-                        />
-                      </Field>
-
-                      <Field
-                        label="Description"
-                        hint="Optional"
-                        description="Write one or two sentences about the project goal, scope, or product name."
-                      >
-                        <Textarea
-                          value={createRepositoryForm.description}
-                          onChange={(event) =>
-                            setCreateRepositoryForm((current) => ({ ...current, description: event.target.value }))
-                          }
-                          placeholder="Describe the project codebase, scope, and primary goal."
-                          className="min-h-[120px] rounded-2xl"
+                          placeholder="existing-repo-name"
+                          className="h-12 rounded-2xl border-border/50 bg-background/50"
                         />
                       </Field>
                     </SetupSection>
-
-                  </div>
-
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="connect" className="mt-0">
-                  <div className="space-y-6">
-                    {!installationReady ? (
-                      <div className="flex items-start gap-3 rounded-[22px] border border-sky-200 bg-sky-50/80 p-4 text-sm text-sky-950">
-                        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
-                        <div className="space-y-1">
-                          <p className="font-medium">Install the GPMS GitHub App first.</p>
-                          <p className="leading-6 text-sky-900/80">
-                            Once installation finishes, this dialog usually lists the installed GitHub account so you only
-                            need the owner login and repository name.
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="space-y-6">
-                      <SetupSection
-                        title="Existing repository link"
-                        description="Use this only for a repository that already exists and already has the GPMS GitHub App installed."
-                      >
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <Field
-                            label={availableInstallations.length > 0 ? "Installed account" : "Installation ID"}
-                            hint="Required"
-                            description={
-                              availableInstallations.length > 0
-                                ? "Choose the installed GitHub account or organization that already has the GPMS app."
-                                : "Filled automatically after app installation, or paste it manually if you already know it."
-                            }
-                          >
-                            {availableInstallations.length > 0 ? (
-                              <Select
-                                value={connectRepositoryForm.installationId}
-                                onValueChange={(value) => {
-                                  const selectedInstallation = availableInstallations.find(
-                                    (installation) => installation.id === value,
-                                  )
-                                  setConnectRepositoryForm((current) => ({
-                                    ...current,
-                                    installationId: value,
-                                    owner: selectedInstallation?.accountLogin ?? current.owner,
-                                  }))
-                                }}
-                              >
-                                <SelectTrigger className="h-11 rounded-2xl">
-                                  <SelectValue placeholder="Choose an installed GitHub account" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {availableInstallations.map((installation) => (
-                                    <SelectItem key={installation.id} value={installation.id}>
-                                      {(installation.accountLogin ?? "Unknown owner") + ` · #${installation.id}`}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <Input
-                                value={connectRepositoryForm.installationId}
-                                onChange={(event) =>
-                                  setConnectRepositoryForm((current) => ({
-                                    ...current,
-                                    installationId: event.target.value,
-                                  }))
-                                }
-                                placeholder="GitHub App installation ID"
-                                className="h-11 rounded-2xl"
-                              />
-                            )}
-                          </Field>
-                          <Field
-                            label="Owner login"
-                            hint="Required"
-                            description={
-                              connectOwnerLockedToInstallation
-                                ? "Locked to the GitHub account or organization that owns the selected installation."
-                                : "Use the exact GitHub username or organization slug that owns the existing repository."
-                            }
-                          >
-                            <Input
-                              value={connectRepositoryForm.owner}
-                              onChange={(event) =>
-                                setConnectRepositoryForm((current) => ({ ...current, owner: event.target.value }))
-                              }
-                              disabled={connectOwnerLockedToInstallation}
-                              placeholder="team-org or owner account"
-                              className="h-11 rounded-2xl"
-                            />
-                          </Field>
-                        </div>
-
-                        <Field
-                          label="Repository name"
-                          hint="Required"
-                          description="Enter the exact existing GitHub repository name, for example `graduation-project-frontend`."
-                        >
-                          <Input
-                            value={connectRepositoryForm.repoName}
-                            onChange={(event) =>
-                              setConnectRepositoryForm((current) => ({ ...current, repoName: event.target.value }))
-                            }
-                            placeholder="existing-gpms-repository"
-                            className="h-11 rounded-2xl"
-                          />
-                        </Field>
-                        {selectedConnectInstallation ? (
-                          <p className="text-xs leading-5 text-muted-foreground">
-                            Using installation #{selectedConnectInstallation.id} on{" "}
-                            {selectedConnectInstallation.accountLogin ?? "the selected GitHub account"}.
-                          </p>
-                        ) : null}
-                        {connectOwnerMismatch && selectedConnectInstallation?.accountLogin ? (
-                          <p className="text-sm leading-6 text-destructive">
-                            Selected installation belongs to {selectedConnectInstallation.accountLogin}, so the owner login must also be {selectedConnectInstallation.accountLogin}.
-                          </p>
-                        ) : null}
-
-                        <div className="rounded-[24px] border border-border/70 bg-muted/20 p-4 text-sm leading-6 text-muted-foreground">
-                          Use this mode only when the repository already exists on GitHub. GPMS will attach it to this team
-                          and start syncing code, issues, pull requests, and releases from that repo.
-                        </div>
-                      </SetupSection>
-                    </div>
-
                   </div>
                 </TabsContent>
               </div>
             </div>
 
-            <DialogFooter className="sticky bottom-0 border-t border-border/70 bg-background/95 px-5 py-4 backdrop-blur sm:px-8">
-              {setupDialogError ? (
-                <div className="mr-auto flex w-full items-start gap-3 rounded-2xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-950 sm:w-auto sm:max-w-[540px]">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p className="leading-6">{setupDialogError}</p>
+            <DialogFooter className="sticky bottom-0 z-20 flex-col items-center gap-4 border-t border-border/50 bg-background/95 px-8 py-6 backdrop-blur sm:flex-row sm:px-12">
+              {setupDialogError && (
+                <div className="mr-auto flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-600">
+                  <AlertCircle className="h-4 w-4" />
+                  <p className="font-medium">{setupDialogError}</p>
                 </div>
-              ) : null}
-              <Button variant="outline" className="w-full sm:w-auto" onClick={() => setSetupDialogOpen(false)}>
-                Cancel
-              </Button>
-              {setupMode === "create" ? (
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => void onCreateRepository()}
-                  disabled={
-                    !personalConnectionReady ||
-                    !createRepositoryForm.installationId ||
-                    !createRepositoryForm.owner.trim() ||
-                    !createRepositoryForm.repoName.trim() ||
-                    createOwnerMismatch ||
-                    busyAction === "create-repository"
-                  }
-                >
-                  {busyAction === "create-repository" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Github className="mr-2 h-4 w-4" />
-                  )}
-                  Create and Connect
-                </Button>
-              ) : (
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={() => void onConnectRepository()}
-                  disabled={
-                    !connectRepositoryForm.installationId ||
-                    !connectRepositoryForm.owner.trim() ||
-                    !connectRepositoryForm.repoName.trim() ||
-                    connectOwnerMismatch ||
-                    busyAction === "connect-repository"
-                  }
-                >
-                  {busyAction === "connect-repository" ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Link2 className="mr-2 h-4 w-4" />
-                  )}
-                  Connect Repository
-                </Button>
               )}
+              
+              <div className="flex w-full items-center justify-end gap-3 sm:w-auto">
+                <Button 
+                  variant="ghost" 
+                  className="rounded-xl px-6 font-semibold" 
+                  onClick={() => setSetupDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                
+                {setupMode === "create" ? (
+                  <Button
+                    className="h-12 rounded-xl bg-primary px-8 font-semibold shadow-lg shadow-primary/20"
+                    onClick={() => void onCreateRepository()}
+                    disabled={
+                      !personalConnectionReady ||
+                      !createRepositoryForm.installationId ||
+                      !createRepositoryForm.owner.trim() ||
+                      !createRepositoryForm.repoName.trim() ||
+                      createOwnerMismatch ||
+                      busyAction === "create-repository"
+                    }
+                  >
+                    {busyAction === "create-repository" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="mr-2 h-4 w-4" />
+                    )}
+                    Create & Connect
+                  </Button>
+                ) : (
+                  <Button
+                    className="h-12 rounded-xl bg-primary px-8 font-semibold shadow-lg shadow-primary/20"
+                    onClick={() => void onConnectRepository()}
+                    disabled={
+                      !connectRepositoryForm.installationId ||
+                      !connectRepositoryForm.owner.trim() ||
+                      !connectRepositoryForm.repoName.trim() ||
+                      connectOwnerMismatch ||
+                      busyAction === "connect-repository"
+                    }
+                  >
+                    {busyAction === "connect-repository" ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Link2 className="mr-2 h-4 w-4" />
+                    )}
+                    Connect Repository
+                  </Button>
+                )}
+              </div>
             </DialogFooter>
           </Tabs>
         </DialogContent>
@@ -9568,20 +9482,16 @@ function SectionCard({
   stackHeader?: boolean
 }) {
   return (
-    <Card className={cn("rounded-[24px] border border-border/70 bg-background shadow-[0_18px_46px_-38px_rgba(15,23,42,0.16)]", className)}>
-      <CardHeader className="space-y-3 p-5 sm:p-6">
-        <div className={cn("flex flex-col gap-4", !stackHeader && "lg:flex-row lg:items-start lg:justify-between")}>
-          <div className="space-y-1.5">
-            <CardTitle className="text-lg font-semibold tracking-tight sm:text-[1.15rem]">{title}</CardTitle>
-            <CardDescription className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              {description}
-            </CardDescription>
-          </div>
-          {action ? <div className={cn("w-full", !stackHeader && "lg:w-auto")}>{action}</div> : null}
+    <div className={cn("rounded-[32px] border border-border/50 bg-background p-6 shadow-sm sm:p-8", className)}>
+      <div className={cn("mb-8 flex flex-col gap-4", !stackHeader && "lg:flex-row lg:items-start lg:justify-between")}>
+        <div className="space-y-1">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground/90">{title}</h3>
+          <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground/70">{description}</p>
         </div>
-      </CardHeader>
-      <CardContent className={cn("p-5 pt-0 sm:p-6 sm:pt-0", contentClassName)}>{children}</CardContent>
-    </Card>
+        {action && <div className={cn("shrink-0", !stackHeader && "lg:pt-1")}>{action}</div>}
+      </div>
+      <div className={contentClassName}>{children}</div>
+    </div>
   )
 }
 
@@ -9693,13 +9603,13 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <Label className="text-sm font-medium text-foreground">{label}</Label>
-        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-4">
+        <Label className="text-sm font-semibold tracking-tight text-foreground/90">{label}</Label>
+        {hint && <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">{hint}</span>}
       </div>
       {children}
-      {description ? <p className="text-xs leading-5 text-muted-foreground">{description}</p> : null}
+      {description && <p className="text-[11px] leading-relaxed text-muted-foreground/60">{description}</p>}
     </div>
   )
 }
@@ -9714,12 +9624,12 @@ function SetupSection({
   children: ReactNode
 }) {
   return (
-    <div className="rounded-[24px] border border-border/70 bg-background shadow-[0_14px_36px_-30px_rgba(15,23,42,0.16)] p-5 sm:p-6">
-      <div className="mb-5 space-y-1">
-        <h3 className="text-lg font-semibold tracking-tight text-foreground">{title}</h3>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+    <div className="space-y-6">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold tracking-tight text-foreground/90">{title}</h3>
+        <p className="text-sm leading-relaxed text-muted-foreground/70">{description}</p>
       </div>
-      <div className="space-y-5">{children}</div>
+      <div className="grid gap-6">{children}</div>
     </div>
   )
 }
@@ -9756,10 +9666,10 @@ function MetaCard({
   hint?: string
 }) {
   return (
-    <div className="min-w-0 rounded-[18px] border border-border/70 bg-background px-4 py-3 shadow-[0_10px_24px_-24px_rgba(15,23,42,0.12)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-sm font-semibold tracking-tight text-foreground">{value}</p>
-      {hint ? <p className="mt-1 text-xs leading-5 text-muted-foreground">{hint}</p> : null}
+    <div className="min-w-0 rounded-[22px] border border-border/60 bg-background/50 px-5 py-4 shadow-[0_8px_20px_-12px_rgba(15,23,42,0.1)] transition-all hover:border-primary/20 hover:bg-background">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/45">{label}</p>
+      <p className="mt-1 text-[15px] font-semibold tracking-tight text-foreground/90">{value}</p>
+      {hint ? <p className="mt-1 text-[11px] font-medium leading-relaxed text-muted-foreground/50">{hint}</p> : null}
     </div>
   )
 }
@@ -9778,15 +9688,20 @@ function EmptySection({
   return (
     <div
       className={cn(
-        "rounded-[24px] border border-dashed border-border/70 bg-muted/15 text-center",
-        compact ? "px-5 py-7" : "px-6 py-12",
+        "relative overflow-hidden rounded-[32px] border border-dashed border-border/60 bg-muted/5 text-center transition-all duration-300 hover:bg-muted/10",
+        compact ? "px-6 py-8" : "px-8 py-16",
       )}
     >
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-background text-primary shadow-sm">
-        {icon}
+      <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/5 blur-3xl" />
+      <div className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-primary/5 blur-3xl" />
+      
+      <div className="relative z-10">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-[22px] bg-background text-primary shadow-sm ring-1 ring-border/50">
+          {icon}
+        </div>
+        <h3 className="text-xl font-semibold tracking-tight text-foreground/90">{title}</h3>
+        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground/70">{description}</p>
       </div>
-      <h3 className="mt-4 text-lg font-semibold tracking-tight">{title}</h3>
-      <p className="mx-auto mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -9801,11 +9716,16 @@ function SetupCard({
   description: string
 }) {
   return (
-    <div className="rounded-[24px] border border-border/70 bg-muted/15 p-5 transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-primary/[0.03]">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background shadow-sm">{icon}</div>
-      <p className="mt-4 text-lg font-semibold tracking-tight">{title}</p>
-      <p className="mt-2 text-sm leading-7 text-muted-foreground">{description}</p>
-    </div>
+    <motion.div 
+      whileHover={{ y: -4 }}
+      className="group rounded-[32px] border border-border/50 bg-background p-8 transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+    >
+      <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110">
+        {icon}
+      </div>
+      <h4 className="text-lg font-semibold tracking-tight text-foreground/90">{title}</h4>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground/70">{description}</p>
+    </motion.div>
   )
 }
 
@@ -9823,12 +9743,17 @@ function ToggleRow({
   disabled?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-[22px] border border-border/70 bg-muted/15 p-4 transition-all duration-200 hover:border-primary/20 hover:bg-primary/4 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-4 rounded-[24px] border border-border/60 bg-muted/10 p-5 transition-all duration-200 hover:border-primary/20 hover:bg-primary/[0.03] sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-1">
-        <p className="font-semibold tracking-tight text-foreground/95">{title}</p>
-        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+        <p className="font-semibold tracking-tight text-foreground/90">{title}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground/70">{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+      <Switch 
+        checked={checked} 
+        onCheckedChange={onCheckedChange} 
+        disabled={disabled}
+        className="data-[state=checked]:bg-primary"
+      />
     </div>
   )
 }
@@ -9849,31 +9774,44 @@ function ActionRow({
   href?: string
 }) {
   return (
-    <div className="rounded-[18px] border border-border/70 bg-muted/5 px-4 py-3.5 transition-all duration-200 hover:border-primary/20 hover:bg-primary/3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="group rounded-[20px] border border-border/60 bg-background/50 px-5 py-4 transition-all duration-200 hover:border-primary/20 hover:bg-background">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <p className="font-medium tracking-tight">{title}</p>
-          <p className="wrap-break-word text-sm leading-5 text-muted-foreground">{description}</p>
+          <p className="text-sm font-semibold tracking-tight text-foreground/90">{title}</p>
+          <p className="wrap-break-word text-xs leading-relaxed text-muted-foreground/60">{description}</p>
         </div>
         {href ? (
-          <Button className="w-full sm:w-auto" variant="ghost" size="sm" asChild>
+          <Button 
+            className="w-full sm:w-auto h-9 rounded-xl border-border/40 bg-background text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30" 
+            variant="outline" 
+            size="sm" 
+            asChild
+          >
             <a href={href} target="_blank" rel="noreferrer">
               {actionLabel}
             </a>
           </Button>
         ) : (
-          <Button className="w-full sm:w-auto" variant="ghost" size="sm" onClick={onAction}>
-            {!href && (
-              <motion.span
-                key={isCopied ? "copied-action-row" : "copy-action-row"}
-                initial={ANIM_BADGE_OUT}
-                animate={ANIM_BADGE_IN}
-                transition={{ duration: 0.16 }}
-                className="mr-2 inline-flex"
-              >
-                {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              </motion.span>
+          <Button 
+            className={cn(
+              "w-full sm:w-auto h-9 rounded-xl text-xs font-bold transition-all",
+              isCopied 
+                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 hover:bg-emerald-500/20" 
+                : "border-border/40 bg-background hover:bg-primary/10 hover:text-primary hover:border-primary/30"
             )}
+            variant="outline" 
+            size="sm" 
+            onClick={onAction}
+          >
+            <motion.span
+              key={isCopied ? "copied-action-row" : "copy-action-row"}
+              initial={ANIM_BADGE_OUT}
+              animate={ANIM_BADGE_IN}
+              transition={{ duration: 0.16 }}
+              className="mr-2 inline-flex"
+            >
+              {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </motion.span>
             {actionLabel}
           </Button>
         )}

@@ -5,11 +5,15 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
+  AlertCircle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Clock,
   GraduationCap,
+  Inbox,
   Loader2,
   Mail,
   Search,
@@ -153,7 +157,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
       .then((result) => {
         if (cancelled) return
         setDoctorTotalPages(result.meta.totalPages || 1)
-        setDoctors((current) => (doctorPage === 1 ? result.items : [...current, ...result.items.filter((item) => current.every((existing) => existing.id !== item.id))]))
+        setDoctors(result.items)
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -176,7 +180,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
       .then((result) => {
         if (cancelled) return
         setTaTotalPages(result.meta.totalPages || 1)
-        setTas((current) => (taPage === 1 ? result.items : [...current, ...result.items.filter((item) => current.every((existing) => existing.id !== item.id))]))
+        setTas(result.items)
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -257,88 +261,34 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
     (item) => item.supervisorRole === "DOCTOR" && item.status === "PENDING",
   ) ?? null
   const pendingTaRequest = requests.find((item) => item.supervisorRole === "TA" && item.status === "PENDING") ?? null
+  const assignedCount = Number(Boolean(team.doctor)) + Number(Boolean(team.ta))
+  const pendingCount = Number(Boolean(pendingDoctorRequest)) + Number(Boolean(pendingTaRequest))
 
   return (
-    <div className="space-y-6">
-      <motion.section
-        {...getSupervisorRevealMotion(reduceMotion)}
-        className="overflow-hidden rounded-[28px] border border-border/70 bg-background shadow-sm"
+    <div className="space-y-5">
+      <motion.div
+        {...getSupervisorRevealMotion(reduceMotion, 0.05)}
+        className="rounded-xl border border-border/70 bg-background p-4 shadow-sm sm:p-5"
       >
-        <div className="grid gap-5 bg-gradient-to-br from-primary/[0.08] via-background to-background p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
-          <div className="min-w-0 space-y-4">
-            <Badge variant="outline" className="w-fit border-primary/20 bg-background/80 text-primary">
-              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
-              Supervisor setup
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">Supervisors</h2>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              Review who is assigned to your team and keep pending requests easy to track.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary" className="rounded-md bg-primary/10 px-2.5 py-1 text-primary">
+              {assignedCount}/2 assigned
             </Badge>
-            <div className="space-y-2">
-              <h2 className="text-2xl font-bold tracking-tight">Choose the right academic support</h2>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Keep your Doctor and TA assignments clear, searchable, and easy to update from one focused workspace.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <SupervisorStatusPill
-              label="Doctor"
-              user={team.doctor}
-              pendingRequest={pendingDoctorRequest}
-              emptyText="No doctor assigned"
-            />
-            <SupervisorStatusPill
-              label="TA"
-              user={team.ta}
-              pendingRequest={pendingTaRequest}
-              emptyText="No TA assigned"
-            />
+            {pendingCount > 0 ? (
+              <Badge variant="outline" className="rounded-md border-amber-500/35 text-amber-700 dark:text-amber-400">
+                {pendingCount} pending
+              </Badge>
+            ) : null}
           </div>
         </div>
-
-        <div className="border-t border-border/60 p-5 sm:p-6">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Flow</p>
-          <div className="grid gap-3 sm:grid-cols-3">
-          {[
-            {
-              step: "01",
-              title: "Review status",
-              desc: "See assigned and pending supervisors before sending another request.",
-            },
-            {
-              step: "02",
-              title: "Browse profiles",
-              desc: "Search by name, email, department, and read short profile notes.",
-            },
-            {
-              step: "03",
-              title: "Send request",
-              desc: "Share the project snapshot and wait for their response.",
-            },
-          ].map(({ step, title, desc }) => (
-            <motion.div
-              key={step}
-              {...getSupervisorRevealMotion(reduceMotion, Number(step) * 0.03)}
-              className="flex items-start gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 transition-[border-color,background-color,transform] duration-200 hover:border-primary/20 hover:bg-muted/30 motion-safe:hover:-translate-y-0.5"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
-                {step}
-              </div>
-              <div>
-                <p className="text-sm font-semibold leading-5">{title}</p>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">{desc}</p>
-              </div>
-            </motion.div>
-          ))}
-          </div>
-        </div>
-      </motion.section>
-
-      {/* Step 1 — Current Status */}
-      <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.05)} className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
-          <h2 className="text-base font-semibold tracking-tight">Current assignments</h2>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
           <AssignmentCard
             role="DOCTOR"
             assignedSupervisor={team.doctor}
@@ -360,30 +310,31 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
         </div>
       </motion.div>
 
-      {/* Request History */}
+      {/* Request history */}
       {requests.length > 0 && (
         <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.08)}>
-        <Card className="border-border/70 shadow-sm">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-base">Request History</CardTitle>
-            <CardDescription>Track which requests are pending and which supervisors responded.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 xl:grid-cols-2">
-            {requests.map((request) => (
-              <SupervisorRequestHistoryCard key={request.id} request={request} reduceMotion={reduceMotion} />
-            ))}
-          </CardContent>
-        </Card>
+          <Card className="rounded-xl border-border/70 shadow-sm">
+            <CardHeader className="space-y-1 pb-4">
+              <CardTitle className="text-base">Request history</CardTitle>
+              <CardDescription>Track which requests are pending and which supervisors responded.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 xl:grid-cols-2">
+              {requests.map((request) => (
+                <SupervisorRequestHistoryCard key={request.id} request={request} reduceMotion={reduceMotion} />
+              ))}
+            </CardContent>
+          </Card>
         </motion.div>
       )}
 
-      {/* Step 2 — Browse & Request */}
       <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.1)} className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
-          <h2 className="text-base font-semibold tracking-tight">Browse &amp; Request Supervisors</h2>
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-foreground">Browse supervisors</h2>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Search by name, email, or department, then open a profile row before sending a request.
+          </p>
         </div>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-2">
           <SupervisorCandidatesSection
             title="Available Doctors"
             description="Browse active doctors and send one supervision request when you're ready."
@@ -394,9 +345,10 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             isLoading={doctorLoading}
             error={doctorError}
             searchValue={doctorSearch}
-            onSearchChange={setDoctorSearch}
-            canLoadMore={doctorPage < doctorTotalPages}
-            onLoadMore={() => setDoctorPage((p) => p + 1)}
+            onSearchChange={(val) => { setDoctorSearch(val); setDoctorPage(1); }}
+            page={doctorPage}
+            totalPages={doctorTotalPages}
+            onPageChange={setDoctorPage}
             onSelect={openRequestDialog}
             reduceMotion={reduceMotion}
           />
@@ -410,9 +362,10 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             isLoading={taLoading}
             error={taError}
             searchValue={taSearch}
-            onSearchChange={setTaSearch}
-            canLoadMore={taPage < taTotalPages}
-            onLoadMore={() => setTaPage((p) => p + 1)}
+            onSearchChange={(val) => { setTaSearch(val); setTaPage(1); }}
+            page={taPage}
+            totalPages={taTotalPages}
+            onPageChange={setTaPage}
             onSelect={openRequestDialog}
             reduceMotion={reduceMotion}
           />
@@ -424,9 +377,9 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
         open={Boolean(selectedSupervisor)}
         onOpenChange={(open) => !open && !sendingRequest && setSelectedSupervisor(null)}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="rounded-xl sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl tracking-tight">Send supervision request</DialogTitle>
+            <DialogTitle className="text-xl">Send supervision request</DialogTitle>
             <DialogDescription>
               {selectedSupervisor
                 ? `Share your project snapshot with ${getFullName(selectedSupervisor)}. They'll use this to decide.`
@@ -436,7 +389,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
 
           <div className="space-y-5">
             {selectedSupervisor && (
-              <div className="flex items-center gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4">
+              <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/15 p-3">
                 <Avatar className="h-12 w-12 border border-border/60">
                   <AvatarImage src={selectedSupervisor.avatarUrl || "/placeholder.svg"} />
                   <AvatarFallback>{getAvatarInitial(selectedSupervisor)}</AvatarFallback>
@@ -447,35 +400,35 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
                     {selectedSupervisor.role === "DOCTOR" ? "Doctor / Professor" : "Teaching Assistant"}
                   </p>
                 </div>
-                <Badge variant="outline" className="ml-auto shrink-0 border-primary/25 text-primary">
+                <Badge variant="outline" className="ml-auto shrink-0 rounded-md border-primary/25 text-primary">
                   {selectedSupervisor.role === "DOCTOR" ? "Doctor" : "TA"}
                 </Badge>
               </div>
             )}
 
             <div className="space-y-2">
-              <Label className="font-semibold">Project Name</Label>
+              <Label className="font-semibold">Project name</Label>
               <Input
                 value={draft.projectName}
                 onChange={(event) => setDraft((current) => ({ ...current, projectName: event.target.value }))}
                 placeholder="Smart Campus Builders"
-                className="h-11"
+                className="h-11 rounded-lg"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="font-semibold">Technologies Used</Label>
+              <Label className="font-semibold">Technologies used</Label>
               <Input
                 value={draft.technologies}
                 onChange={(event) => setDraft((current) => ({ ...current, technologies: event.target.value }))}
                 placeholder="Next.js, Node.js, PostgreSQL"
-                className="h-11"
+                className="h-11 rounded-lg"
               />
               <p className="text-xs text-muted-foreground">Separate technologies with commas.</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="font-semibold">Project Description</Label>
+              <Label className="font-semibold">Project description</Label>
               <Textarea
                 rows={5}
                 value={draft.projectDescription}
@@ -483,23 +436,23 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
                   setDraft((current) => ({ ...current, projectDescription: event.target.value }))
                 }
                 placeholder="Describe the problem you're solving, what you want to build, and the kind of supervision you need."
-                className="resize-none"
+                className="resize-none rounded-lg"
               />
               <p className="text-xs text-muted-foreground">Minimum 10 characters. Be clear and concise.</p>
             </div>
           </div>
 
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setSelectedSupervisor(null)} disabled={sendingRequest}>
+            <Button variant="outline" className="rounded-lg" onClick={() => setSelectedSupervisor(null)} disabled={sendingRequest}>
               Cancel
             </Button>
-            <Button onClick={() => void sendRequest()} disabled={sendingRequest} className="min-w-[140px]">
+            <Button onClick={() => void sendRequest()} disabled={sendingRequest} className="min-w-[140px] rounded-lg">
               {sendingRequest ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Mail className="h-4 w-4" />
               )}
-              <span className="ml-2">{sendingRequest ? "Sending..." : "Send Request"}</span>
+              <span className="ml-2">{sendingRequest ? "Sending..." : "Send request"}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -523,6 +476,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
 export function SupervisorRequestInbox({ currentRole, requests, supervisedTeams, onRefresh }: SupervisorRequestInboxProps) {
   const [busyRequestId, setBusyRequestId] = useState("")
   const [busyAction, setBusyAction] = useState<"accept" | "decline" | "">("")
+  const reduceMotion = Boolean(useReducedMotion())
 
   const pendingRequests = requests.filter((item) => item.status === "PENDING")
   const historyRequests = requests.filter((item) => item.status !== "PENDING")
@@ -549,259 +503,306 @@ export function SupervisorRequestInbox({ currentRole, requests, supervisedTeams,
 
   const roleLabel = currentRole === "doctor" ? "Doctor" : "Teaching Assistant"
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.5,
+        ease: EASE_OUT_QUINT,
+      },
+    },
+  }
+
   return (
-    <div className="container mx-auto max-w-5xl space-y-6 p-4 md:p-6">
-      {/* Header */}
-      <div className="overflow-hidden rounded-[28px] border border-border/70 shadow-sm">
-        <div className="bg-gradient-to-br from-primary/[0.10] via-background to-primary/[0.04] px-5 py-6 sm:px-6 sm:py-7 md:px-8">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start">
-            <div className="space-y-3">
-              <Badge variant="outline" className="border-primary/25 bg-background/85 text-primary">
-                {roleLabel} Inbox
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="mx-auto w-full max-w-6xl space-y-8 p-4 md:p-6 lg:p-10"
+    >
+      {/* Hero Section */}
+      <motion.div variants={itemVariants} className="relative overflow-hidden rounded-[32px] border border-primary/10 bg-gradient-to-br from-primary/[0.03] via-background to-primary/[0.01] p-8 md:p-12">
+        <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl" />
+        
+        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="border-primary/20 bg-primary/5 px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary">
+                {roleLabel} Workspace
               </Badge>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                  Supervision Requests
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  Each request includes the team name, project idea, and tech stack so you can review and decide with full context.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border bg-background/92 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Inbox Overview</p>
-              <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-1">
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-amber-700 dark:text-amber-400">Pending</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums">{pendingRequests.length}</p>
-                </div>
-                <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Reviewed</p>
-                  <p className="mt-1 text-2xl font-bold tabular-nums">{historyRequests.length}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Assigned Teams */}
-      {supervisedTeams.length > 0 && (
-        <Card className="border-border/70 shadow-sm">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-base">Teams You Supervise</CardTitle>
-            <CardDescription>Teams that currently list you as an active supervisor.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 xl:grid-cols-2">
-            {supervisedTeams.map((team) => (
-              <div key={team.id} className="rounded-[20px] border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold tracking-tight">{team.name}</p>
-                      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
-                        {team.stage.replaceAll("_", " ")}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm leading-5 text-muted-foreground line-clamp-2">
-                      {team.bio || "No team bio added yet."}
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" className="rounded-xl" asChild>
-                    <Link href={`/dashboard/teams/${team.id}`}>
-                      Open Team
-                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" className="rounded-xl" asChild>
-                    <Link href={`/dashboard/tasks?teamId=${team.id}`}>Tasks</Link>
-                  </Button>
-                  <Button variant="ghost" size="sm" className="rounded-xl" asChild>
-                    <Link href={`/dashboard/github?teamId=${team.id}`}>GitHub</Link>
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pending Requests */}
-      {pendingRequests.length > 0 ? (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold tracking-tight">Pending Requests</h2>
-            <Badge variant="secondary" className="bg-amber-500/10 text-amber-700 dark:text-amber-400">
-              {pendingRequests.length} awaiting
-            </Badge>
-          </div>
-          <div className="space-y-3">
-            {pendingRequests.map((request) => {
-              const isBusy = busyRequestId === request.id
-              return (
-                <div
-                  key={request.id}
-                  className="overflow-hidden rounded-[24px] border border-border/70 bg-background shadow-sm"
+              {pendingRequests.length > 0 && (
+                <motion.div
+                  animate={{ scale: [1, 1.05, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
                 >
-                  {/* Amber accent bar */}
-                  <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-amber-500" />
+                  <Badge className="bg-amber-500 text-white shadow-lg shadow-amber-500/20">
+                    {pendingRequests.length} Pending Actions
+                  </Badge>
+                </motion.div>
+              )}
+            </div>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+              Supervision Hub
+            </h1>
+            <p className="text-lg leading-relaxed text-muted-foreground">
+              Review incoming project proposals, manage your supervised teams, and provide guidance to the next generation of engineers.
+            </p>
+          </div>
 
-                  <div className="p-5 sm:p-6">
-                    {/* Header row */}
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                            {request.supervisorRole === "DOCTOR" ? "Doctor Request" : "TA Request"}
-                          </Badge>
-                          <Badge variant="secondary">
-                            {request.team.name}
-                          </Badge>
-                        </div>
-                        <h3 className="text-lg font-bold tracking-tight">{request.projectName}</h3>
-                      </div>
-                      <Badge variant="secondary" className="gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                        <Clock className="h-3 w-3" />
-                        Pending
-                      </Badge>
-                    </div>
+          <div className="flex shrink-0 items-center gap-6 rounded-3xl border border-primary/10 bg-background/50 p-6 backdrop-blur-sm">
+            <div className="text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Supervising</p>
+              <p className="mt-1 text-3xl font-bold text-foreground tabular-nums">{supervisedTeams.length}</p>
+            </div>
+            <div className="h-10 w-px bg-primary/10" />
+            <div className="text-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Incoming</p>
+              <p className="mt-1 text-3xl font-bold text-foreground tabular-nums">{pendingRequests.length}</p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
-                    {/* Description */}
-                    <p className="mt-3 text-sm leading-6 text-muted-foreground">{request.projectDescription}</p>
-
-                    {/* Tech stack */}
-                    {request.technologies.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {request.technologies.map((item) => (
-                          <Badge key={item} variant="secondary" className="rounded-full">
-                            {item}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Requester info */}
-                    <div className="mt-4 flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
-                      <Avatar className="h-9 w-9 border border-border/60">
-                        <AvatarImage src={request.requestedBy.avatarUrl || "/placeholder.svg"} />
-                        <AvatarFallback>{getAvatarInitial(request.requestedBy)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{getFullName(request.requestedBy)}</p>
-                        <p className="text-xs text-muted-foreground">{request.requestedBy.email}</p>
-                      </div>
-                      <Badge variant="outline" className="ml-auto shrink-0">Team Leader</Badge>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <Button variant="ghost" size="sm" className="self-start rounded-xl text-muted-foreground" asChild>
-                        <Link href={`/dashboard/teams/${request.team.id}`}>
-                          View Team Page
-                          <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          className="flex-1 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none sm:min-w-[110px]"
-                          disabled={isBusy}
-                          onClick={() => void respond(request.id, "decline")}
-                        >
-                          {isBusy && busyAction === "decline" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <XCircle className="h-4 w-4" />
-                          )}
-                          <span className="ml-2">Decline</span>
-                        </Button>
-                        <Button
-                          className="flex-1 rounded-xl sm:flex-none sm:min-w-[110px]"
-                          disabled={isBusy}
-                          onClick={() => void respond(request.id, "accept")}
-                        >
-                          {isBusy && busyAction === "accept" ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <UserCheck className="h-4 w-4" />
-                          )}
-                          <span className="ml-2">Accept</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
+      <div className="grid gap-8 lg:grid-cols-12">
+        {/* Main Content Area */}
+        <div className="lg:col-span-8 space-y-8">
+          {/* Pending Requests Section */}
+          <section className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                  <Mail className="h-5 w-5" />
                 </div>
-              )
-            })}
-          </div>
+                <h2 className="text-xl font-bold tracking-tight">Incoming Requests</h2>
+              </div>
+              {pendingRequests.length > 0 && (
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  Awaiting your review
+                </span>
+              )}
+            </div>
+
+            <AnimatePresence mode="popLayout">
+              {pendingRequests.length > 0 ? (
+                <div className="grid gap-4">
+                  {pendingRequests.map((request, i) => (
+                    <motion.div
+                      key={request.id}
+                      variants={itemVariants}
+                      layout
+                      className="group relative overflow-hidden rounded-[28px] border border-border/60 bg-card p-6 shadow-sm transition-all hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5"
+                    >
+                      <div className="absolute right-0 top-0 h-2 w-full bg-gradient-to-r from-amber-400/40 to-amber-500/10" />
+                      
+                      <div className="space-y-6">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="secondary" className="bg-muted/50 font-bold">
+                                {request.team.name}
+                              </Badge>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 italic">
+                                Sent {new Date(request.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <h3 className="text-2xl font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">
+                              {request.projectName}
+                            </h3>
+                          </div>
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-600">
+                            <Clock className="h-6 w-6" />
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl bg-muted/30 p-4">
+                          <p className="text-sm leading-relaxed text-foreground/80">
+                            {request.projectDescription}
+                          </p>
+                        </div>
+
+                        {request.technologies.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {request.technologies.map((tech) => (
+                              <Badge key={tech} variant="outline" className="rounded-full border-primary/10 bg-primary/5 text-primary">
+                                {tech}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-2">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                              <AvatarImage src={request.requestedBy.avatarUrl || "/placeholder.svg"} />
+                              <AvatarFallback className="bg-primary/10 text-primary font-bold">{getAvatarInitial(request.requestedBy)}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-foreground leading-none">{getFullName(request.requestedBy)}</p>
+                              <p className="mt-1 text-xs text-muted-foreground truncate">{request.requestedBy.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <Button
+                              variant="ghost"
+                              className="h-11 rounded-xl font-bold text-muted-foreground hover:bg-destructive/5 hover:text-destructive"
+                              disabled={busyRequestId === request.id}
+                              onClick={() => void respond(request.id, "decline")}
+                            >
+                              {busyRequestId === request.id && busyAction === "decline" ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <XCircle className="mr-2 h-4 w-4" />
+                              )}
+                              Decline
+                            </Button>
+                            <Button
+                              className="h-11 rounded-xl px-6 font-bold shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                              disabled={busyRequestId === request.id}
+                              onClick={() => void respond(request.id, "accept")}
+                            >
+                              {busyRequestId === request.id && busyAction === "accept" ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <UserCheck className="mr-2 h-4 w-4" />
+                              )}
+                              Accept Request
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <motion.div
+                  variants={itemVariants}
+                  className="flex flex-col items-center justify-center rounded-[32px] border border-dashed border-border/60 bg-muted/20 py-16 text-center"
+                >
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground/40">
+                    <Inbox className="h-8 w-8" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold">Inbox is Clear</h3>
+                  <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+                    You don't have any pending supervision requests right now.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </section>
+
+          {/* History Section */}
+          {historyRequests.length > 0 && (
+            <section className="space-y-6">
+              <div className="flex items-center gap-3 px-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <h2 className="text-xl font-bold tracking-tight text-foreground">Past Decisions</h2>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {historyRequests.map((request) => (
+                  <motion.div key={request.id} variants={itemVariants}>
+                    <SupervisorRequestHistoryCard request={request} />
+                  </motion.div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
-      ) : (
-        <div className="overflow-hidden rounded-[24px] border border-dashed border-border/70 p-8 text-center sm:p-10">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <h2 className="mt-4 text-lg font-semibold">No pending requests</h2>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            When team leaders request you as a supervisor, requests will appear here with full project details.
-          </p>
+
+        {/* Sidebar: Supervised Teams */}
+        <div className="lg:col-span-4 space-y-8">
+          <section className="sticky top-8 space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                  <Users className="h-5 w-5" />
+                </div>
+                <h2 className="text-xl font-bold tracking-tight text-foreground">Supervised Teams</h2>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              {supervisedTeams.length > 0 ? (
+                supervisedTeams.map((team) => (
+                  <motion.div
+                    key={team.id}
+                    variants={itemVariants}
+                    className="group relative overflow-hidden rounded-3xl border border-border/60 bg-card p-6 shadow-sm transition-all hover:border-emerald-500/20 hover:shadow-lg hover:shadow-emerald-500/5"
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
+                          {team.stage.replaceAll("_", " ")}
+                        </Badge>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
+                          {team.memberCount}/{team.maxMembers} members
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold tracking-tight group-hover:text-emerald-600 transition-colors">
+                        {team.name}
+                      </h3>
+                      <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                        {team.bio || "No team bio added yet."}
+                      </p>
+                      
+                      <div className="flex items-center gap-2 pt-2">
+                        <Button variant="outline" size="sm" className="h-9 flex-1 rounded-xl border-border/60 font-bold transition-all hover:bg-emerald-500/5 hover:text-emerald-600 hover:border-emerald-500/30" asChild>
+                          <Link href={`/dashboard/teams/${team.id}`}>
+                            View Space
+                          </Link>
+                        </Button>
+                        <Button size="icon" variant="outline" className="h-9 w-9 rounded-xl border-border/60 hover:bg-primary/5 hover:text-primary transition-all" asChild>
+                          <Link href={`/dashboard/tasks?teamId=${team.id}`}>
+                            <Users className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              ) : (
+                <motion.div
+                  variants={itemVariants}
+                  className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/60 bg-muted/20 py-12 text-center"
+                >
+                  <Users className="h-8 w-8 text-muted-foreground/30" />
+                  <p className="mt-3 text-sm font-bold text-muted-foreground">No assigned teams yet</p>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Support/Resource Card */}
+            <motion.div variants={itemVariants} className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/5 to-transparent p-6">
+              <div className="flex items-center gap-3 text-primary">
+                <Sparkles className="h-5 w-5" />
+                <h3 className="text-sm font-bold uppercase tracking-widest">Supervisor Guide</h3>
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Need help with your supervision duties? Check out our guidelines for effective project guidance.
+              </p>
+              <Button variant="link" className="mt-2 h-auto p-0 text-xs font-bold text-primary hover:no-underline">
+                Read Guidelines <ArrowRight className="ml-1 h-3 w-3" />
+              </Button>
+            </motion.div>
+          </section>
         </div>
-      )}
-
-      {/* History */}
-      {historyRequests.length > 0 && (
-        <Card className="border-border/70 shadow-sm">
-          <CardHeader className="space-y-1 pb-4">
-            <CardTitle className="text-base">Reviewed Requests</CardTitle>
-            <CardDescription>Your past supervision decisions for reference.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 xl:grid-cols-2">
-            {historyRequests.map((request) => (
-              <SupervisorRequestHistoryCard key={request.id} request={request} />
-            ))}
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function SupervisorStatusPill({
-  label,
-  user,
-  pendingRequest,
-  emptyText,
-}: {
-  label: "Doctor" | "TA"
-  user: ApiTeamUser | null
-  pendingRequest: ApiSupervisorRequest | null
-  emptyText: string
-}) {
-  const Icon = label === "Doctor" ? GraduationCap : Users
-  const stateLabel = user ? "Assigned" : pendingRequest ? "Pending" : "Open"
-  const stateClass = user
-    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-    : pendingRequest
-      ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-400"
-      : "border-border/70 bg-background/70 text-muted-foreground"
-
-  return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/80 p-3 shadow-sm">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Icon className="h-4 w-4" />
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-        <p className="mt-0.5 truncate text-sm font-semibold">
-          {user ? getFullName(user) : pendingRequest ? getFullName(pendingRequest.supervisor) : emptyText}
-        </p>
-      </div>
-      <Badge variant="outline" className={cn("shrink-0 rounded-full", stateClass)}>
-        {stateLabel}
-      </Badge>
-    </div>
+    </motion.div>
   )
 }
 
@@ -828,81 +829,76 @@ function AssignmentCard({
   return (
     <motion.div
       {...getSupervisorHoverMotion(reduceMotion)}
-      className="overflow-hidden rounded-[24px] border border-border/70 bg-background shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-md"
+      className="group relative flex flex-col gap-4 rounded-3xl border border-border/60 bg-background p-6 shadow-sm transition-all hover:border-primary/20 hover:shadow-md"
     >
-      {/* Top accent */}
-      <div className={`h-1 w-full ${assignedSupervisor ? "bg-gradient-to-r from-emerald-400 to-emerald-500" : pendingRequest ? "bg-gradient-to-r from-amber-400 to-amber-500" : "bg-border/40"}`} />
-
-      <div className="p-5">
-        {/* Role header */}
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <RoleIcon className="h-5 w-5" />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <RoleIcon className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <p className="font-semibold">{roleLabel}</p>
-            <p className="text-xs text-muted-foreground">{helper}</p>
+            <p className="text-lg font-bold tracking-tight text-foreground">{roleLabel}</p>
+            <p className="text-xs font-medium text-muted-foreground">{helper}</p>
           </div>
         </div>
-
-        {/* Status body */}
         {assignedSupervisor ? (
-          <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-11 w-11 border border-border/60">
-                <AvatarImage src={assignedSupervisor.avatarUrl || "/placeholder.svg"} />
-                <AvatarFallback>{getAvatarInitial(assignedSupervisor)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold leading-5">{getFullName(assignedSupervisor)}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{assignedSupervisor.email}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Badge className="gap-1 bg-emerald-600 text-white">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Assigned
-              </Badge>
-              {onRemove && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-lg border-destructive/25 bg-background/70 px-2.5 text-xs text-destructive transition-[background-color,border-color,transform] hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive motion-safe:hover:-translate-y-0.5"
-                  onClick={onRemove}
-                  disabled={isRemoving}
-                >
-                  {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  <span className="ml-1">Remove</span>
-                </Button>
-              )}
-            </div>
-          </div>
+          <Badge className="h-6 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
+            Assigned
+          </Badge>
         ) : pendingRequest ? (
-          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
-            <div className="flex items-center gap-3">
-              <Avatar className="h-11 w-11 border border-border/60">
-                <AvatarImage src={pendingRequest.supervisor.avatarUrl || "/placeholder.svg"} />
-                <AvatarFallback>{getAvatarInitial(pendingRequest.supervisor)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="font-semibold leading-5">{getFullName(pendingRequest.supervisor)}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Request sent &mdash; waiting for response
-                </p>
-              </div>
-            </div>
-            <Badge variant="secondary" className="mt-3 gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-              <Clock className="h-3 w-3" />
-              Awaiting Response
-            </Badge>
-          </div>
+          <Badge variant="outline" className="h-6 rounded-full border-amber-500/20 bg-amber-500/5 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider">
+            Pending
+          </Badge>
         ) : (
-          <div className="mt-4 rounded-2xl border border-dashed border-border/60 p-4">
-            <p className="text-sm text-muted-foreground">No {roleLabel.toLowerCase()} assigned yet.</p>
-            <p className="mt-1 text-xs text-muted-foreground/70">Browse supervisors below and send a request.</p>
-          </div>
+          <Badge variant="secondary" className="h-6 rounded-full bg-muted/50 text-[10px] font-bold uppercase tracking-wider">
+            Open
+          </Badge>
         )}
       </div>
+
+      {assignedSupervisor ? (
+        <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 transition-colors group-hover:bg-muted/30">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+              <AvatarImage src={assignedSupervisor.avatarUrl || "/placeholder.svg"} />
+              <AvatarFallback className="bg-primary/10 text-primary font-bold">{getAvatarInitial(assignedSupervisor)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="font-bold text-foreground leading-none">{getFullName(assignedSupervisor)}</p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">{assignedSupervisor.email}</p>
+            </div>
+            {onRemove ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-xl text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-all"
+                onClick={onRemove}
+                disabled={isRemoving}
+              >
+                {isRemoving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : pendingRequest ? (
+        <div className="rounded-2xl border border-amber-500/10 bg-amber-500/[0.03] p-4">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
+              <AvatarImage src={pendingRequest.supervisor.avatarUrl || "/placeholder.svg"} />
+              <AvatarFallback className="bg-amber-500/10 text-amber-600 font-bold">{getAvatarInitial(pendingRequest.supervisor)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="font-bold text-foreground leading-none">{getFullName(pendingRequest.supervisor)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Waiting for supervisor to accept</p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 bg-muted/10 py-6 text-center">
+          <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest">Unassigned Slot</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">Find a {roleLabel.toLowerCase()} in the directory below</p>
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -925,51 +921,41 @@ function RemoveSupervisorDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border-destructive/20 p-0 shadow-2xl">
-        <div className="p-6">
+      <AlertDialogContent className="max-w-md overflow-hidden rounded-[40px] border-destructive/20 p-0 shadow-2xl">
+        <div className="p-8">
           <AlertDialogHeader className="space-y-4 text-left">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
-              <TriangleAlert className="h-5 w-5" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+              <TriangleAlert className="h-6 w-6" />
             </div>
-            <div>
+            <div className="space-y-2">
               <AlertDialogTitle className="text-2xl tracking-tight">Remove {roleLabel}?</AlertDialogTitle>
-              <AlertDialogDescription className="mt-2 leading-6">
-                This removes the assignment from your team. It will not delete the user account or any project data.
+              <AlertDialogDescription className="text-base leading-relaxed">
+                This will remove the assignment from your team. You can always re-request them later if needed.
               </AlertDialogDescription>
             </div>
           </AlertDialogHeader>
 
           {target ? (
-            <div className="mt-5 rounded-2xl border border-border/70 bg-muted/20 p-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-11 w-11 border border-border/60">
+            <div className="mt-6 rounded-2xl border border-destructive/15 bg-destructive/[0.02] p-5">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-12 w-12 border-2 border-background shadow-sm">
                   <AvatarImage src={target.supervisor.avatarUrl || "/placeholder.svg"} />
-                  <AvatarFallback>{getAvatarInitial(target.supervisor)}</AvatarFallback>
+                  <AvatarFallback className="bg-destructive/10 text-destructive font-bold">{getAvatarInitial(target.supervisor)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate font-semibold">{supervisorName}</p>
-                  <p className="truncate text-sm text-muted-foreground">{target.supervisor.email}</p>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-xl bg-background/80 px-3 py-2">
-                  <span className="block text-xs text-muted-foreground">Role</span>
-                  <span className="font-semibold">{roleLabel}</span>
-                </div>
-                <div className="rounded-xl bg-background/80 px-3 py-2">
-                  <span className="block text-xs text-muted-foreground">Team</span>
-                  <span className="font-semibold">Unassigned</span>
+                  <p className="truncate font-bold text-foreground">{supervisorName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{target.supervisor.email}</p>
                 </div>
               </div>
             </div>
           ) : null}
 
-          <AlertDialogFooter className="mt-6 gap-3 sm:gap-3">
-            <AlertDialogCancel className="h-11 rounded-xl" disabled={isSubmitting}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="h-11 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          <AlertDialogFooter className="mt-8 gap-3 sm:gap-3">
+            <Button variant="outline" className="h-11 flex-1 rounded-xl font-bold" disabled={isSubmitting} onClick={() => onOpenChange(false)}>
+              Keep Assignment
+            </Button>
+            <Button
+              className="h-11 flex-1 rounded-xl bg-destructive font-bold text-destructive-foreground hover:bg-destructive/90 shadow-lg shadow-destructive/10"
               disabled={isSubmitting}
               onClick={(event) => {
                 event.preventDefault()
@@ -977,8 +963,8 @@ function RemoveSupervisorDialog({
               }}
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              <span className="ml-2">Remove Assignment</span>
-            </AlertDialogAction>
+              <span className="ml-2">Remove</span>
+            </Button>
           </AlertDialogFooter>
         </div>
       </AlertDialogContent>
@@ -997,8 +983,9 @@ function SupervisorCandidatesSection({
   error,
   searchValue,
   onSearchChange,
-  canLoadMore,
-  onLoadMore,
+  page,
+  totalPages,
+  onPageChange,
   onSelect,
   reduceMotion,
 }: {
@@ -1012,8 +999,9 @@ function SupervisorCandidatesSection({
   error: string
   searchValue: string
   onSearchChange: (value: string) => void
-  canLoadMore: boolean
-  onLoadMore: () => void
+  page: number
+  totalPages: number
+  onPageChange: (page: number) => void
   onSelect: (candidate: ApiDirectoryUser) => void
   reduceMotion: boolean
 }) {
@@ -1021,7 +1009,7 @@ function SupervisorCandidatesSection({
   const RoleIcon = role === "DOCTOR" ? GraduationCap : Users
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  // Derive a department filter dropdown from the visible candidates
+  // Build the department filter from the visible candidates.
   const departments = Array.from(
     new Set(
       candidates
@@ -1036,7 +1024,7 @@ function SupervisorCandidatesSection({
       ? candidates
       : candidates.filter((c) => c.department === departmentFilter)
 
-  // Auto-pin the assigned supervisor + pending-requested supervisor to the top
+  // Keep the assigned or pending supervisor easy to find.
   const sortedCandidates = [...filteredCandidates].sort((a, b) => {
     const aPriority = assignedSupervisor?.id === a.id ? 0 : pendingRequest?.supervisor.id === a.id ? 1 : 2
     const bPriority = assignedSupervisor?.id === b.id ? 0 : pendingRequest?.supervisor.id === b.id ? 1 : 2
@@ -1044,43 +1032,38 @@ function SupervisorCandidatesSection({
   })
 
   return (
-    <Card className="overflow-hidden border-border/70 shadow-sm transition-[border-color,box-shadow] duration-300 hover:border-primary/15 hover:shadow-md">
-      <CardHeader className="space-y-2 border-b border-border/60 bg-muted/15 pb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <RoleIcon className="h-4 w-4" />
+    <Card className="overflow-hidden rounded-[32px] border-border/60 bg-background shadow-xl shadow-primary/5">
+      <CardHeader className="space-y-4 border-b border-border/40 bg-muted/5 p-6 md:p-8">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <RoleIcon className="h-6 w-6" />
           </div>
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-base">{title}</CardTitle>
-            <CardDescription className="mt-1">{description}</CardDescription>
+            <CardTitle className="text-xl font-bold tracking-tight">{title}</CardTitle>
+            <CardDescription className="mt-1 text-sm leading-relaxed">{description}</CardDescription>
           </div>
-          <Badge variant="outline" className="rounded-full text-xs">
-            {filteredCandidates.length}
-            {departmentFilter !== "ALL" && candidates.length !== filteredCandidates.length && (
-              <span className="ml-1 text-muted-foreground">/ {candidates.length}</span>
-            )}
+          <Badge variant="outline" className="rounded-full border-primary/10 bg-primary/5 px-3 py-1 text-xs font-bold text-primary">
+            {filteredCandidates.length} Available
           </Badge>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4 sm:p-5">
-        {/* Search + department filter row */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
             <Input
               value={searchValue}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={`Search ${roleLabel.toLowerCase()}s by name, email, department…`}
-              className="h-10 rounded-xl border-border/70 bg-background pl-9 text-sm"
+              placeholder={`Search ${roleLabel.toLowerCase()}s...`}
+              className="h-11 rounded-xl border-border/60 bg-background/50 pl-10 text-sm transition-all focus-visible:bg-background focus-visible:ring-primary/20"
             />
           </div>
           {departments.length > 1 && (
             <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="h-10 w-full rounded-xl text-sm sm:w-[180px]">
+              <SelectTrigger className="h-11 w-full rounded-xl border-border/60 bg-background/50 text-sm sm:w-[200px] transition-all focus:ring-primary/20">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All departments</SelectItem>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="ALL">All Departments</SelectItem>
                 {departments.map((d) => (
                   <SelectItem key={d} value={d}>{d.replaceAll("_", " ")}</SelectItem>
                 ))}
@@ -1088,14 +1071,16 @@ function SupervisorCandidatesSection({
             </Select>
           )}
         </div>
-
+      </CardHeader>
+      
+      <CardContent className="p-4 md:p-6">
         {/* States */}
         {isLoading && (
-          <div className="space-y-1.5 py-1">
+          <div className="space-y-3 py-2">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-xl border border-border/40 bg-muted/10 px-3 py-2.5">
-                <div className="h-9 w-9 shrink-0 rounded-full bg-muted/40 animate-pulse" />
-                <div className="flex-1 space-y-1.5">
+              <div key={i} className="flex items-center gap-4 rounded-2xl border border-border/40 bg-muted/10 p-4">
+                <div className="h-10 w-10 shrink-0 rounded-full bg-muted/40 animate-pulse" />
+                <div className="flex-1 space-y-2">
                   <div className="h-3 w-32 rounded bg-muted/40 animate-pulse" />
                   <div className="h-2.5 w-48 rounded bg-muted/30 animate-pulse" />
                 </div>
@@ -1105,25 +1090,27 @@ function SupervisorCandidatesSection({
         )}
 
         {!isLoading && error && (
-          <div className="rounded-2xl border border-destructive/25 bg-destructive/5 p-3 text-sm text-destructive">
+          <div className="flex items-center gap-3 rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm font-medium text-destructive">
+            <AlertCircle className="h-5 w-5" />
             {error}
           </div>
         )}
 
         {!isLoading && !error && filteredCandidates.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border/70 bg-muted/15 p-8 text-center">
-            <RoleIcon className="mx-auto mb-2 h-7 w-7 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {searchValue || departmentFilter !== "ALL"
-                ? "No matches. Try a different search or clear the filter."
-                : `No ${roleLabel.toLowerCase()} accounts available right now.`}
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/40 text-muted-foreground/40">
+              <Search className="h-8 w-8" />
+            </div>
+            <h3 className="mt-4 text-base font-bold text-foreground">No matches found</h3>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+              Try a different search term or clear your filters to find more {roleLabel.toLowerCase()}s.
             </p>
           </div>
         )}
 
-        {/* Compact candidate rows — click to expand */}
+        {/* Candidate rows */}
         {!isLoading && !error && filteredCandidates.length > 0 && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <AnimatePresence initial={false}>
               {sortedCandidates.map((candidate, index) => {
                 const isAssigned = assignedSupervisor?.id === candidate.id
@@ -1134,87 +1121,87 @@ function SupervisorCandidatesSection({
                 const isExpanded = expandedId === candidate.id
 
                 let actionLabel = `Request ${roleLabel}`
-                if (isAssigned) actionLabel = "Currently your supervisor"
-                else if (hasAssignedOther) actionLabel = `Your team already has a ${roleLabel.toLowerCase()}`
-                else if (isPendingSameCandidate) actionLabel = "Request already sent"
-                else if (hasPendingOtherCandidate) actionLabel = `Pending request to another ${roleLabel.toLowerCase()}`
+                if (isAssigned) actionLabel = "Assigned"
+                else if (hasAssignedOther) actionLabel = "Full"
+                else if (isPendingSameCandidate) actionLabel = "Pending"
+                else if (hasPendingOtherCandidate) actionLabel = "Pending Other"
 
                 return (
                   <motion.div
                     key={candidate.id}
                     layout
-                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                    initial={reduceMotion ? false : { opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-                    transition={{ delay: Math.min(index * 0.015, 0.2), duration: 0.2 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, y: -10 }}
+                    transition={{ delay: Math.min(index * 0.02, 0.3), duration: 0.3 }}
                     className={cn(
-                      "overflow-hidden rounded-xl border transition-colors",
+                      "overflow-hidden rounded-2xl border transition-all",
                       isAssigned
-                        ? "border-emerald-500/35 bg-emerald-500/[0.04]"
+                        ? "border-emerald-500/30 bg-emerald-500/[0.03]"
                         : isPendingSameCandidate
-                          ? "border-amber-500/35 bg-amber-500/[0.04]"
-                          : "border-border/50 bg-background hover:border-primary/25",
+                          ? "border-amber-500/30 bg-amber-500/[0.03]"
+                          : isExpanded 
+                            ? "border-primary/30 bg-primary/[0.01] shadow-md shadow-primary/5"
+                            : "border-border/60 bg-background hover:border-primary/20 hover:bg-muted/5",
                     )}
                   >
-                    {/* Compact row — always visible */}
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setExpandedId(isExpanded ? null : candidate.id)}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          setExpandedId(isExpanded ? null : candidate.id)
+                        }
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-4 px-4 py-3.5 text-left outline-none"
                     >
-                      <Avatar className="h-9 w-9 shrink-0 border border-border/40">
+                      <Avatar className="h-10 w-10 shrink-0 border-2 border-background shadow-sm">
                         <AvatarImage src={candidate.avatarUrl || "/placeholder.svg"} />
-                        <AvatarFallback className="text-xs font-medium">{getAvatarInitial(candidate)}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">{getAvatarInitial(candidate)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate text-sm font-semibold leading-5">{getFullName(candidate)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-base font-bold leading-none text-foreground">{getFullName(candidate)}</p>
                           {isAssigned && (
-                            <Badge className="h-4 gap-1 bg-emerald-600 px-1.5 text-[9px] text-white">
+                            <Badge className="h-5 gap-1 bg-emerald-500 text-white px-2 text-[9px] font-bold uppercase tracking-wider">
                               <CheckCircle2 className="h-2.5 w-2.5" />
-                              Yours
+                              Current
                             </Badge>
                           )}
                           {isPendingSameCandidate && (
-                            <Badge variant="secondary" className="h-4 gap-1 bg-amber-500/15 px-1.5 text-[9px] text-amber-700 dark:text-amber-400">
+                            <Badge className="h-5 gap-1 bg-amber-500 text-white px-2 text-[9px] font-bold uppercase tracking-wider">
                               <Clock className="h-2.5 w-2.5" />
                               Pending
                             </Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                          {candidate.department && (
-                            <>
-                              <span className="truncate">{candidate.department.replaceAll("_", " ")}</span>
-                              {candidate.email && <span>·</span>}
-                            </>
-                          )}
-                          {candidate.email && <span className="truncate">{candidate.email}</span>}
+                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                          <span className="truncate">{candidate.department?.replaceAll("_", " ") || "No Department"}</span>
+                          <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+                          <span className="truncate">{candidate.email}</span>
                         </div>
                       </div>
 
-                      {/* Quick request button on row — collapsed state */}
                       {!isExpanded && !actionDisabled && (
                         <Button
                           size="sm"
-                          variant="default"
-                          className="h-8 shrink-0 rounded-lg px-3 text-xs"
+                          className="h-9 shrink-0 rounded-xl px-4 text-xs font-bold shadow-sm shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
                           onClick={(e) => { e.stopPropagation(); onSelect(candidate) }}
                         >
-                          <Send className="h-3 w-3" />
-                          <span className="ml-1">Request</span>
+                          Request
                         </Button>
                       )}
-                      <motion.div
-                        animate={{ rotate: isExpanded ? 90 : 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="shrink-0 text-muted-foreground"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </motion.div>
-                    </button>
+                      
+                      <div className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground transition-all",
+                        isExpanded && "bg-primary/10 text-primary rotate-180"
+                      )}>
+                        <ChevronDown className="h-4 w-4" />
+                      </div>
+                    </div>
 
-                    {/* Expanded panel — bio + send button */}
                     <AnimatePresence initial={false}>
                       {isExpanded && (
                         <motion.div
@@ -1222,45 +1209,61 @@ function SupervisorCandidatesSection({
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] as const }}
-                          className="overflow-hidden border-t border-border/40 bg-muted/15"
+                          transition={{ duration: 0.3, ease: EASE_OUT_QUINT }}
+                          className="overflow-hidden border-t border-border/40 bg-muted/5"
                         >
-                          <div className="space-y-3 p-3 sm:p-4">
-                            {candidate.bio?.trim() ? (
-                              <p className="text-xs leading-5 text-muted-foreground">{candidate.bio}</p>
-                            ) : (
-                              <p className="text-xs italic text-muted-foreground/70">
-                                No bio provided.
-                              </p>
-                            )}
-                            <div className="flex flex-wrap items-center gap-2">
+                          <div className="space-y-5 p-5">
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">About {getFullName(candidate).split(" ")[0]}</p>
+                              {candidate.bio?.trim() ? (
+                                <p className="text-sm leading-relaxed text-foreground/80">{candidate.bio}</p>
+                              ) : (
+                                <p className="text-sm italic text-muted-foreground/60">No bio provided by this {roleLabel.toLowerCase()}.</p>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2">
                               {candidate.preferredTrack && (
-                                <Badge variant="outline" className="rounded-full text-[10px]">
-                                  Track: {candidate.preferredTrack.replaceAll("_", " ")}
+                                <Badge variant="outline" className="rounded-lg border-primary/10 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
+                                  {candidate.preferredTrack.replaceAll("_", " ")}
                                 </Badge>
                               )}
                               {candidate.academicYear && (
-                                <Badge variant="outline" className="rounded-full text-[10px]">
+                                <Badge variant="outline" className="rounded-lg border-primary/10 bg-primary/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">
                                   {candidate.academicYear.replaceAll("_", " ")}
                                 </Badge>
                               )}
                             </div>
-                            <Button
-                              variant={actionDisabled ? "outline" : "default"}
-                              size="sm"
-                              className="h-9 w-full rounded-lg"
-                              disabled={actionDisabled}
-                              onClick={(e) => { e.stopPropagation(); onSelect(candidate) }}
-                            >
-                              {actionDisabled ? (
-                                <span>{actionLabel}</span>
-                              ) : (
-                                <>
-                                  <Send className="h-3.5 w-3.5" />
-                                  <span className="ml-1.5">Request as {roleLabel}</span>
-                                </>
-                              )}
-                            </Button>
+
+                            <div className="flex gap-3 pt-2">
+                              <Button
+                                variant="outline"
+                                className="group h-11 flex-1 rounded-xl font-bold border-border/60 hover:bg-primary/5 hover:text-primary hover:border-primary/30 shadow-sm transition-all justify-between px-5"
+                                asChild
+                              >
+                                <Link href={`/dashboard/users/${candidate.id}`}>
+                                  View Profile
+                                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                                </Link>
+                              </Button>
+                              <Button
+                                className={cn(
+                                  "h-11 flex-[1.5] rounded-xl font-bold shadow-lg transition-all",
+                                  actionDisabled ? "bg-muted text-muted-foreground shadow-none" : "shadow-primary/10 hover:scale-[1.01] active:scale-[0.99]"
+                                )}
+                                disabled={actionDisabled}
+                                onClick={(e) => { e.stopPropagation(); onSelect(candidate) }}
+                              >
+                                {actionDisabled ? (
+                                  <span>{actionLabel}</span>
+                                ) : (
+                                  <>
+                                    <Send className="mr-2 h-4 w-4" />
+                                    Send {roleLabel} Request
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </motion.div>
                       )}
@@ -1272,14 +1275,35 @@ function SupervisorCandidatesSection({
           </div>
         )}
 
-        {!isLoading && !error && canLoadMore && (
-          <Button
-            variant="outline"
-            className="h-10 w-full rounded-xl text-sm transition-transform motion-safe:hover:-translate-y-0.5"
-            onClick={onLoadMore}
-          >
-            Load more {roleLabel.toLowerCase()}s
-          </Button>
+        {/* Pagination */}
+        {!isLoading && !error && totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-between border-t border-border/40 pt-6">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+              Page <span className="text-foreground">{page}</span> of {totalPages}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-xl border-border/60 font-bold px-4"
+                disabled={page <= 1}
+                onClick={() => onPageChange(page - 1)}
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 rounded-xl border-border/60 font-bold px-4"
+                disabled={page >= totalPages}
+                onClick={() => onPageChange(page + 1)}
+              >
+                Next
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1290,33 +1314,43 @@ function SupervisorRequestHistoryCard({ request, reduceMotion = false }: { reque
   return (
     <motion.div
       {...getSupervisorHoverMotion(reduceMotion)}
-      className="rounded-[20px] border border-border/60 bg-background p-4 transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm"
+      className="group relative flex flex-col gap-4 rounded-2xl border border-border/60 bg-background p-5 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-semibold text-sm leading-5">{request.projectName}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {request.supervisorRole === "DOCTOR" ? "Doctor" : "TA"} request &bull; {request.team.name}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{getFullName(request.supervisor)}</p>
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="bg-muted/50 text-[9px] font-bold uppercase tracking-wider">
+              {request.supervisorRole === "DOCTOR" ? "Doctor" : "TA"}
+            </Badge>
+            <span className="text-[10px] font-bold text-muted-foreground/60 italic">
+              {new Date(request.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+          <p className="font-bold text-sm leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-1">{request.projectName}</p>
+          <p className="text-[11px] text-muted-foreground font-medium truncate">{getFullName(request.supervisor)}</p>
         </div>
         <SupervisorStatusBadge status={request.status} />
       </div>
 
-      {request.technologies.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {request.technologies.map((item) => (
-            <Badge key={item} variant="secondary" className="rounded-full text-xs">
+      <div className="flex items-center justify-between border-t border-border/40 pt-3">
+        <div className="flex -space-x-2 overflow-hidden">
+          {request.technologies.slice(0, 3).map((item) => (
+            <div key={item} className="inline-flex h-6 items-center rounded-full border border-background bg-muted px-2 text-[9px] font-bold uppercase tracking-tighter">
               {item}
-            </Badge>
+            </div>
           ))}
+          {request.technologies.length > 3 && (
+            <div className="inline-flex h-6 items-center rounded-full border border-background bg-muted px-2 text-[9px] font-bold text-muted-foreground">
+              +{request.technologies.length - 3}
+            </div>
+          )}
         </div>
-      )}
-
-      <p className="mt-3 text-xs text-muted-foreground">
-        Sent {new Date(request.createdAt).toLocaleDateString()}
-        {request.respondedAt && ` · Responded ${new Date(request.respondedAt).toLocaleDateString()}`}
-      </p>
+        <Button variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-[10px] font-bold" asChild>
+          <Link href={`/dashboard/teams/${request.team.id}`}>
+            Details
+          </Link>
+        </Button>
+      </div>
     </motion.div>
   )
 }
@@ -1324,8 +1358,8 @@ function SupervisorRequestHistoryCard({ request, reduceMotion = false }: { reque
 function SupervisorStatusBadge({ status }: { status: ApiSupervisorRequest["status"] }) {
   if (status === "ACCEPTED") {
     return (
-      <Badge className="shrink-0 gap-1 bg-emerald-600 text-white">
-        <CheckCircle2 className="h-3.5 w-3.5" />
+      <Badge className="h-6 shrink-0 gap-1 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold">
+        <CheckCircle2 className="h-3 w-3" />
         Accepted
       </Badge>
     )
@@ -1333,20 +1367,24 @@ function SupervisorStatusBadge({ status }: { status: ApiSupervisorRequest["statu
 
   if (status === "DECLINED") {
     return (
-      <Badge variant="destructive" className="shrink-0 gap-1">
-        <XCircle className="h-3.5 w-3.5" />
+      <Badge variant="outline" className="h-6 shrink-0 gap-1 border-destructive/20 bg-destructive/5 text-destructive text-[10px] font-bold">
+        <XCircle className="h-3 w-3" />
         Declined
       </Badge>
     )
   }
 
   if (status === "CANCELLED") {
-    return <Badge variant="secondary" className="shrink-0">Cancelled</Badge>
+    return (
+      <Badge variant="secondary" className="h-6 shrink-0 text-[10px] font-bold bg-muted/50">
+        Cancelled
+      </Badge>
+    )
   }
 
   return (
-    <Badge variant="secondary" className="shrink-0 gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-      <Sparkles className="h-3.5 w-3.5" />
+    <Badge variant="secondary" className="h-6 shrink-0 gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold">
+      <Sparkles className="h-3 w-3" />
       Pending
     </Badge>
   )

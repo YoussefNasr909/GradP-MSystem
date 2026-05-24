@@ -644,6 +644,7 @@ function toRepositoryRecordResponse(record) {
 
 async function listAvailableInstallationsForConnection(connection) {
   if (!connection || !connection.isActive) return [];
+  const userLogin = connection.login;
 
   try {
     const usableConnection = await getUsableGitHubUserConnection(connection);
@@ -653,6 +654,14 @@ async function listAvailableInstallationsForConnection(connection) {
     const { data } = await octokit.request("GET /user/installations");
 
     return (data.installations ?? [])
+      .filter((installation) => {
+        // Privacy filter: Only show the user's personal installation or organization installations.
+        // Hides other users' personal installations that the user might have access to.
+        const isPersonal = installation.account?.type === "User";
+        const isOwner = installation.account?.login === userLogin;
+        const isOrg = installation.account?.type === "Organization";
+        return isOwner || isOrg;
+      })
       .map((installation) => toGitHubInstallationResponse(installation))
       .sort((left, right) => {
         const leftKey = `${left.accountLogin ?? ""}:${left.id}`;

@@ -24,6 +24,8 @@ export function formatRoleLabel(role: Role) {
       return "Doctor"
     case "TA":
       return "TA"
+    case "SUPPORT":
+      return "Support"
     case "LEADER":
       return "Team Leader"
     case "STUDENT":

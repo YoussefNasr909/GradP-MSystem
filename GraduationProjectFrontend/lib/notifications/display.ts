@@ -12,6 +12,7 @@ export type NotificationDisplay = {
     | "submission"
     | "team"
     | "supervisor"
+    | "support"
     | "system"
     | "info"
 }
@@ -142,6 +143,16 @@ export function getNotificationDisplay(notification: ApiNotification): Notificat
       category: "supervisor",
       toneClassName: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
       title: notification.title || "Supervisor update",
+      message: notification.message,
+    }
+  }
+
+  if (type.startsWith("SUPPORT_TICKET")) {
+    return {
+      label: "Support",
+      category: "support",
+      toneClassName: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+      title: notification.title || "Support ticket update",
       message: notification.message,
     }
   }

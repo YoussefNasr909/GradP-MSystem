@@ -26,6 +26,7 @@ const CHAT_RELATIONS = Object.freeze({
   TEAM_TA: "TEAM_TA",
   SUPERVISED_TEAM_LEADER: "SUPERVISED_TEAM_LEADER",
   ADMIN_DIRECT: "ADMIN_DIRECT",
+  SUPPORT_DIRECT: "SUPPORT_DIRECT",
 });
 
 const PROFILE_VISIBILITIES = Object.freeze({
@@ -309,6 +310,8 @@ function canDiscoverChatUser(actor, user, contactMap) {
   if (!user || actor.id === user.id) return false;
   if (actor.role === ROLES.ADMIN) return true;
   if (user.accountStatus !== ACCOUNT_STATUSES.ACTIVE || user.isEmailVerified !== true) return false;
+  if (user.role === ROLES.SUPPORT) return true;
+  if (actor.role === ROLES.SUPPORT) return true;
 
   const visibility = user.settings?.profileVisibility ?? PROFILE_VISIBILITIES.PUBLIC;
   if (visibility === PROFILE_VISIBILITIES.PRIVATE) return false;
@@ -325,6 +328,7 @@ function isSupervisorChatRole(role) {
 }
 
 function getRoleChatRelation(actorRole, peerRole) {
+  if (actorRole === ROLES.SUPPORT || peerRole === ROLES.SUPPORT) return CHAT_RELATIONS.SUPPORT_DIRECT;
   if (actorRole === ROLES.ADMIN || peerRole === ROLES.ADMIN) return CHAT_RELATIONS.ADMIN_DIRECT;
 
   const isStudentGroup = r => r === ROLES.STUDENT || r === ROLES.LEADER;
@@ -800,6 +804,9 @@ export async function searchChatUsersService(actor, query) {
     supervisor: ROLES.DOCTOR,
     admin: ROLES.ADMIN,
     administrator: ROLES.ADMIN,
+    support: ROLES.SUPPORT,
+    helpdesk: ROLES.SUPPORT,
+    help: ROLES.SUPPORT,
     ta: ROLES.TA,
     teaching: ROLES.TA,
     assistant: ROLES.TA,
@@ -814,12 +821,14 @@ export async function searchChatUsersService(actor, query) {
   let targetRoles = [];
   if (actor.role === ROLES.STUDENT || actor.role === ROLES.LEADER) {
     // Students/Leaders can message teammates, team doctor, and team TA
-    targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA];
+    targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA, ROLES.SUPPORT];
   } else if (actor.role === ROLES.DOCTOR || actor.role === ROLES.TA) {
     // Doctors/TAs can message team leaders, other staff, and admins
-    targetRoles = [ROLES.DOCTOR, ROLES.TA, ROLES.LEADER, ROLES.STUDENT, ROLES.ADMIN];
+    targetRoles = [ROLES.DOCTOR, ROLES.TA, ROLES.LEADER, ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPPORT];
   } else if (actor.role === ROLES.ADMIN) {
-    targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN];
+    targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN, ROLES.SUPPORT];
+  } else if (actor.role === ROLES.SUPPORT) {
+    targetRoles = [ROLES.STUDENT, ROLES.LEADER, ROLES.DOCTOR, ROLES.TA, ROLES.ADMIN, ROLES.SUPPORT];
   } else {
     return [];
   }

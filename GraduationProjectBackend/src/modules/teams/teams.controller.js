@@ -1,6 +1,7 @@
-﻿import {
+import {
   acceptInvitationService,
   cancelInvitationService,
+  cancelJoinRequestService,
   approveJoinRequestService,
   approveSupervisorRequestService,
   createInvitationService,
@@ -73,6 +74,11 @@ export const approveJoinRequest = asyncHandler(async (req, res) => {
 
 export const rejectJoinRequest = asyncHandler(async (req, res) => {
   const result = await rejectJoinRequestService(req.user, req.validated.params.id);
+  res.json({ ok: true, data: result });
+});
+
+export const cancelJoinRequest = asyncHandler(async (req, res) => {
+  const result = await cancelJoinRequestService(req.user, req.validated.params.id);
   res.json({ ok: true, data: result });
 });
 

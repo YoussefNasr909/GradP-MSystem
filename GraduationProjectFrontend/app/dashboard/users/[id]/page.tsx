@@ -10,7 +10,6 @@ import { FallbackState } from "@/components/feedback/fallback-state"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usersApi } from "@/lib/api/users"
 import type { ApiPublicUserProfile } from "@/lib/api/types"
@@ -78,176 +77,172 @@ export default function PublicUserProfilePage() {
   const identityMeta = [departmentLabel, academicYearLabel].filter((value) => value !== "Not shared").join(" / ")
 
   return (
-    <div className="mx-auto w-full max-w-[72rem] p-4 md:p-6 xl:p-8">
+    <div className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6 xl:p-8">
       <motion.section
-        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+        initial={reduceMotion ? false : { opacity: 0, y: 14 }}
         animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-        transition={reduceMotion ? undefined : { duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
+        transition={reduceMotion ? undefined : { duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+        className="space-y-5"
       >
-        <Card className="overflow-hidden rounded-[30px] border-border/70 bg-background shadow-[0_18px_50px_-32px_rgba(15,23,42,0.28)]">
-          <CardContent className="p-0">
-            {isSelf ? (
-              <div className="flex justify-end border-b border-border/60 px-5 py-4 sm:px-7">
-                <Button variant="outline" className="h-10 rounded-xl border-primary/20 bg-transparent px-4 hover:border-primary/30 hover:bg-primary/[0.05]" asChild>
-                  <Link href="/dashboard/settings?tab=profile">Edit My Profile</Link>
-                </Button>
+        <div className="flex flex-col gap-5 border-b border-border/70 pb-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+            <Avatar className="h-20 w-20 border border-border/70 shadow-sm">
+              <AvatarImage src={profile.avatarUrl || "/placeholder.svg"} />
+              <AvatarFallback className="text-xl font-semibold">{getAvatarInitial(profile)}</AvatarFallback>
+            </Avatar>
+
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="rounded-md bg-primary/10 px-2.5 py-1 text-primary">
+                  {roleLabel}
+                </Badge>
+                {isSelf ? (
+                  <Badge variant="outline" className="rounded-md">
+                    You
+                  </Badge>
+                ) : null}
+                {identityMeta ? <span className="text-sm text-muted-foreground">{identityMeta}</span> : null}
               </div>
-            ) : null}
 
-            <div className="space-y-8 px-5 py-6 sm:px-7 sm:py-7">
-              <motion.div
-                initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-                animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-                transition={reduceMotion ? undefined : { duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-                className="flex flex-col gap-5 sm:flex-row sm:items-start"
-              >
-                <motion.div
-                  initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-                  animate={reduceMotion ? undefined : { opacity: 1, scale: 1 }}
-                  transition={reduceMotion ? undefined : { duration: 0.34, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <Avatar className="h-20 w-20 border-4 border-primary/10">
-                    <AvatarImage src={profile.avatarUrl || "/placeholder.svg"} />
-                    <AvatarFallback className="text-xl font-semibold">{getAvatarInitial(profile)}</AvatarFallback>
-                  </Avatar>
-                </motion.div>
-
-                <div className="min-w-0 flex-1 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary" className="rounded-full bg-primary/[0.08] px-3 py-1 text-primary">
-                      {roleLabel}
-                    </Badge>
-                    {isSelf ? <Badge variant="outline" className="rounded-full">You</Badge> : null}
-                  </div>
-
-                  <div className="space-y-2">
-                    <h1 className="break-words text-3xl font-semibold tracking-tight text-foreground sm:text-[2.15rem]">
-                      {getFullName(profile)}
-                    </h1>
-                    {identityMeta ? <p className="text-sm text-muted-foreground">{identityMeta}</p> : null}
-                    <p className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-[15px]">{bioText}</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              <motion.div
-                initial={reduceMotion ? false : { opacity: 0, y: 12 }}
-                animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
-                transition={reduceMotion ? undefined : { duration: 0.42, delay: 0.14, ease: [0.22, 1, 0.36, 1] }}
-                className="grid gap-8 border-t border-border/60 pt-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]"
-              >
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <SectionTitle>Profile details</SectionTitle>
-                    <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-                      <DetailRow label="Email" value={profile.email ?? "Hidden by privacy settings"} />
-                      <DetailRow label="Role" value={roleLabel} />
-                      <DetailRow label="Academic ID" value={academicIdLabel} />
-                      <DetailRow label="Department" value={departmentLabel} />
-                      <DetailRow label="Academic Year" value={academicYearLabel} />
-                      <DetailRow label="Preferred Track" value={preferredTrackLabel} />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <SectionTitle>Current team</SectionTitle>
-                    {profile.currentTeam ? (
-                      <div className="space-y-4">
-                        <div className="space-y-2 border-b border-border/60 pb-4">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Team name</p>
-                          <div className="space-y-1.5">
-                            <p className="text-base font-semibold text-foreground">{profile.currentTeam.name}</p>
-                            <p className="text-sm leading-7 text-muted-foreground">
-                              {profile.currentTeam.bio?.trim() || "No public team description has been added yet."}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-                          <DetailRow
-                            label="Role in team"
-                            value={profile.currentTeam.teamRole === "LEADER" ? "Team Leader" : "Team Member"}
-                          />
-                          <DetailRow label="Visibility" value={formatTeamVisibility(profile.currentTeam.visibility)} />
-                          <DetailRow label="Members" value={`${profile.currentTeam.memberCount} members`} />
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          className="h-11 rounded-xl border-border/70 bg-transparent px-4 text-foreground transition-[border-color,background-color,color,transform] duration-200 hover:border-primary/30 hover:bg-primary/[0.05] hover:text-primary"
-                          asChild
-                        >
-                          <Link href={`/dashboard/teams/${profile.currentTeam.id}`}>
-                            Open Team
-                            <ArrowRight className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </div>
-                    ) : (
-                      <PlainNotice>
-                        This user is not currently part of any team.
-                      </PlainNotice>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-8 lg:border-l lg:border-border/60 lg:pl-8">
-                  <div className="space-y-4">
-                    <SectionTitle>Public links</SectionTitle>
-                    {profile.linkedinUrl || profile.githubUsername ? (
-                      <div className="space-y-3">
-                        {profile.linkedinUrl ? (
-                          <ExternalLinkRow
-                            href={profile.linkedinUrl}
-                            label="LinkedIn"
-                            detail={profile.linkedinUrl}
-                            icon={<Linkedin className="h-4 w-4" />}
-                            reduceMotion={Boolean(reduceMotion)}
-                          />
-                        ) : null}
-
-                        {profile.githubUsername ? (
-                          <ExternalLinkRow
-                            href={`https://github.com/${profile.githubUsername}`}
-                            label="GitHub"
-                            detail={`github.com/${profile.githubUsername}`}
-                            icon={<Github className="h-4 w-4" />}
-                            reduceMotion={Boolean(reduceMotion)}
-                          />
-                        ) : null}
-                      </div>
-                    ) : (
-                      <PlainNotice>
-                        No public LinkedIn or GitHub links have been shared yet.
-                      </PlainNotice>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+              <div className="space-y-2">
+                <h1 className="break-words text-2xl font-semibold text-foreground sm:text-3xl">
+                  {getFullName(profile)}
+                </h1>
+                <p className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-[15px]">{bioText}</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {isSelf ? (
+            <Button
+              variant="outline"
+              className="h-10 rounded-lg border-border/70 bg-background px-4 text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              asChild
+            >
+              <Link href="/dashboard/settings?tab=profile">Edit profile</Link>
+            </Button>
+          ) : null}
+        </div>
+
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+          animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+          transition={reduceMotion ? undefined : { duration: 0.36, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+          className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]"
+        >
+          <div className="space-y-4">
+            <ProfilePanel title="Profile details" description="Academic information this user shares publicly.">
+              <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-2">
+                <DetailRow label="Email" value={profile.email ?? "Hidden by privacy settings"} />
+                <DetailRow label="Role" value={roleLabel} />
+                <DetailRow label="Academic ID" value={academicIdLabel} />
+                <DetailRow label="Department" value={departmentLabel} />
+                <DetailRow label="Academic year" value={academicYearLabel} />
+                <DetailRow label="Preferred track" value={preferredTrackLabel} />
+              </div>
+            </ProfilePanel>
+
+            <ProfilePanel title="Current team" description="Where this user is currently collaborating.">
+              {profile.currentTeam ? (
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border/60 bg-muted/15 p-4">
+                    <p className="text-base font-semibold text-foreground">{profile.currentTeam.name}</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      {profile.currentTeam.bio?.trim() || "No public team description has been added yet."}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 sm:grid-cols-3">
+                    <DetailRow
+                      label="Team role"
+                      value={profile.currentTeam.teamRole === "LEADER" ? "Team Leader" : "Team Member"}
+                    />
+                    <DetailRow label="Visibility" value={formatTeamVisibility(profile.currentTeam.visibility)} />
+                    <DetailRow label="Members" value={`${profile.currentTeam.memberCount} members`} />
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    className="group h-10 rounded-lg border-border/70 bg-background px-4 text-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                    asChild
+                  >
+                    <Link href={`/dashboard/teams/${profile.currentTeam.id}`}>
+                      Open team
+                      <ArrowRight className="ml-2 h-4 w-4 text-muted-foreground transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </Link>
+                  </Button>
+                </div>
+              ) : (
+                <PlainNotice>This user is not currently part of any team.</PlainNotice>
+              )}
+            </ProfilePanel>
+          </div>
+
+          <ProfilePanel title="Public links" description="External places this user chose to share.">
+            {profile.linkedinUrl || profile.githubUsername ? (
+              <div className="space-y-3">
+                {profile.linkedinUrl ? (
+                  <ExternalLinkRow
+                    href={profile.linkedinUrl}
+                    label="LinkedIn"
+                    detail={profile.linkedinUrl}
+                    icon={<Linkedin className="h-4 w-4" />}
+                    reduceMotion={Boolean(reduceMotion)}
+                  />
+                ) : null}
+
+                {profile.githubUsername ? (
+                  <ExternalLinkRow
+                    href={`https://github.com/${profile.githubUsername}`}
+                    label="GitHub"
+                    detail={`github.com/${profile.githubUsername}`}
+                    icon={<Github className="h-4 w-4" />}
+                    reduceMotion={Boolean(reduceMotion)}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <PlainNotice>No public LinkedIn or GitHub links have been shared yet.</PlainNotice>
+            )}
+          </ProfilePanel>
+        </motion.div>
       </motion.section>
     </div>
   )
 }
 
-function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="text-lg font-semibold tracking-tight text-foreground">{children}</h2>
+function ProfilePanel({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description: string
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-xl border border-border/70 bg-background p-4 shadow-sm sm:p-5">
+      <div className="mb-4 space-y-1">
+        <h2 className="text-base font-semibold text-foreground">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </section>
+  )
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-b border-border/60 py-3 last:border-b-0">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-      <p className="mt-1.5 text-sm leading-6 text-foreground">{value}</p>
+    <div className="min-w-0 bg-background p-3">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 break-words text-sm leading-6 text-foreground">{value}</p>
     </div>
   )
 }
 
 function PlainNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="border-b border-border/60 py-3">
+    <div className="rounded-lg border border-dashed border-border/70 bg-muted/15 p-4">
       <p className="text-sm leading-7 text-muted-foreground">{children}</p>
     </div>
   )
@@ -275,11 +270,11 @@ function ExternalLinkRow({
       <Button
         variant="outline"
         asChild
-        className="group h-auto w-full justify-between rounded-xl border-border/70 bg-background px-4 py-3 text-foreground shadow-none transition-[border-color,background-color,color] duration-200 hover:border-primary/30 hover:bg-primary/[0.05] hover:text-foreground"
+        className="group h-auto w-full justify-between rounded-lg border-border/70 bg-background px-4 py-3 text-foreground shadow-none transition-[border-color,background-color,color] duration-200 hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
       >
         <a href={href} target="_blank" rel="noreferrer">
           <span className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-primary transition-colors duration-200 group-hover:bg-primary/10 group-hover:text-primary">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-primary transition-colors duration-200 group-hover:bg-primary/10 group-hover:text-primary">
               {icon}
             </span>
             <span className="min-w-0 text-left">
@@ -298,78 +293,59 @@ function ExternalLinkRow({
 
 function ProfileLoadingState() {
   return (
-    <div className="mx-auto w-full max-w-[72rem] p-4 md:p-6 xl:p-8">
-      <Card className="overflow-hidden rounded-[30px] border-border/70 bg-background shadow-[0_18px_50px_-32px_rgba(15,23,42,0.28)]">
-        <CardContent className="p-0">
-          <div className="flex justify-end border-b border-border/60 px-5 py-4 sm:px-7">
-            <Skeleton className="h-10 w-32 rounded-xl" />
-          </div>
-
-          <div className="space-y-8 px-5 py-6 sm:px-7 sm:py-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-              <Skeleton className="h-20 w-20 rounded-full" />
-              <div className="min-w-0 flex-1 space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Skeleton className="h-7 w-24 rounded-full" />
-                  <Skeleton className="h-7 w-16 rounded-full" />
-                </div>
-                <Skeleton className="h-10 w-72 rounded-2xl" />
-                <Skeleton className="h-4 w-44 rounded-full" />
-                <Skeleton className="h-4 w-full rounded-full" />
-                <Skeleton className="h-4 w-5/6 rounded-full" />
-              </div>
+    <div className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-6 xl:p-8">
+      <div className="flex flex-col gap-5 border-b border-border/70 pb-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Skeleton className="h-20 w-20 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Skeleton className="h-7 w-24 rounded-md" />
+              <Skeleton className="h-7 w-36 rounded-md" />
             </div>
-
-            <div className="grid gap-8 border-t border-border/60 pt-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-              <div className="space-y-8">
-                <div className="space-y-4">
-                  <Skeleton className="h-6 w-36 rounded-full" />
-                  <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-                    {Array.from({ length: 6 }).map((_, index) => (
-                      <div key={index} className="border-b border-border/60 py-3">
-                        <Skeleton className="h-3 w-20 rounded-full" />
-                        <Skeleton className="mt-2 h-5 w-full rounded-full" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <Skeleton className="h-6 w-32 rounded-full" />
-                  <div className="space-y-4">
-                    <div className="border-b border-border/60 pb-4">
-                      <Skeleton className="h-3 w-20 rounded-full" />
-                      <Skeleton className="mt-3 h-5 w-40 rounded-full" />
-                      <Skeleton className="mt-3 h-4 w-full rounded-full" />
-                    </div>
-                    <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-                      {Array.from({ length: 3 }).map((_, index) => (
-                        <div key={index} className="border-b border-border/60 py-3">
-                          <Skeleton className="h-3 w-20 rounded-full" />
-                          <Skeleton className="mt-2 h-5 w-full rounded-full" />
-                        </div>
-                      ))}
-                    </div>
-                    <Skeleton className="h-11 w-36 rounded-xl" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 lg:border-l lg:border-border/60 lg:pl-8">
-                <Skeleton className="h-6 w-28 rounded-full" />
-                <Skeleton className="h-14 rounded-xl" />
-                <Skeleton className="h-14 rounded-xl" />
-              </div>
-            </div>
+            <Skeleton className="h-8 w-72 max-w-full rounded-md" />
+            <Skeleton className="h-4 w-full rounded-full" />
+            <Skeleton className="h-4 w-5/6 rounded-full" />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <Skeleton className="h-10 w-28 rounded-lg" />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(20rem,0.85fr)]">
+        <div className="space-y-4">
+          <LoadingPanel rows={6} columns="sm:grid-cols-2" />
+          <LoadingPanel rows={3} columns="sm:grid-cols-3" />
+        </div>
+
+        <section className="rounded-xl border border-border/70 bg-background p-4 shadow-sm sm:p-5">
+          <Skeleton className="h-5 w-28 rounded-md" />
+          <Skeleton className="mt-2 h-4 w-56 rounded-full" />
+          <Skeleton className="mt-5 h-14 rounded-lg" />
+          <Skeleton className="mt-3 h-14 rounded-lg" />
+        </section>
+      </div>
 
       <div className="mt-5 flex items-center justify-center gap-3 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
         Loading public profile...
       </div>
     </div>
+  )
+}
+
+function LoadingPanel({ rows, columns }: { rows: number; columns: string }) {
+  return (
+    <section className="rounded-xl border border-border/70 bg-background p-4 shadow-sm sm:p-5">
+      <Skeleton className="h-5 w-36 rounded-md" />
+      <Skeleton className="mt-2 h-4 w-64 max-w-full rounded-full" />
+      <div className={`mt-5 grid gap-px overflow-hidden rounded-lg border border-border/60 bg-border/60 ${columns}`}>
+        {Array.from({ length: rows }).map((_, index) => (
+          <div key={index} className="bg-background p-3">
+            <Skeleton className="h-3 w-20 rounded-full" />
+            <Skeleton className="mt-2 h-5 w-full rounded-full" />
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

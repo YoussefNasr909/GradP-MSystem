@@ -9,6 +9,7 @@ function categoryPreferenceKey(type, title = "", actionUrl = "") {
   if (normalizedType.startsWith("TASK")) return "taskReminders";
   if (normalizedType.startsWith("SUBMISSION")) return "submissionAlerts";
   if (normalizedType.startsWith("TEAM") || normalizedType.startsWith("SUPERVISOR")) return "teamUpdates";
+  if (normalizedType.startsWith("SUPPORT")) return "mentionNotifications";
   if (normalizedType.startsWith("MESSAGE") || normalizedType.includes("MENTION")) return "mentionNotifications";
   if (normalizedText.includes("deadline")) return "deadlineWarnings";
   if (normalizedText.includes("grade")) return "gradeNotifications";

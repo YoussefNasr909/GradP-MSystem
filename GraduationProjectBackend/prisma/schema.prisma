@@ -12,6 +12,7 @@ enum Role {
   LEADER
   TA
   DOCTOR
+  SUPPORT
   ADMIN
 }
 
@@ -246,6 +247,55 @@ enum NotificationType {
   XP_REVERSED
   BADGE_UNLOCKED
   XP_ADJUSTMENT_REVIEWED
+  SUPPORT_TICKET_CREATED
+  SUPPORT_TICKET_REPLY
+  SUPPORT_TICKET_STATUS_CHANGED
+  SUPPORT_TICKET_ASSIGNED
+}
+
+enum SupportTicketSource {
+  FORM
+  CHAT
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_USER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportTicketCategory {
+  BUG
+  FEATURE
+  QUESTION
+  ACCOUNT
+  TECHNICAL
+  GENERAL
+}
+
+enum SupportTicketMessageVisibility {
+  PUBLIC
+  INTERNAL
+}
+
+enum SupportTicketActivityType {
+  CREATED
+  MESSAGE_ADDED
+  INTERNAL_NOTE_ADDED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  CATEGORY_CHANGED
+  ASSIGNED
+  REOPENED
 }
 
 enum DiscussionCategory {
@@ -407,78 +457,84 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  ledTeam                    Team?                              @relation("TeamLeader")
-  doctorTeams                Team[]                             @relation("TeamDoctor")
-  taTeams                    Team[]                             @relation("TeamTA")
-  teamMembership             TeamMember?                        @relation("TeamMemberUser")
-  sentTeamInvitations        TeamInvitation[]                   @relation("TeamInvitationSender")
-  receivedTeamInvitations    TeamInvitation[]                   @relation("TeamInvitationRecipient")
-  teamJoinRequests           TeamJoinRequest[]                  @relation("TeamJoinRequestUser")
-  sentSupervisorRequests     TeamSupervisorRequest[]            @relation("TeamSupervisorRequestSender")
-  receivedSupervisorRequests TeamSupervisorRequest[]            @relation("TeamSupervisorRequestRecipient")
-  githubConnection           GitHubUserConnection?
-  assignedTasks              Task[]                             @relation("TaskAssignee")
-  createdTasks               Task[]                             @relation("TaskCreator")
-  reviewedTasks              Task[]                             @relation("TaskReviewer")
-  authoredTaskReviews        TaskReview[]                       @relation("TaskReviewAuthor")
-  uploadedTaskEvidence       TaskSubmissionEvidence[]           @relation("TaskEvidenceUploader")
-  createdSprints             Sprint[]                           @relation("SprintCreator")
-  authoredSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationEvaluator")
-  reviewedSprintEvaluations  SprintEvaluation[]                 @relation("SprintEvaluationReviewer")
-  submittedWeeklyReports     WeeklyReport[]                     @relation("WeeklyReportSubmitter")
-  reviewedWeeklyReports      WeeklyReport[]                     @relation("WeeklyReportReviewer")
-  submittedSubmissions       Submission[]                       @relation("SubmissionSubmitter")
-  reviewedSubmissions        Submission[]                       @relation("SubmissionReviewer")
-  taReviewedSubmissions      Submission[]                       @relation("SubmissionTAReviewer")
-  authoredProposals          Proposal[]                         @relation("ProposalAuthor")
-  reviewedProposals          Proposal[]                         @relation("ProposalReviewer")
-  authoredSupervisorNotes    TeamSupervisorNote[]               @relation("SupervisorNoteAuthor")
-  setDeliverableDeadlines    TeamDeliverableDeadline[]          @relation("DeadlineSetter")
-  authoredAnnouncements      Announcement[]                     @relation("AnnouncementAuthor")
-  authoredSubmissionComments SubmissionComment[]                @relation("SubmissionCommentAuthor")
-  createdRubricTemplates     TeamRubricTemplate[]               @relation("RubricTemplateCreator")
-  uploadedDocuments          TeamDocument[]                     @relation("DocumentUploader")
-  createdResources           TeamResource[]                     @relation("ResourceCreator")
-  createdRisks               Risk[]                             @relation("RiskCreator")
-  monitoredRisks             Risk[]                             @relation("RiskMonitor")
-  approvedRisks              Risk[]                             @relation("RiskApprover")
-  notifications              Notification[]                     @relation("UserNotifications")
-  settings                   UserSettings?
-  organizedMeetings          Meeting[]                          @relation("MeetingOrganizer")
-  meetingParticipants        MeetingParticipant[]               @relation("MeetingParticipantUser")
-  meetingApprovals           MeetingApproval[]                  @relation("MeetingApprovalUser")
-  calendarIntegrations       CalendarIntegration[]
-  teamGroupChatParticipants  TeamGroupConversationParticipant[]
-  sentTeamGroupMessages      TeamGroupMessage[]                 @relation("TeamGroupMessageSender")
-  directChatConversationsOne DirectChatConversation[]           @relation("DirectChatConversationUserOne")
-  directChatConversationsTwo DirectChatConversation[]           @relation("DirectChatConversationUserTwo")
-  sentDirectChatMessages     DirectChatMessage[]                @relation("DirectChatMessageSender")
-  receivedDirectChatMessages DirectChatMessage[]                @relation("DirectChatMessageRecipient")
-  deletedDirectChatMessages  DirectChatMessage[]                @relation("DirectChatMessageDeletedBy")
-  discussionPosts            Discussion[]                       @relation("DiscussionAuthor")
-  discussionComments         DiscussionComment[]                @relation("DiscussionCommentAuthor")
-  discussionLikes            DiscussionLike[]                   @relation("DiscussionLikeUser")
-  discussionViews            DiscussionView[]                   @relation("DiscussionViewUser")
+  ledTeam                      Team?                              @relation("TeamLeader")
+  doctorTeams                  Team[]                             @relation("TeamDoctor")
+  taTeams                      Team[]                             @relation("TeamTA")
+  teamMembership               TeamMember?                        @relation("TeamMemberUser")
+  sentTeamInvitations          TeamInvitation[]                   @relation("TeamInvitationSender")
+  receivedTeamInvitations      TeamInvitation[]                   @relation("TeamInvitationRecipient")
+  teamJoinRequests             TeamJoinRequest[]                  @relation("TeamJoinRequestUser")
+  sentSupervisorRequests       TeamSupervisorRequest[]            @relation("TeamSupervisorRequestSender")
+  receivedSupervisorRequests   TeamSupervisorRequest[]            @relation("TeamSupervisorRequestRecipient")
+  githubConnection             GitHubUserConnection?
+  assignedTasks                Task[]                             @relation("TaskAssignee")
+  createdTasks                 Task[]                             @relation("TaskCreator")
+  reviewedTasks                Task[]                             @relation("TaskReviewer")
+  authoredTaskReviews          TaskReview[]                       @relation("TaskReviewAuthor")
+  uploadedTaskEvidence         TaskSubmissionEvidence[]           @relation("TaskEvidenceUploader")
+  createdSprints               Sprint[]                           @relation("SprintCreator")
+  authoredSprintEvaluations    SprintEvaluation[]                 @relation("SprintEvaluationEvaluator")
+  reviewedSprintEvaluations    SprintEvaluation[]                 @relation("SprintEvaluationReviewer")
+  submittedWeeklyReports       WeeklyReport[]                     @relation("WeeklyReportSubmitter")
+  reviewedWeeklyReports        WeeklyReport[]                     @relation("WeeklyReportReviewer")
+  submittedSubmissions         Submission[]                       @relation("SubmissionSubmitter")
+  reviewedSubmissions          Submission[]                       @relation("SubmissionReviewer")
+  taReviewedSubmissions        Submission[]                       @relation("SubmissionTAReviewer")
+  authoredProposals            Proposal[]                         @relation("ProposalAuthor")
+  reviewedProposals            Proposal[]                         @relation("ProposalReviewer")
+  authoredSupervisorNotes      TeamSupervisorNote[]               @relation("SupervisorNoteAuthor")
+  setDeliverableDeadlines      TeamDeliverableDeadline[]          @relation("DeadlineSetter")
+  authoredAnnouncements        Announcement[]                     @relation("AnnouncementAuthor")
+  authoredSubmissionComments   SubmissionComment[]                @relation("SubmissionCommentAuthor")
+  createdRubricTemplates       TeamRubricTemplate[]               @relation("RubricTemplateCreator")
+  uploadedDocuments            TeamDocument[]                     @relation("DocumentUploader")
+  createdResources             TeamResource[]                     @relation("ResourceCreator")
+  createdRisks                 Risk[]                             @relation("RiskCreator")
+  monitoredRisks               Risk[]                             @relation("RiskMonitor")
+  approvedRisks                Risk[]                             @relation("RiskApprover")
+  notifications                Notification[]                     @relation("UserNotifications")
+  supportTicketsRequested      SupportTicket[]                    @relation("SupportTicketRequester")
+  supportTicketsAssigned       SupportTicket[]                    @relation("SupportTicketAssignee")
+  authoredSupportMessages      SupportTicketMessage[]             @relation("SupportTicketMessageAuthor")
+  uploadedSupportAttachments   SupportTicketAttachment[]          @relation("SupportTicketAttachmentUploader")
+  supportTicketActivities      SupportTicketActivity[]            @relation("SupportTicketActivityActor")
+  supportSavedRepliesCreated   SupportSavedReply[]                @relation("SupportSavedReplyCreator")
+  settings                     UserSettings?
+  organizedMeetings            Meeting[]                          @relation("MeetingOrganizer")
+  meetingParticipants          MeetingParticipant[]               @relation("MeetingParticipantUser")
+  meetingApprovals             MeetingApproval[]                  @relation("MeetingApprovalUser")
+  calendarIntegrations         CalendarIntegration[]
+  teamGroupChatParticipants    TeamGroupConversationParticipant[]
+  sentTeamGroupMessages        TeamGroupMessage[]                 @relation("TeamGroupMessageSender")
+  directChatConversationsOne   DirectChatConversation[]           @relation("DirectChatConversationUserOne")
+  directChatConversationsTwo   DirectChatConversation[]           @relation("DirectChatConversationUserTwo")
+  sentDirectChatMessages       DirectChatMessage[]                @relation("DirectChatMessageSender")
+  receivedDirectChatMessages   DirectChatMessage[]                @relation("DirectChatMessageRecipient")
+  deletedDirectChatMessages    DirectChatMessage[]                @relation("DirectChatMessageDeletedBy")
+  discussionPosts              Discussion[]                       @relation("DiscussionAuthor")
+  discussionComments           DiscussionComment[]                @relation("DiscussionCommentAuthor")
+  discussionLikes              DiscussionLike[]                   @relation("DiscussionLikeUser")
+  discussionViews              DiscussionView[]                   @relation("DiscussionViewUser")
   // Gamification relations
-  createdGamificationRules       GamificationRule[]         @relation("GamificationRuleCreator")
-  gamificationEventsAsActor      GamificationEvent[]        @relation("GamificationEventActor")
-  xpTransactionsAsRecipient      XpTransaction[]            @relation("XpTransactionRecipientUser")
-  xpTransactionsCreated          XpTransaction[]            @relation("XpTransactionCreator")
-  xpTransactionsReviewed         XpTransaction[]            @relation("XpTransactionReviewer")
-  xpBalance                      UserXpBalance?
-  userBadges                     UserBadge[]                @relation("UserBadgeOwner")
-  leaderboardSnapshots           LeaderboardSnapshot[]      @relation("LeaderboardSnapshotUser")
-  githubContributions            GitHubContribution[]       @relation("GitHubContributionUser")
-  suspiciousActivityCases        SuspiciousActivityCase[]   @relation("SuspiciousActivityUser")
-  assignedSuspiciousCases        SuspiciousActivityCase[]   @relation("SuspiciousActivityReviewer")
-  xpAdjustmentRequestsCreated    XpAdjustmentRequest[]      @relation("XpAdjustmentRequester")
-  xpAdjustmentRequestsAsTarget   XpAdjustmentRequest[]      @relation("XpAdjustmentTargetUser")
-  xpAdjustmentRequestsApproved   XpAdjustmentRequest[]      @relation("XpAdjustmentApprover")
-  gamificationAuditLogs          GamificationAuditLog[]     @relation("GamificationAuditActor")
-  coinBalance                    UserCoinBalance?           @relation("UserCoinBalanceOwner")
-  coinTransactions               CoinTransaction[]          @relation("CoinTransactionUser")
-  questProgress                  UserQuestProgress[]        @relation("UserQuestProgressOwner")
-  rewardPurchases                RewardPurchase[]           @relation("RewardPurchaseUser")
+  createdGamificationRules     GamificationRule[]                 @relation("GamificationRuleCreator")
+  gamificationEventsAsActor    GamificationEvent[]                @relation("GamificationEventActor")
+  xpTransactionsAsRecipient    XpTransaction[]                    @relation("XpTransactionRecipientUser")
+  xpTransactionsCreated        XpTransaction[]                    @relation("XpTransactionCreator")
+  xpTransactionsReviewed       XpTransaction[]                    @relation("XpTransactionReviewer")
+  xpBalance                    UserXpBalance?
+  userBadges                   UserBadge[]                        @relation("UserBadgeOwner")
+  leaderboardSnapshots         LeaderboardSnapshot[]              @relation("LeaderboardSnapshotUser")
+  githubContributions          GitHubContribution[]               @relation("GitHubContributionUser")
+  suspiciousActivityCases      SuspiciousActivityCase[]           @relation("SuspiciousActivityUser")
+  assignedSuspiciousCases      SuspiciousActivityCase[]           @relation("SuspiciousActivityReviewer")
+  xpAdjustmentRequestsCreated  XpAdjustmentRequest[]              @relation("XpAdjustmentRequester")
+  xpAdjustmentRequestsAsTarget XpAdjustmentRequest[]              @relation("XpAdjustmentTargetUser")
+  xpAdjustmentRequestsApproved XpAdjustmentRequest[]              @relation("XpAdjustmentApprover")
+  gamificationAuditLogs        GamificationAuditLog[]             @relation("GamificationAuditActor")
+  coinBalance                  UserCoinBalance?                   @relation("UserCoinBalanceOwner")
+  coinTransactions             CoinTransaction[]                  @relation("CoinTransactionUser")
+  questProgress                UserQuestProgress[]                @relation("UserQuestProgressOwner")
+  rewardPurchases              RewardPurchase[]                   @relation("RewardPurchaseUser")
 }
 
 model UserSettings {
@@ -541,38 +597,38 @@ model Team {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
-  leader                 User                      @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
-  doctor                 User?                     @relation("TeamDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
-  ta                     User?                     @relation("TeamTA", fields: [taId], references: [id], onDelete: SetNull)
-  members                TeamMember[]
-  invitations            TeamInvitation[]
-  joinRequests           TeamJoinRequest[]
-  supervisorRequests     TeamSupervisorRequest[]
-  githubRepository       GitHubTeamRepository?
-  tasks                  Task[]
-  taskSubmissionEvidence TaskSubmissionEvidence[]
-  sprints                Sprint[]
-  weeklyReports          WeeklyReport[]
-  submissions            Submission[]
-  documents              TeamDocument[]
-  meetings               Meeting[]
-  risks                  Risk[]
-  proposal               Proposal?
-  supervisorNotes        TeamSupervisorNote[]
-  deliverableDeadlines   TeamDeliverableDeadline[]
-  announcements          Announcement[]
-  announcementTargets  AnnouncementTargetTeam[]
-  rubricTemplates        TeamRubricTemplate[]
-  groupConversation      TeamGroupConversation?
+  leader                    User                      @relation("TeamLeader", fields: [leaderId], references: [id], onDelete: Cascade)
+  doctor                    User?                     @relation("TeamDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
+  ta                        User?                     @relation("TeamTA", fields: [taId], references: [id], onDelete: SetNull)
+  members                   TeamMember[]
+  invitations               TeamInvitation[]
+  joinRequests              TeamJoinRequest[]
+  supervisorRequests        TeamSupervisorRequest[]
+  githubRepository          GitHubTeamRepository?
+  tasks                     Task[]
+  taskSubmissionEvidence    TaskSubmissionEvidence[]
+  sprints                   Sprint[]
+  weeklyReports             WeeklyReport[]
+  submissions               Submission[]
+  documents                 TeamDocument[]
+  meetings                  Meeting[]
+  risks                     Risk[]
+  proposal                  Proposal?
+  supervisorNotes           TeamSupervisorNote[]
+  deliverableDeadlines      TeamDeliverableDeadline[]
+  announcements             Announcement[]
+  announcementTargets       AnnouncementTargetTeam[]
+  rubricTemplates           TeamRubricTemplate[]
+  groupConversation         TeamGroupConversation?
   // Gamification relations
-  gamificationEvents        GamificationEvent[]        @relation("GamificationEventTeam")
-  xpTransactionsAsRecipient XpTransaction[]            @relation("XpTransactionRecipientTeam")
+  gamificationEvents        GamificationEvent[]       @relation("GamificationEventTeam")
+  xpTransactionsAsRecipient XpTransaction[]           @relation("XpTransactionRecipientTeam")
   xpBalance                 TeamXpBalance?
-  teamBadges                TeamBadge[]                @relation("TeamBadgeOwner")
-  leaderboardSnapshots      LeaderboardSnapshot[]      @relation("LeaderboardSnapshotTeam")
-  githubContributions       GitHubContribution[]       @relation("GitHubContributionTeam")
-  suspiciousActivityCases   SuspiciousActivityCase[]   @relation("SuspiciousActivityTeam")
-  xpAdjustmentRequests      XpAdjustmentRequest[]      @relation("XpAdjustmentTargetTeam")
+  teamBadges                TeamBadge[]               @relation("TeamBadgeOwner")
+  leaderboardSnapshots      LeaderboardSnapshot[]     @relation("LeaderboardSnapshotTeam")
+  githubContributions       GitHubContribution[]      @relation("GitHubContributionTeam")
+  suspiciousActivityCases   SuspiciousActivityCase[]  @relation("SuspiciousActivityTeam")
+  xpAdjustmentRequests      XpAdjustmentRequest[]     @relation("XpAdjustmentTargetTeam")
 
   @@index([visibility, stage])
   @@index([name])
@@ -817,14 +873,14 @@ model Task {
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
 
-  team               Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  sprint             Sprint?                  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
-  assignee           User?                    @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
-  createdBy          User?                    @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  reviewedBy         User?                    @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  githubContributions GitHubContribution[] @relation("GitHubContributionTask")
-  submissionEvidence TaskSubmissionEvidence[]
-  reviews            TaskReview[]
+  team                Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  sprint              Sprint?                  @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee            User?                    @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  createdBy           User?                    @relation("TaskCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedBy          User?                    @relation("TaskReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  githubContributions GitHubContribution[]     @relation("GitHubContributionTask")
+  submissionEvidence  TaskSubmissionEvidence[]
+  reviews             TaskReview[]
 
   @@unique([teamId, githubIssueNumber])
   @@index([teamId, status])
@@ -941,23 +997,23 @@ model SprintEvaluation {
 }
 
 model WeeklyReport {
-  id              String             @id @default(cuid())
-  teamId          String
-  submittedById   String?
-  reviewedById    String?
-  weekLabel       String
-  periodStart     DateTime?
-  periodEnd       DateTime?
-  summaryDraft    String?
-  summaryFinal    String?
-  githubActivity  Json?
-  status          WeeklyReportStatus @default(DRAFT)
-  reviewComment   String?
-  isSubmitted     Boolean            @default(false)
-  submittedAt     DateTime?
-  reviewedAt      DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id             String             @id @default(cuid())
+  teamId         String
+  submittedById  String?
+  reviewedById   String?
+  weekLabel      String
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  summaryDraft   String?
+  summaryFinal   String?
+  githubActivity Json?
+  status         WeeklyReportStatus @default(DRAFT)
+  reviewComment  String?
+  isSubmitted    Boolean            @default(false)
+  submittedAt    DateTime?
+  reviewedAt     DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   team        Team  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   submittedBy User? @relation("WeeklyReportSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
@@ -1019,12 +1075,12 @@ model Submission {
   late        Boolean   @default(false)
 
   // Duplicate detection (gamification anti-cheat)
-  fileHash             String?
-  normalizedTextHash   String?
-  contentFingerprint   String?
+  fileHash           String?
+  normalizedTextHash String?
+  contentFingerprint String?
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   team           Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   submittedBy    User?               @relation("SubmissionSubmitter", fields: [submittedByUserId], references: [id], onDelete: SetNull)
@@ -1138,6 +1194,114 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+model SupportTicket {
+  id                     String                @id @default(cuid())
+  ticketNumber           String                @unique
+  requesterUserId        String
+  assignedSupportUserId  String?
+  source                 SupportTicketSource   @default(FORM)
+  subject                String
+  category               SupportTicketCategory @default(GENERAL)
+  priority               SupportTicketPriority @default(MEDIUM)
+  status                 SupportTicketStatus   @default(OPEN)
+  tags                   String[]              @default([])
+  firstResponseDueAt     DateTime?
+  nextResponseDueAt      DateTime?
+  firstSupportResponseAt DateTime?
+  snoozedUntil           DateTime?
+  lastActivityAt         DateTime              @default(now())
+  resolvedAt             DateTime?
+  closedAt               DateTime?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  requester       User                      @relation("SupportTicketRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  assignedSupport User?                     @relation("SupportTicketAssignee", fields: [assignedSupportUserId], references: [id], onDelete: SetNull)
+  messages        SupportTicketMessage[]
+  attachments     SupportTicketAttachment[]
+  activities      SupportTicketActivity[]
+
+  @@index([requesterUserId, createdAt])
+  @@index([assignedSupportUserId, status])
+  @@index([status, priority, lastActivityAt])
+  @@index([category, createdAt])
+  @@index([nextResponseDueAt])
+  @@index([firstResponseDueAt])
+}
+
+model SupportTicketMessage {
+  id         String                         @id @default(cuid())
+  ticketId   String
+  authorId   String
+  visibility SupportTicketMessageVisibility @default(PUBLIC)
+  body       String
+  createdAt  DateTime                       @default(now())
+  updatedAt  DateTime                       @updatedAt
+
+  ticket      SupportTicket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      User                      @relation("SupportTicketMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  attachments SupportTicketAttachment[]
+
+  @@index([ticketId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([visibility])
+}
+
+model SupportTicketAttachment {
+  id           String   @id @default(cuid())
+  ticketId     String
+  messageId    String?
+  uploadedById String
+  fileUrl      String
+  fileName     String
+  fileSize     Int
+  fileType     String
+  createdAt    DateTime @default(now())
+
+  ticket     SupportTicket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message    SupportTicketMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  uploadedBy User                  @relation("SupportTicketAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@index([messageId])
+  @@index([uploadedById])
+}
+
+model SupportTicketActivity {
+  id        String                    @id @default(cuid())
+  ticketId  String
+  actorId   String?
+  type      SupportTicketActivityType
+  fromValue String?
+  toValue   String?
+  metadata  Json?
+  createdAt DateTime                  @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actor  User?         @relation("SupportTicketActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([type, createdAt])
+}
+
+model SupportSavedReply {
+  id              String                 @id @default(cuid())
+  title           String
+  body            String
+  category        SupportTicketCategory?
+  createdByUserId String
+  usageCount      Int                    @default(0)
+  isActive        Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  createdBy User @relation("SupportSavedReplyCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, category])
+  @@index([createdByUserId, createdAt])
 }
 
 model TeamGroupConversation {
@@ -1510,8 +1674,8 @@ model Announcement {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  author User  @relation("AnnouncementAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
-  team   Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  author      User                     @relation("AnnouncementAuthor", fields: [authorUserId], references: [id], onDelete: Cascade)
+  team        Team?                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   targetTeams AnnouncementTargetTeam[]
 
   @@index([authorUserId, createdAt])
@@ -1710,21 +1874,21 @@ model GamificationRule {
 
 // Immutable event outbox emitted by domain services, processed asynchronously.
 model GamificationEvent {
-  id              String                  @id @default(cuid())
-  eventType       GamificationEventType
-  sourceType      String
-  sourceId        String
-  teamId          String?
-  actorUserId     String?
-  payload         Json?
-  occurredAt      DateTime                @default(now())
-  processedAt     DateTime?
-  status          GamificationEventStatus @default(PENDING)
-  idempotencyKey  String                  @unique
-  attempts        Int                     @default(0)
-  lastError       String?
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  id             String                  @id @default(cuid())
+  eventType      GamificationEventType
+  sourceType     String
+  sourceId       String
+  teamId         String?
+  actorUserId    String?
+  payload        Json?
+  occurredAt     DateTime                @default(now())
+  processedAt    DateTime?
+  status         GamificationEventStatus @default(PENDING)
+  idempotencyKey String                  @unique
+  attempts       Int                     @default(0)
+  lastError      String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
 
   team      Team? @relation("GamificationEventTeam", fields: [teamId], references: [id], onDelete: SetNull)
   actorUser User? @relation("GamificationEventActor", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -1742,46 +1906,46 @@ model GamificationEvent {
 
 // Immutable XP ledger — the source of truth for all balance and history views.
 model XpTransaction {
-  id                       String                 @id @default(cuid())
-  idempotencyKey           String?                @unique
-  recipientType            XpRecipientType
-  userId                   String?
-  teamId                   String?
-  amount                   Int
-  direction                XpTransactionDirection
-  status                   XpTransactionStatus    @default(PENDING)
-  reason                   String
-  eventId                  String
-  sourceType               String
-  sourceId                 String
-  ruleCode                 String?
-  ruleVersion              Int?
-  baseXp                   Int?
-  qualityMultiplier        Float?
-  timelinessMultiplier     Float?
-  evidenceMultiplier       Float?
-  difficultyMultiplier     Float?
-  createdByType            GamificationActorType  @default(SYSTEM)
-  createdByUserId          String?
-  reviewedByUserId         String?
-  reviewedAt               DateTime?
-  reversalOfTransactionId  String?
-  metadata                 Json?
-  createdAt                DateTime               @default(now())
-  updatedAt                DateTime               @updatedAt
+  id                      String                 @id @default(cuid())
+  idempotencyKey          String?                @unique
+  recipientType           XpRecipientType
+  userId                  String?
+  teamId                  String?
+  amount                  Int
+  direction               XpTransactionDirection
+  status                  XpTransactionStatus    @default(PENDING)
+  reason                  String
+  eventId                 String
+  sourceType              String
+  sourceId                String
+  ruleCode                String?
+  ruleVersion             Int?
+  baseXp                  Int?
+  qualityMultiplier       Float?
+  timelinessMultiplier    Float?
+  evidenceMultiplier      Float?
+  difficultyMultiplier    Float?
+  createdByType           GamificationActorType  @default(SYSTEM)
+  createdByUserId         String?
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  reversalOfTransactionId String?
+  metadata                Json?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
 
-  user                   User?          @relation("XpTransactionRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
-  team                   Team?          @relation("XpTransactionRecipientTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  user                   User?             @relation("XpTransactionRecipientUser", fields: [userId], references: [id], onDelete: SetNull)
+  team                   Team?             @relation("XpTransactionRecipientTeam", fields: [teamId], references: [id], onDelete: SetNull)
   event                  GamificationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  createdByUser          User?          @relation("XpTransactionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  reviewedByUser         User?          @relation("XpTransactionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  reversalOfTransaction  XpTransaction? @relation("XpTransactionReversal", fields: [reversalOfTransactionId], references: [id], onDelete: SetNull)
-  reversedByTransactions XpTransaction[] @relation("XpTransactionReversal")
+  createdByUser          User?             @relation("XpTransactionCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  reviewedByUser         User?             @relation("XpTransactionReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reversalOfTransaction  XpTransaction?    @relation("XpTransactionReversal", fields: [reversalOfTransactionId], references: [id], onDelete: SetNull)
+  reversedByTransactions XpTransaction[]   @relation("XpTransactionReversal")
 
-  userBadgeReward     UserBadge?               @relation("UserBadgeTransaction")
-  teamBadgeReward     TeamBadge?               @relation("TeamBadgeTransaction")
-  suspiciousCase      SuspiciousActivityCase?  @relation("SuspiciousActivityTransaction")
-  xpAdjustmentRequest XpAdjustmentRequest?     @relation("XpAdjustmentTransaction")
+  userBadgeReward     UserBadge?              @relation("UserBadgeTransaction")
+  teamBadgeReward     TeamBadge?              @relation("TeamBadgeTransaction")
+  suspiciousCase      SuspiciousActivityCase? @relation("SuspiciousActivityTransaction")
+  xpAdjustmentRequest XpAdjustmentRequest?    @relation("XpAdjustmentTransaction")
 
   @@index([userId, status, createdAt])
   @@index([teamId, status, createdAt])
@@ -1793,19 +1957,19 @@ model XpTransaction {
 
 // Fast read model for user XP profile, dashboard, and leaderboards.
 model UserXpBalance {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  lifetimeXp         Int      @default(0)
-  semesterXp         Int      @default(0)
-  monthlyXp          Int      @default(0)
-  weeklyXp           Int      @default(0)
-  pendingXp          Int      @default(0)
-  frozenXp           Int      @default(0)
-  level              Int      @default(1)
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  lifetimeXp         Int       @default(0)
+  semesterXp         Int       @default(0)
+  monthlyXp          Int       @default(0)
+  weeklyXp           Int       @default(0)
+  pendingXp          Int       @default(0)
+  frozenXp           Int       @default(0)
+  level              Int       @default(1)
   qualityScore       Float?
   lastRecalculatedAt DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1816,19 +1980,19 @@ model UserXpBalance {
 
 // Fast read model for team XP panels and team leaderboards.
 model TeamXpBalance {
-  id                 String   @id @default(cuid())
-  teamId             String   @unique
-  lifetimeTeamXp     Int      @default(0)
-  semesterTeamXp     Int      @default(0)
-  monthlyTeamXp      Int      @default(0)
-  weeklyTeamXp       Int      @default(0)
-  pendingTeamXp      Int      @default(0)
-  frozenTeamXp       Int      @default(0)
+  id                 String    @id @default(cuid())
+  teamId             String    @unique
+  lifetimeTeamXp     Int       @default(0)
+  semesterTeamXp     Int       @default(0)
+  monthlyTeamXp      Int       @default(0)
+  weeklyTeamXp       Int       @default(0)
+  pendingTeamXp      Int       @default(0)
+  frozenTeamXp       Int       @default(0)
   teamHealthScore    Float?
   leaderboardScore   Float?
   lastRecalculatedAt DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
@@ -1867,15 +2031,15 @@ model BadgeDefinition {
 
 // Records user badge unlocks and progress.
 model UserBadge {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   userId               String
   badgeDefinitionId    String
   unlockedAt           DateTime?
   progress             Float?
   metadata             Json?
-  createdTransactionId String?  @unique
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdTransactionId String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   user               User            @relation("UserBadgeOwner", fields: [userId], references: [id], onDelete: Cascade)
   badgeDefinition    BadgeDefinition @relation(fields: [badgeDefinitionId], references: [id], onDelete: Cascade)
@@ -1888,15 +2052,15 @@ model UserBadge {
 
 // Records team badge unlocks and progress.
 model TeamBadge {
-  id                   String   @id @default(cuid())
+  id                   String    @id @default(cuid())
   teamId               String
   badgeDefinitionId    String
   unlockedAt           DateTime?
   progress             Float?
   metadata             Json?
-  createdTransactionId String?  @unique
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdTransactionId String?   @unique
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   team               Team            @relation("TeamBadgeOwner", fields: [teamId], references: [id], onDelete: Cascade)
   badgeDefinition    BadgeDefinition @relation(fields: [badgeDefinitionId], references: [id], onDelete: Cascade)
@@ -1909,7 +2073,7 @@ model TeamBadge {
 
 // Stores generated leaderboard ranks for fast reads and historical comparison.
 model LeaderboardSnapshot {
-  id              String              @id @default(cuid())
+  id              String               @id @default(cuid())
   scopeType       LeaderboardScopeType
   scopeId         String?
   leaderboardType LeaderboardType
@@ -1920,7 +2084,7 @@ model LeaderboardSnapshot {
   teamId          String?
   score           Float
   breakdown       Json?
-  generatedAt     DateTime            @default(now())
+  generatedAt     DateTime             @default(now())
 
   user User? @relation("LeaderboardSnapshotUser", fields: [userId], references: [id], onDelete: SetNull)
   team Team? @relation("LeaderboardSnapshotTeam", fields: [teamId], references: [id], onDelete: SetNull)
@@ -1933,25 +2097,25 @@ model LeaderboardSnapshot {
 
 // Normalized GitHub scoring input separate from raw webhook payloads.
 model GitHubContribution {
-  id               String   @id @default(cuid())
-  repositoryId     String
-  githubEventType  String
-  githubNodeId     String?
-  githubUrl        String?
-  userId           String?
-  teamId           String?
-  taskId           String?
+  id                String   @id @default(cuid())
+  repositoryId      String
+  githubEventType   String
+  githubNodeId      String?
+  githubUrl         String?
+  userId            String?
+  teamId            String?
+  taskId            String?
   pullRequestNumber Int?
-  issueNumber      Int?
-  commitSha        String?
-  diffStats        Json?
-  qualitySignals   Json?
-  isRewardable     Boolean  @default(true)
-  suspicionScore   Float    @default(0)
-  payloadHash      String?
-  occurredAt       DateTime @default(now())
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  issueNumber       Int?
+  commitSha         String?
+  diffStats         Json?
+  qualitySignals    Json?
+  isRewardable      Boolean  @default(true)
+  suspicionScore    Float    @default(0)
+  payloadHash       String?
+  occurredAt        DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   repository GitHubTeamRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   user       User?                @relation("GitHubContributionUser", fields: [userId], references: [id], onDelete: SetNull)
@@ -1983,11 +2147,11 @@ model SuspiciousActivityCase {
   updatedAt            DateTime                 @updatedAt
   resolvedAt           DateTime?
 
-  user               User?              @relation("SuspiciousActivityUser", fields: [userId], references: [id], onDelete: SetNull)
-  team               Team?              @relation("SuspiciousActivityTeam", fields: [teamId], references: [id], onDelete: SetNull)
-  event              GamificationEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  transaction        XpTransaction?     @relation("SuspiciousActivityTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
-  assignedReviewer   User?              @relation("SuspiciousActivityReviewer", fields: [assignedReviewerId], references: [id], onDelete: SetNull)
+  user             User?              @relation("SuspiciousActivityUser", fields: [userId], references: [id], onDelete: SetNull)
+  team             Team?              @relation("SuspiciousActivityTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  event            GamificationEvent? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  transaction      XpTransaction?     @relation("SuspiciousActivityTransaction", fields: [transactionId], references: [id], onDelete: SetNull)
+  assignedReviewer User?              @relation("SuspiciousActivityReviewer", fields: [assignedReviewerId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([teamId, status])
@@ -2155,17 +2319,17 @@ model RewardPurchase {
 
 // Append-only audit trail for gamification actions.
 model GamificationAuditLog {
-  id           String                  @id @default(cuid())
-  actorUserId  String?
-  action       GamificationAuditAction
-  targetType   String
-  targetId     String
-  before       Json?
-  after        Json?
-  reason       String?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime                @default(now())
+  id          String                  @id @default(cuid())
+  actorUserId String?
+  action      GamificationAuditAction
+  targetType  String
+  targetId    String
+  before      Json?
+  after       Json?
+  reason      String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime                @default(now())
 
   actorUser User? @relation("GamificationAuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
