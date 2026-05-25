@@ -104,6 +104,12 @@ type TeamDialogParticipant = {
   sortOrder: number
 }
 
+type ProfileDialogData = {
+  user: Pick<ApiChatUser, "id" | "fullName" | "email" | "role" | "avatarUrl" | "bio">
+  subtitle: string
+  teamName: string | null
+}
+
 type SocketAckSuccess<T> = {
   ok: true
   data: T
@@ -116,7 +122,7 @@ type SocketAckFailure = {
   }
 }
 
-function getUserInitial(user: ApiChatUser | null | undefined) {
+function getUserInitial(user: Pick<ApiChatUser, "fullName" | "email"> | null | undefined) {
   const source = user?.fullName || user?.email || "U"
   return source.trim().charAt(0).toUpperCase()
 }
@@ -551,6 +557,8 @@ export function ChatWorkspace({
   const [showListOnMobile, setShowListOnMobile] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
   const [pinnedItemKeys, setPinnedItemKeys] = useState<string[]>([])
+  const [profileDialogItem, setProfileDialogItem] = useState<ProfileDialogData | null>(null)
+  const [returnToMembersDialog, setReturnToMembersDialog] = useState(false)
   const [membersDialogOpen, setMembersDialogOpen] = useState(false)
   const [membersDialogTeam, setMembersDialogTeam] = useState<ApiTeamDetail | null>(null)
   const [membersDialogLoading, setMembersDialogLoading] = useState(false)
@@ -1818,7 +1826,7 @@ export function ChatWorkspace({
                     <button
                       type="button"
                       onClick={() => void handleOpenTeamMembers(selectedItem)}
-                      className="group/header flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:hover:bg-zinc-800/35"
+                      className="group/header flex min-w-0 max-w-full shrink cursor-pointer items-center gap-3 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:hover:bg-zinc-800/35"
                       aria-label="View chat members"
                     >
                       <ChatItemAvatar item={selectedItem} selected />
@@ -1833,10 +1841,21 @@ export function ChatWorkspace({
                       </div>
                     </button>
                   ) : selectedItem.user ? (
-                    <Link
-                      href={`/dashboard/users/${selectedItem.user.id}`}
-                      className="group/header flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:hover:bg-zinc-800/35"
-                      aria-label={`View ${selectedItem.title}'s profile`}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!selectedItem.user) return
+                        setReturnToMembersDialog(false)
+                        setProfileDialogItem({
+                          user: selectedItem.user,
+                          subtitle:
+                            relationLabelForUser(selectedItem.relation, selectedItem.user) ||
+                            roleToLabel(selectedItem.user.role),
+                          teamName: selectedItem.team?.name ?? null,
+                        })
+                      }}
+                      className="group/header flex min-w-0 max-w-full shrink cursor-pointer items-center gap-3 rounded-xl px-2.5 py-1.5 text-left transition-colors hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:hover:bg-zinc-800/35"
+                      aria-label={`Show ${selectedItem.title}'s chat details`}
                     >
                       <ChatItemAvatar item={selectedItem} selected />
 
@@ -1848,7 +1867,7 @@ export function ChatWorkspace({
                           {selectedItem.subtitle || "Direct conversation"}
                         </p>
                       </div>
-                    </Link>
+                    </button>
                   ) : (
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <ChatItemAvatar item={selectedItem} selected />
@@ -2343,9 +2362,75 @@ export function ChatWorkspace({
                 </p>
               </div>
             </div>
-          )}
-        </section>
-      </div>
+            )}
+          </section>
+        </div>
+
+      <Dialog
+        open={Boolean(profileDialogItem)}
+        onOpenChange={(open) => {
+          if (open) return
+
+          setProfileDialogItem(null)
+          if (returnToMembersDialog) {
+            setReturnToMembersDialog(false)
+            setMembersDialogOpen(true)
+          }
+        }}
+      >
+        <DialogContent className="z-[120] max-w-md rounded-2xl border-border/70 p-0 dark:border-zinc-800 dark:bg-zinc-950">
+          <DialogHeader className="border-b border-border/70 px-5 py-4 text-left dark:border-zinc-800">
+            <DialogTitle className="text-base">Chat profile</DialogTitle>
+            <DialogDescription>A quick look at who this conversation is with.</DialogDescription>
+          </DialogHeader>
+
+          {profileDialogItem?.user ? (
+            <div className="px-5 py-5">
+              <div className="flex min-w-0 items-center gap-4">
+                <Avatar className="h-14 w-14 shrink-0 ring-1 ring-border/70">
+                  <AvatarImage src={profileDialogItem.user.avatarUrl || "/placeholder-user.jpg"} />
+                  <AvatarFallback>{getUserInitial(profileDialogItem.user)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-semibold text-foreground dark:text-zinc-100">
+                    {profileDialogItem.user.fullName}
+                  </h3>
+                  <p className="mt-1 truncate text-sm text-muted-foreground dark:text-zinc-500">
+                    {profileDialogItem.subtitle}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <ProfileDetail label="Email" value={profileDialogItem.user.email} />
+                <ProfileDetail label="Team" value={profileDialogItem.teamName} />
+                {profileDialogItem.user.bio?.trim() ? (
+                  <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/50">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 dark:text-zinc-600">
+                      Bio
+                    </p>
+                    <p className="mt-1 line-clamp-3 text-sm leading-6 text-foreground dark:text-zinc-200">
+                      {profileDialogItem.user.bio}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+
+              <Button asChild className="mt-5 w-full rounded-xl">
+                <Link
+                  href={`/dashboard/users/${profileDialogItem.user.id}`}
+                  onClick={() => {
+                    setReturnToMembersDialog(false)
+                    setProfileDialogItem(null)
+                  }}
+                >
+                  View full profile
+                </Link>
+              </Button>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={membersDialogOpen} onOpenChange={setMembersDialogOpen}>
         <DialogContent className="z-[120] max-w-lg rounded-2xl border-border/70 p-0 dark:border-zinc-800 dark:bg-zinc-950">
@@ -2373,11 +2458,19 @@ export function ChatWorkspace({
             ) : membersDialogTeam ? (
               <div className="space-y-2">
                 {membersDialogParticipants.map((participant) => (
-                  <Link
+                  <button
+                    type="button"
                     key={participant.key}
-                    href={`/dashboard/users/${participant.user.id}`}
-                    className="flex min-w-0 items-center gap-3 rounded-2xl border border-border/60 px-3 py-3 transition-colors hover:border-primary/25 hover:bg-primary/[0.04] dark:border-zinc-800 dark:hover:border-primary/30 dark:hover:bg-zinc-900"
-                    onClick={() => setMembersDialogOpen(false)}
+                    className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-border/60 px-3 py-3 text-left transition-colors hover:border-primary/25 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 dark:border-zinc-800 dark:hover:border-primary/30 dark:hover:bg-zinc-900"
+                    onClick={() => {
+                      setMembersDialogOpen(false)
+                      setReturnToMembersDialog(true)
+                      setProfileDialogItem({
+                        user: participant.user,
+                        subtitle: participant.subtitle,
+                        teamName: membersDialogTeam?.name ?? selectedItem?.team?.name ?? null,
+                      })
+                    }}
                   >
                     <Avatar className="h-10 w-10 shrink-0 ring-1 ring-border/60 dark:ring-zinc-700/60">
                       <AvatarImage src={participant.user.avatarUrl || "/placeholder-user.jpg"} />
@@ -2399,7 +2492,7 @@ export function ChatWorkspace({
                         {participant.subtitle}
                       </p>
                     </div>
-                  </Link>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -2408,6 +2501,21 @@ export function ChatWorkspace({
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function ProfileDetail({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value?.trim()) return null
+
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/30 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 dark:text-zinc-600">
+        {label}
+      </span>
+      <span className="min-w-0 truncate text-right text-sm font-medium text-foreground dark:text-zinc-200">
+        {value}
+      </span>
     </div>
   )
 }

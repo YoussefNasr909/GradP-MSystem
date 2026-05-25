@@ -276,27 +276,6 @@ function TeamRow({
           </div>
         </div>
 
-        {/* Phase breakdown bar */}
-        {Object.keys(row.phaseAverages).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-border/40">
-            <div className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-              {["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"].map((phase) => {
-                const score = row.phaseAverages[phase]
-                return (
-                  <div key={phase} className="text-center">
-                    <p className="text-[10px] uppercase text-muted-foreground tracking-wider mb-1 truncate">
-                      {STAGE_LABEL[phase]}
-                    </p>
-                    <p className={cn("text-sm font-semibold tabular-nums", gradeColor(score ?? null))}>
-                      {score !== undefined ? score : "—"}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Pending submissions awaiting doctor's final grade (only visible to doctor) */}
         {isDoctorView && pendingDoctorSubs.length > 0 && (
           <div className="mt-3 pt-3 border-t border-border/40">
@@ -451,10 +430,6 @@ export default function GradesOverviewPage() {
               <Trophy className="h-7 w-7 text-amber-500" />
               Grades Overview
             </motion.h1>
-            <motion.p className="text-muted-foreground"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              Official doctor grades with transparent SDLC weighting
-            </motion.p>
           </div>
         </div>
 
@@ -480,7 +455,7 @@ export default function GradesOverviewPage() {
       {!loading && data && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
           <Card className="p-5 border-border/50">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-amber-500" />
