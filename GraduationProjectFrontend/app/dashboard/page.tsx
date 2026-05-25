@@ -477,65 +477,60 @@ function SupportDashboard() {
     }
   }, [currentUser?.id])
 
+  const activeTicketCount = (summary?.open ?? 0) + (summary?.inProgress ?? 0) + (summary?.waitingOnUser ?? 0)
+  const attentionTicketCount = (summary?.urgent ?? 0) + (summary?.overdue ?? 0)
   const metrics = [
     {
-      label: "Open",
-      value: summary?.open ?? 0,
+      label: "Active tickets",
+      value: activeTicketCount,
+      helper: "Open, working, or waiting",
       icon: ClipboardList,
-      tone: "text-sky-600 dark:text-sky-300",
-      bg: "bg-sky-500/10",
+      href: "/dashboard/support",
     },
     {
-      label: "Mine",
+      label: "Assigned to me",
       value: summary?.assignedToMe ?? 0,
+      helper: "Your queue",
       icon: UserPlus,
-      tone: "text-indigo-600 dark:text-indigo-300",
-      bg: "bg-indigo-500/10",
+      href: "/dashboard/support?view=mine",
     },
     {
       label: "Unassigned",
       value: summary?.unassigned ?? 0,
+      helper: "Needs an owner",
       icon: Users,
-      tone: "text-amber-600 dark:text-amber-300",
-      bg: "bg-amber-500/10",
+      href: "/dashboard/support?view=unassigned",
     },
     {
-      label: "Urgent",
-      value: summary?.urgent ?? 0,
+      label: "Needs attention",
+      value: attentionTicketCount,
+      helper: "Urgent or overdue",
       icon: AlertTriangle,
-      tone: "text-red-600 dark:text-red-300",
-      bg: "bg-red-500/10",
+      href: "/dashboard/support?view=overdue",
+      danger: true,
     },
+  ]
+
+  const healthRows = [
+    { label: "Overdue", value: summary?.overdue ?? 0 },
+    { label: "Due soon", value: summary?.dueSoon ?? 0 },
+    { label: "Resolved today", value: summary?.resolvedToday ?? 0 },
+    { label: "Closed today", value: summary?.closedToday ?? 0 },
     {
-      label: "Overdue",
-      value: summary?.overdue ?? 0,
-      icon: AlertCircle,
-      tone: "text-red-600 dark:text-red-300",
-      bg: "bg-red-500/10",
-    },
-    {
-      label: "Due soon",
-      value: summary?.dueSoon ?? 0,
-      icon: Clock,
-      tone: "text-amber-600 dark:text-amber-300",
-      bg: "bg-amber-500/10",
-    },
-    {
-      label: "Resolved today",
-      value: summary?.resolvedToday ?? 0,
-      icon: CheckCircle,
-      tone: "text-emerald-600 dark:text-emerald-300",
-      bg: "bg-emerald-500/10",
+      label: "Avg first response",
+      value: summary?.averageFirstResponseMinutes == null ? "No data" : `${summary.averageFirstResponseMinutes}m`,
     },
   ]
 
   return (
-    <div className="space-y-5 pb-8">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 pb-8">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Support workspace</p>
           <h1 className="text-2xl font-semibold tracking-tight">Support dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Welcome, {currentUser?.name || "Support"}</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Welcome, {currentUser?.name || "Support"}. Start with your assigned tickets, then scan the queue for anything urgent.
+          </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button asChild className="gap-2">
@@ -563,22 +558,37 @@ function SupportDashboard() {
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-border/70 bg-card/60 p-2">
-        <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="rounded-lg px-3 py-2.5">
-              <p className="text-xs text-muted-foreground">{metric.label}</p>
-              <p className={cn("mt-1 text-2xl font-semibold", metric.tone)}>{isLoading ? "..." : metric.value}</p>
-            </div>
-          ))}
-        </div>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => {
+          const MetricIcon = metric.icon
+          return (
+            <NextLink
+              key={metric.label}
+              href={metric.href}
+              className="group rounded-xl border border-border/70 bg-card p-4 shadow-sm shadow-black/[0.02] transition hover:border-primary/30 hover:bg-accent/20"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
+                  <p className={cn("mt-2 text-2xl font-semibold tracking-tight", metric.danger && !isLoading && metric.value > 0 && "text-red-600 dark:text-red-300")}>
+                    {isLoading ? "..." : metric.value}
+                  </p>
+                </div>
+                <span className="rounded-lg bg-muted p-2 text-muted-foreground transition group-hover:text-foreground">
+                  <MetricIcon className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">{metric.helper}</p>
+            </NextLink>
+          )
+        })}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Card className="rounded-xl border-border/70 p-5 shadow-none">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold">My workload</h2>
+              <h2 className="text-lg font-semibold">Assigned to you</h2>
               <p className="text-sm text-muted-foreground">Assigned tickets that need a next step.</p>
             </div>
             <Button asChild variant="outline" size="sm" className="gap-2 bg-transparent">
@@ -592,22 +602,22 @@ function SupportDashboard() {
           <div className="mt-5 space-y-3">
             {isLoading ? (
               Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="h-20 rounded-lg border bg-muted/30" />
+                <div key={index} className="h-20 rounded-lg border border-border/60 bg-muted/20" />
               ))
             ) : recentTickets.length ? (
               recentTickets.map((ticket) => (
                 <NextLink
                   key={ticket.id}
                   href={`/dashboard/support?ticket=${ticket.id}`}
-                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/35 p-3 transition hover:border-primary/40 hover:bg-accent/30 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition hover:border-primary/30 hover:bg-accent/20 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-muted-foreground">{ticket.ticketNumber}</span>
-                      <Badge variant={ticket.priority === "URGENT" ? "destructive" : "secondary"}>
+                      <Badge variant={ticket.priority === "URGENT" ? "destructive" : "secondary"} className="rounded-md">
                         {supportDashboardLabel(ticket.priority)}
                       </Badge>
-                      <Badge variant="outline">{supportDashboardLabel(ticket.status)}</Badge>
+                      <Badge variant="outline" className="rounded-md">{supportDashboardLabel(ticket.status)}</Badge>
                     </div>
                     <p className="mt-2 line-clamp-1 text-sm font-medium">{ticket.subject}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -634,25 +644,13 @@ function SupportDashboard() {
           <h2 className="text-lg font-semibold">Queue health</h2>
           <p className="mt-1 text-sm text-muted-foreground">SLA and closure signals for today.</p>
 
-          <div className="mt-5 space-y-3 text-sm">
-            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-              <span className="text-muted-foreground">Overdue</span>
-              <span className="font-semibold">{isLoading ? "..." : summary?.overdue ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-              <span className="text-muted-foreground">Due soon</span>
-              <span className="font-semibold">{isLoading ? "..." : summary?.dueSoon ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-              <span className="text-muted-foreground">Closed today</span>
-              <span className="font-semibold">{isLoading ? "..." : summary?.closedToday ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between rounded-lg bg-muted/30 p-3">
-              <span className="text-muted-foreground">Avg first response</span>
-              <span className="font-semibold">
-                {isLoading ? "..." : summary?.averageFirstResponseMinutes == null ? "No data" : `${summary.averageFirstResponseMinutes}m`}
-              </span>
-            </div>
+          <div className="mt-5 divide-y divide-border/60 text-sm">
+            {healthRows.map((row) => (
+              <div key={row.label} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="font-semibold">{isLoading ? "..." : row.value}</span>
+              </div>
+            ))}
           </div>
 
           <div className="mt-5 grid gap-2">

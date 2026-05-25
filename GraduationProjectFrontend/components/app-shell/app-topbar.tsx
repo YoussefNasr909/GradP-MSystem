@@ -562,9 +562,6 @@ export function AppTopbar() {
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium">{displayName}</p>
                   <p className="truncate text-xs text-muted-foreground">{currentUser?.email}</p>
-                  <Badge className="mt-1 w-fit text-xs" variant={badge.variant}>
-                    {badge.label}
-                  </Badge>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

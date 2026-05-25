@@ -299,6 +299,7 @@ function TicketListItem({
   ticket,
   active,
   onSelect,
+  variant = "staff",
   selectable,
   checked,
   onCheckedChange,
@@ -308,21 +309,24 @@ function TicketListItem({
   ticket: ApiSupportTicketSummary
   active: boolean
   onSelect: () => void
+  variant?: "staff" | "requester"
   selectable?: boolean
   checked?: boolean
   onCheckedChange?: (checked: boolean) => void
   currentUserId?: string
   isArchiveView?: boolean
 }) {
+  const isStaffRow = variant === "staff"
   const showSla = ticket.sla?.state === "OVERDUE" || ticket.sla?.state === "DUE_SOON"
   const showPriority = ticket.priority === "URGENT" || ticket.priority === "HIGH" || isArchiveView
+  const categoryLabel = CATEGORY_OPTIONS.find((option) => option.value === ticket.category)?.label ?? ticket.category
 
   return (
     <div
       className={cn(
-        "group flex w-full gap-2 rounded-xl border border-border/60 bg-card/35 p-3 text-left transition hover:border-primary/40 hover:bg-accent/30",
+        "group flex w-full gap-2 rounded-xl border border-border/60 bg-card/50 p-3 text-left transition hover:border-primary/30 hover:bg-accent/20",
         isArchiveView && "opacity-75 hover:opacity-100",
-        active && "border-primary/50 bg-primary/5",
+        active && "border-primary/45 bg-primary/[0.04]",
       )}
     >
       {selectable ? (
@@ -339,7 +343,7 @@ function TicketListItem({
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-xs text-muted-foreground">{ticket.ticketNumber}</span>
               {ticket.source === "CHAT" ? (
-                <Badge variant="secondary" className="h-5 gap-1 rounded-md px-1.5 text-[11px]">
+                <Badge variant="secondary" className="h-5 gap-1 rounded-md bg-muted px-1.5 text-[11px] text-muted-foreground">
                   <MessageCircle className="h-3 w-3" />
                   Chat
                 </Badge>
@@ -347,24 +351,35 @@ function TicketListItem({
             </div>
             <h3 className="mt-1 line-clamp-2 text-sm font-semibold">{ticket.subject}</h3>
           </div>
-          {showPriority ? <PriorityBadge priority={ticket.priority} /> : null}
+          {isStaffRow ? (
+            showPriority ? <PriorityBadge priority={ticket.priority} /> : null
+          ) : (
+            <QueueStatusBadge status={ticket.status} />
+          )}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <QueueStatusBadge status={ticket.status} />
-          {showSla ? <SlaBadge ticket={ticket} /> : null}
+          {isStaffRow ? <QueueStatusBadge status={ticket.status} /> : showPriority ? <PriorityBadge priority={ticket.priority} /> : null}
+          {isStaffRow && showSla ? <SlaBadge ticket={ticket} /> : null}
         </div>
-        <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between gap-3">
-            <span className="truncate">{ticket.requester?.fullName ?? "Unknown requester"}</span>
-            <span className="shrink-0">{formatDateTime(ticket.lastActivityAt)}</span>
+        {isStaffRow ? (
+          <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate">{ticket.requester?.fullName ?? "Unknown requester"}</span>
+              <span className="shrink-0">{formatDateTime(ticket.lastActivityAt)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="truncate">
+                Agent: <QueueOwnerLabel ticket={ticket} currentUserId={currentUserId} />
+              </span>
+              {ticket.counts.internalNotes ? <span className="shrink-0">{ticket.counts.internalNotes} notes</span> : null}
+            </div>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="truncate">
-              Agent: <QueueOwnerLabel ticket={ticket} currentUserId={currentUserId} />
-            </span>
-            {ticket.counts.internalNotes ? <span className="shrink-0">{ticket.counts.internalNotes} notes</span> : null}
+        ) : (
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span className="truncate">{categoryLabel}</span>
+            <span className="shrink-0">Updated {formatDateTime(ticket.lastActivityAt)}</span>
           </div>
-        </div>
+        )}
       </button>
     </div>
   )
@@ -911,34 +926,42 @@ export default function SupportPage() {
   const currentQueueView = queueView
 
   return (
-    <div className="space-y-5 pb-8">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{isStaff ? "Helpdesk" : "Support"}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{isStaff ? "Queue" : "Contact support"}</h1>
+    <div className="space-y-6 pb-8">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{isStaff ? "Support workspace" : "Support"}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{isStaff ? "Support queue" : "Contact support"}</h1>
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {isStaff
+              ? "Triage active requests, reply from one place, and keep urgent work visible."
+              : "Start a quick chat or create a tracked ticket when you need help."}
+          </p>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={refreshAll} disabled={loadingTickets} className="w-full gap-2 sm:w-auto">
+        <Button type="button" variant="outline" size="sm" onClick={refreshAll} disabled={loadingTickets} className="w-full gap-2 bg-transparent sm:w-auto">
           <RefreshCw className={cn("h-4 w-4", loadingTickets && "animate-spin")} />
           Refresh
         </Button>
       </section>
 
       {isStaff ? (
-        <div className="rounded-xl border border-border/70 bg-card/60 p-2">
-          <div className="grid gap-1 sm:grid-cols-4">
-            {[
-              { label: "Active", value: activeTicketCount },
-              { label: "Mine", value: summary?.assignedToMe ?? 0 },
-              { label: "Unassigned", value: summary?.unassigned ?? 0 },
-              { label: "Overdue", value: summary?.overdue ?? 0, danger: true },
-            ].map((metric) => (
-              <div key={metric.label} className="rounded-lg px-3 py-2">
-                <p className="text-xs text-muted-foreground">{metric.label}</p>
-                <p className={cn("mt-0.5 text-xl font-semibold", metric.danger && "text-red-600 dark:text-red-300")}>{metric.value}</p>
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Active tickets", value: activeTicketCount, helper: "Open, working, or waiting" },
+            { label: "Assigned to me", value: summary?.assignedToMe ?? 0, helper: "Your current queue" },
+            { label: "Unassigned", value: summary?.unassigned ?? 0, helper: "Needs an owner" },
+            { label: "Overdue", value: summary?.overdue ?? 0, helper: "Past SLA", danger: true },
+          ].map((metric) => (
+            <div key={metric.label} className="rounded-xl border border-border/70 bg-card p-4 shadow-sm shadow-black/[0.02]">
+              <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <p className={cn("text-2xl font-semibold tracking-tight", metric.danger && metric.value > 0 && "text-red-600 dark:text-red-300")}>
+                  {metric.value}
+                </p>
+                <p className="text-right text-xs text-muted-foreground">{metric.helper}</p>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          ))}
+        </section>
       ) : null}
 
       {error ? (
@@ -953,44 +976,46 @@ export default function SupportPage() {
 
       {isStaff ? (
         <>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="inline-grid w-full grid-cols-2 rounded-lg bg-muted p-1 text-sm sm:w-auto sm:grid-cols-5">
-              <Button type="button" variant={currentQueueView === "active" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("active")} className="h-8">
-                Active
-              </Button>
-              <Button type="button" variant={currentQueueView === "mine" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("mine")} className="h-8">
-                Mine
-              </Button>
-              <Button type="button" variant={currentQueueView === "unassigned" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("unassigned")} className="h-8">
-                Unassigned
-              </Button>
-              <Button type="button" variant={currentQueueView === "overdue" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("overdue")} className="h-8">
-                Overdue
-              </Button>
-              <Button type="button" variant={currentQueueView === "archive" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("archive")} className="h-8">
-                Archive
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setAdvancedFiltersOpen((open) => !open)} className="gap-2">
-                <SlidersHorizontal className="h-4 w-4" />
-                Filters{activeAdvancedFilterCount ? ` (${activeAdvancedFilterCount})` : ""}
-              </Button>
-              <Button
-                type="button"
-                variant={bulkMode ? "secondary" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setBulkMode((enabled) => !enabled)
-                  setSelectedBulkIds([])
-                }}
-              >
-                Bulk edit
-              </Button>
-              <Button type="button" variant={detailsOpen ? "secondary" : "outline"} size="sm" onClick={() => setDetailsOpen((open) => !open)} className="gap-2">
-                {detailsOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-                Actions
-              </Button>
+          <div className="rounded-xl border border-border/70 bg-card p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="grid w-full grid-cols-2 rounded-lg bg-muted/60 p-1 text-sm sm:w-auto sm:grid-cols-5">
+                <Button type="button" variant={currentQueueView === "active" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("active")} className="h-8">
+                  Active
+                </Button>
+                <Button type="button" variant={currentQueueView === "mine" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("mine")} className="h-8">
+                  Mine
+                </Button>
+                <Button type="button" variant={currentQueueView === "unassigned" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("unassigned")} className="h-8">
+                  Unassigned
+                </Button>
+                <Button type="button" variant={currentQueueView === "overdue" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("overdue")} className="h-8">
+                  Overdue
+                </Button>
+                <Button type="button" variant={currentQueueView === "archive" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("archive")} className="h-8">
+                  Archive
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setAdvancedFiltersOpen((open) => !open)} className="gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters{activeAdvancedFilterCount ? ` (${activeAdvancedFilterCount})` : ""}
+                </Button>
+                <Button
+                  type="button"
+                  variant={bulkMode ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setBulkMode((enabled) => !enabled)
+                    setSelectedBulkIds([])
+                  }}
+                >
+                  Bulk edit
+                </Button>
+                <Button type="button" variant={detailsOpen ? "secondary" : "outline"} size="sm" onClick={() => setDetailsOpen((open) => !open)} className="gap-2">
+                  {detailsOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+                  Actions
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -1432,19 +1457,29 @@ export default function SupportPage() {
         </>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[24rem_minmax(0,1fr)]">
-          <Card className="gap-4 rounded-xl border-border/70 py-4 shadow-none">
-            <CardContent className="px-4">
+          <Card className="gap-4 rounded-xl border-border/70 py-5 shadow-none">
+            <CardHeader className="px-5 pb-0">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MessageSquare className="h-4 w-4" />
+                Ask for help
+              </CardTitle>
+              <CardDescription>Use chat for quick questions or a ticket when you want the issue tracked.</CardDescription>
+            </CardHeader>
+            <CardContent className="px-5">
               <Tabs defaultValue="quick" className="gap-4">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-2 bg-muted/60">
                   <TabsTrigger value="quick">Quick chat</TabsTrigger>
                   <TabsTrigger value="ticket">New ticket</TabsTrigger>
                 </TabsList>
                 <TabsContent value="quick" className="space-y-3">
+                  <Label htmlFor="support-quick-message">Message</Label>
                   <Textarea
+                    id="support-quick-message"
                     value={quickMessage}
                     onChange={(event) => setQuickMessage(event.target.value)}
-                    placeholder="What do you need help with?"
+                    placeholder="Write the question or issue you need help with."
                     rows={5}
+                    className="resize-none"
                   />
                   <Button type="button" onClick={handleQuickChat} disabled={quickChatLoading} className="w-full">
                     {quickChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
@@ -1453,91 +1488,92 @@ export default function SupportPage() {
                 </TabsContent>
                 <TabsContent value="ticket">
                   <form className="space-y-4" onSubmit={handleCreateTicket}>
-                  <div className="space-y-2">
-                    <Label htmlFor="support-subject">Subject</Label>
-                    <Input
-                      id="support-subject"
-                      value={createForm.subject}
-                      onChange={(event) => setCreateForm((form) => ({ ...form, subject: event.target.value }))}
-                      placeholder="Short summary"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
-                      <Label>Category</Label>
-                      <Select value={createForm.category} onValueChange={(value) => setCreateForm((form) => ({ ...form, category: value as ApiSupportTicketCategory }))}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="support-subject">Subject</Label>
+                      <Input
+                        id="support-subject"
+                        value={createForm.subject}
+                        onChange={(event) => setCreateForm((form) => ({ ...form, subject: event.target.value }))}
+                        placeholder="Short summary"
+                        required
+                      />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Select value={createForm.category} onValueChange={(value) => setCreateForm((form) => ({ ...form, category: value as ApiSupportTicketCategory }))}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CATEGORY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Priority</Label>
+                        <Select value={createForm.priority} onValueChange={(value) => setCreateForm((form) => ({ ...form, priority: value as ApiSupportTicketPriority }))}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRIORITY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Priority</Label>
-                      <Select value={createForm.priority} onValueChange={(value) => setCreateForm((form) => ({ ...form, priority: value as ApiSupportTicketPriority }))}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PRIORITY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="support-description">Details</Label>
+                      <Textarea
+                        id="support-description"
+                        value={createForm.description}
+                        onChange={(event) => setCreateForm((form) => ({ ...form, description: event.target.value }))}
+                        placeholder="Add details, steps, links, or screenshots."
+                        rows={5}
+                        required
+                        className="resize-none"
+                      />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="support-description">Description</Label>
-                    <Textarea
-                      id="support-description"
-                      value={createForm.description}
-                      onChange={(event) => setCreateForm((form) => ({ ...form, description: event.target.value }))}
-                      placeholder="Add details, steps, links, or screenshots context"
-                      rows={5}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="support-files">Attachments</Label>
-                    <Input
-                      key={createFileInputKey}
-                      id="support-files"
-                      type="file"
-                      multiple
-                      onChange={(event) => setCreateFiles(Array.from(event.target.files ?? []))}
-                    />
-                    <p className="text-xs text-muted-foreground">{SUPPORT_UPLOAD_LIMIT}</p>
-                    <AttachmentChips files={createFiles} onRemove={removeCreateFile} />
-                  </div>
-                  <Button type="submit" disabled={creatingTicket} className="w-full">
-                    {creatingTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    Submit ticket
-                  </Button>
-                </form>
+                    <div className="space-y-2">
+                      <Label htmlFor="support-files">Attachments</Label>
+                      <Input
+                        key={createFileInputKey}
+                        id="support-files"
+                        type="file"
+                        multiple
+                        onChange={(event) => setCreateFiles(Array.from(event.target.files ?? []))}
+                      />
+                      <p className="text-xs text-muted-foreground">{SUPPORT_UPLOAD_LIMIT}</p>
+                      <AttachmentChips files={createFiles} onRemove={removeCreateFile} />
+                    </div>
+                    <Button type="submit" disabled={creatingTicket} className="w-full">
+                      {creatingTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Submit ticket
+                    </Button>
+                  </form>
                 </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
 
           <div className={cn("grid gap-4", selectedTicketId && "lg:grid-cols-[20rem_minmax(0,1fr)]")}>
-            <Card className="gap-4 rounded-xl border-border/70 py-4 shadow-none">
-              <CardHeader className="px-4">
-                <CardTitle className="flex items-center gap-2">
+            <Card className="gap-4 rounded-xl border-border/70 py-5 shadow-none">
+              <CardHeader className="px-5 pb-0">
+                <CardTitle className="flex items-center gap-2 text-base">
                   <FileText className="h-4 w-4" />
-                  My tickets
+                  Your tickets
                 </CardTitle>
-                <CardDescription>{ticketMeta?.total ?? 0} requests</CardDescription>
+                <CardDescription>{ticketMeta?.total ?? 0} requests in your support history</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 px-4">
+              <CardContent className="space-y-3 px-5">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -1557,6 +1593,7 @@ export default function SupportPage() {
                           key={ticket.id}
                           ticket={ticket}
                           active={ticket.id === selectedTicketId}
+                          variant="requester"
                           currentUserId={currentUser.id}
                           onSelect={() => setSelectedTicketId(ticket.id)}
                         />
