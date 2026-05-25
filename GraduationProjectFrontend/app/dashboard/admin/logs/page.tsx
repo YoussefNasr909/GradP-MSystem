@@ -1,164 +1,148 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { motion, AnimatePresence } from "framer-motion"
+import { useCallback, useEffect, useState } from "react"
 import { format } from "date-fns"
+import { motion } from "framer-motion"
 import {
   Activity,
+  AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   Clock,
-  Download,
-  Eye,
-  Filter,
+  Copy,
   Info,
   Lock,
   RefreshCw,
   Search,
   Server,
+  Terminal,
   User,
   XCircle,
-  Terminal,
-  ChevronRight,
-  Copy,
-  AlertCircle,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { useAuthStore } from "@/lib/stores/auth-store"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { adminLogsApi } from "@/lib/api/admin-logs"
-import type { SystemLog, ActivityEntry, LogCounts } from "@/lib/api/admin-logs"
+import type { ActivityEntry, LogCounts, SystemLog } from "@/lib/api/admin-logs"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+function useDebouncedValue<T>(value: T, delay = 350) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setDebouncedValue(value), delay)
+    return () => window.clearTimeout(timeoutId)
+  }, [delay, value])
+
+  return debouncedValue
+}
 
 function getLevelIcon(level: string) {
   switch (level) {
-    case "info":    return <Info className="h-4 w-4" />
-    case "warning": return <AlertTriangle className="h-4 w-4" />
-    case "error":   return <XCircle className="h-4 w-4" />
-    case "success": return <CheckCircle2 className="h-4 w-4" />
-    default:        return <Activity className="h-4 w-4" />
+    case "info":
+      return <Info className="h-4 w-4" />
+    case "warning":
+      return <AlertTriangle className="h-4 w-4" />
+    case "error":
+      return <XCircle className="h-4 w-4" />
+    case "success":
+      return <CheckCircle2 className="h-4 w-4" />
+    default:
+      return <Activity className="h-4 w-4" />
   }
 }
 
-function getLevelColor(level: string) {
+function getLevelTone(level: string) {
   switch (level) {
-    case "info":    return "text-blue-500 bg-blue-500/10 border-blue-500/20"
-    case "warning": return "text-yellow-500 bg-yellow-500/10 border-yellow-500/20"
-    case "error":   return "text-red-500 bg-red-500/10 border-red-500/20"
-    case "success": return "text-green-500 bg-green-500/10 border-green-500/20"
-    default:        return "text-muted-foreground bg-muted"
+    case "info":
+      return "border-blue-200/80 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300"
+    case "warning":
+      return "border-amber-200/80 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+    case "error":
+      return "border-rose-200/80 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+    case "success":
+      return "border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+    default:
+      return "border-border bg-muted text-muted-foreground"
   }
 }
 
-function getLevelBadge(level: string) {
-  switch (level) {
-    case "info":    return "border-blue-500/30 text-blue-500"
-    case "warning": return "border-yellow-500/30 text-yellow-500"
-    case "error":   return "border-red-500/30 text-red-500"
-    case "success": return "border-green-500/30 text-green-500"
-    default:        return ""
-  }
-}
-
-function getRoleColor(role: string) {
+function getRoleTone(role: string) {
   switch (role.toLowerCase()) {
-    case "admin":   return "border-purple-500/30 text-purple-500"
-    case "doctor":  return "border-blue-500/30 text-blue-500"
-    case "ta":      return "border-cyan-500/30 text-cyan-500"
-    case "leader":  return "border-amber-500/30 text-amber-500"
-    default:        return "border-border text-muted-foreground"
+    case "admin":
+      return "border-fuchsia-200/80 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900/60 dark:bg-fuchsia-950/30 dark:text-fuchsia-300"
+    case "doctor":
+      return "border-sky-200/80 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300"
+    case "ta":
+      return "border-cyan-200/80 bg-cyan-50 text-cyan-700 dark:border-cyan-900/60 dark:bg-cyan-950/30 dark:text-cyan-300"
+    case "leader":
+      return "border-amber-200/80 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+    default:
+      return "border-border bg-muted text-muted-foreground"
   }
 }
 
 function getUserInitials(name: string) {
   return name
     .split(" ")
-    .map((n) => n[0])
+    .map((part) => part[0])
     .join("")
     .toUpperCase()
     .slice(0, 2)
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatCard({
+function SummaryTile({
   label,
   value,
   icon: Icon,
-  colorClass,
-  bgClass,
-  delay,
+  tone,
 }: {
   label: string
   value: number
   icon: React.ElementType
-  colorClass: string
-  bgClass: string
-  delay: number
+  tone: string
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <Card className="p-4 border-border/50 hover:border-border/80 transition-colors">
-        <div className="flex items-center gap-3">
-          <div className={cn("p-2 rounded-lg", bgClass)}>
-            <Icon className={cn("h-5 w-5", colorClass)} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold tabular-nums">{value}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
-          </div>
+    <Card className="border-border/60 bg-card/80 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         </div>
-      </Card>
-    </motion.div>
+        <div className={cn("rounded-2xl border p-2.5", tone)}>
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+    </Card>
   )
 }
 
-function StatsSkeleton() {
+function ListSkeleton({ activity = false }: { activity?: boolean }) {
   return (
-    <div className="grid gap-4 md:grid-cols-5">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <Card key={i} className="p-4 border-border/50">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-9 w-9 rounded-lg" />
-            <div className="space-y-1.5">
-              <Skeleton className="h-6 w-10" />
-              <Skeleton className="h-3 w-16" />
+    <div className="space-y-3 p-4">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="rounded-2xl border border-border/60 p-4">
+          <div className="flex gap-4">
+            <Skeleton className={cn("shrink-0", activity ? "h-10 w-10 rounded-full" : "h-10 w-10 rounded-2xl")} />
+            <div className="flex-1 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-24 rounded-full" />
+                <Skeleton className="h-5 w-28 rounded-full" />
+              </div>
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-48" />
             </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function LogListSkeleton() {
-  return (
-    <div className="divide-y divide-border/50">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="p-4 flex items-start gap-4">
-          <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-5 w-16 rounded-full" />
-              <Skeleton className="h-4 w-24" />
-            </div>
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-3 w-40" />
           </div>
         </div>
       ))}
@@ -166,66 +150,56 @@ function LogListSkeleton() {
   )
 }
 
-function ActivityListSkeleton() {
+function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="divide-y divide-border/50">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="p-4 flex items-start gap-4">
-          <Skeleton className="h-10 w-10 rounded-full shrink-0" />
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-5 w-14 rounded-full" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-            <Skeleton className="h-3 w-48" />
-            <Skeleton className="h-3 w-32" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20 text-center"
-    >
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60">
+    <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
+      <div className="mb-4 rounded-3xl border border-border/60 bg-muted/40 p-4">
         <Terminal className="h-6 w-6 text-muted-foreground" />
       </div>
-      <p className="text-sm font-medium text-muted-foreground">{message}</p>
-    </motion.div>
+      <h3 className="text-base font-semibold">{title}</h3>
+      <p className="mt-2 max-w-md text-sm text-muted-foreground">{description}</p>
+    </div>
   )
 }
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col items-center justify-center py-20 text-center"
-    >
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10">
-        <AlertCircle className="h-6 w-6 text-destructive" />
+    <div className="flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
+      <div className="mb-4 rounded-3xl border border-rose-200/80 bg-rose-50 p-4 dark:border-rose-900/60 dark:bg-rose-950/30">
+        <AlertCircle className="h-6 w-6 text-rose-600 dark:text-rose-300" />
       </div>
-      <p className="text-sm font-medium mb-4 text-muted-foreground">Failed to load data</p>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        <RefreshCw className="h-4 w-4 mr-2" /> Try again
+      <h3 className="text-base font-semibold">Couldn&apos;t load this section</h3>
+      <p className="mt-2 max-w-md text-sm text-muted-foreground">
+        Try again in a moment. If the issue keeps happening, refresh the page.
+      </p>
+      <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
+        <RefreshCw className="mr-2 h-4 w-4" />
+        Try again
       </Button>
-    </motion.div>
+    </div>
   )
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+function DetailCard({
+  label,
+  children,
+  className,
+}: {
+  label: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("rounded-2xl border border-border/60 bg-gradient-to-br from-background to-muted/30 p-4 shadow-sm", className)}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{label}</p>
+      <div className="mt-2.5 min-w-0">{children}</div>
+    </div>
+  )
+}
 
 export default function AdminLogsPage() {
   const { currentUser } = useAuthStore()
 
-  // ── System Logs state ─────────────────────────────────────────────────────
   const [sysLogs, setSysLogs] = useState<SystemLog[]>([])
   const [sysCounts, setSysCounts] = useState<LogCounts | null>(null)
   const [sysTotal, setSysTotal] = useState(0)
@@ -234,327 +208,357 @@ export default function AdminLogsPage() {
   const [sysSearch, setSysSearch] = useState("")
   const [sysLevel, setSysLevel] = useState("all")
   const [sysCategory, setSysCategory] = useState("all")
-  const [sysPage, setSysPage] = useState(1)
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null)
 
-  // ── Activity state ────────────────────────────────────────────────────────
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [actTotal, setActTotal] = useState(0)
   const [actLoading, setActLoading] = useState(false)
   const [actError, setActError] = useState(false)
   const [actSearch, setActSearch] = useState("")
   const [actRole, setActRole] = useState("all")
-  const [actPage, setActPage] = useState(1)
 
-  // ── Refresh ───────────────────────────────────────────────────────────────
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [activeTab, setActiveTab] = useState("system")
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
 
-  // ── Fetch system logs ─────────────────────────────────────────────────────
+  const debouncedSysSearch = useDebouncedValue(sysSearch.trim())
+  const debouncedActSearch = useDebouncedValue(actSearch.trim())
+
   const fetchSystemLogs = useCallback(async () => {
     setSysLoading(true)
     setSysError(false)
+
     try {
-      const res = await adminLogsApi.getSystemLogs({
-        page: sysPage,
-        limit: 50,
+      const response = await adminLogsApi.getSystemLogs({
+        limit: 24,
         level: sysLevel,
         category: sysCategory,
-        search: sysSearch || undefined,
+        search: debouncedSysSearch || undefined,
       })
-      setSysLogs(res.logs)
-      setSysCounts(res.counts)
-      setSysTotal(res.total)
+
+      setSysLogs(response.logs)
+      setSysCounts(response.counts)
+      setSysTotal(response.total)
+      setLastUpdatedAt(new Date())
     } catch {
       setSysError(true)
     } finally {
       setSysLoading(false)
     }
-  }, [sysPage, sysLevel, sysCategory, sysSearch])
+  }, [debouncedSysSearch, sysCategory, sysLevel])
 
-  // ── Fetch activity ────────────────────────────────────────────────────────
   const fetchActivity = useCallback(async () => {
     setActLoading(true)
     setActError(false)
+
     try {
-      const res = await adminLogsApi.getUserActivity({
-        page: actPage,
-        limit: 50,
-        search: actSearch || undefined,
+      const response = await adminLogsApi.getUserActivity({
+        limit: 24,
+        search: debouncedActSearch || undefined,
         role: actRole,
       })
-      setActivities(res.activities)
-      setActTotal(res.total)
+
+      setActivities(response.activities)
+      setActTotal(response.total)
+      setLastUpdatedAt(new Date())
     } catch {
       setActError(true)
     } finally {
       setActLoading(false)
     }
-  }, [actPage, actSearch, actRole])
+  }, [actRole, debouncedActSearch])
 
-  // ── Initial + reactive fetches ────────────────────────────────────────────
-  useEffect(() => { void fetchSystemLogs() }, [fetchSystemLogs])
-  useEffect(() => { void fetchActivity() }, [fetchActivity])
+  useEffect(() => {
+    if (activeTab === "system") {
+      void fetchSystemLogs()
+    }
+  }, [activeTab, fetchSystemLogs])
+
+  useEffect(() => {
+    if (activeTab === "activity") {
+      void fetchActivity()
+    }
+  }, [activeTab, fetchActivity])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
-    await Promise.allSettled([fetchSystemLogs(), fetchActivity()])
+
+    if (activeTab === "system") {
+      await fetchSystemLogs()
+      toast.success("System logs refreshed")
+    } else {
+      await fetchActivity()
+      toast.success("User activity refreshed")
+    }
+
     setIsRefreshing(false)
-    toast.success("Logs refreshed")
+  }
+
+  const clearSystemFilters = () => {
+    setSysSearch("")
+    setSysLevel("all")
+    setSysCategory("all")
+  }
+
+  const clearActivityFilters = () => {
+    setActSearch("")
+    setActRole("all")
   }
 
   const copyLogJson = (log: SystemLog) => {
     void navigator.clipboard.writeText(JSON.stringify(log, null, 2))
-    toast.success("Copied to clipboard")
+    toast.success("Log JSON copied")
   }
 
-  // ── Access guard ──────────────────────────────────────────────────────────
   if (currentUser?.role !== "admin") {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="min-h-[60vh] flex items-center justify-center"
+        className="flex min-h-[60vh] items-center justify-center"
       >
-        <Card className="p-12 text-center max-w-md border-border/50">
-          <Lock className="h-16 w-16 mx-auto mb-6 text-destructive" />
-          <h2 className="text-2xl font-bold mb-3">Access Denied</h2>
-          <p className="text-muted-foreground">You don&apos;t have permission to access the system logs.</p>
+        <Card className="max-w-md border-border/60 p-12 text-center shadow-sm">
+          <Lock className="mx-auto mb-6 h-16 w-16 text-destructive" />
+          <h2 className="text-2xl font-bold">Access denied</h2>
+          <p className="mt-3 text-muted-foreground">You don&apos;t have permission to view the system logs page.</p>
         </Card>
       </motion.div>
     )
   }
 
   const counts = sysCounts ?? { total: 0, info: 0, warning: 0, error: 0, success: 0 }
+  const systemFilterCount = Number(Boolean(sysSearch)) + Number(sysLevel !== "all") + Number(sysCategory !== "all")
+  const activityFilterCount = Number(Boolean(actSearch)) + Number(actRole !== "all")
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5 pb-8">
+      <Card className="overflow-hidden border-border/60 bg-gradient-to-br from-background via-background to-slate-50/80 p-6 shadow-sm dark:to-slate-950/30">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="rounded-3xl border border-violet-200/70 bg-violet-50 p-3 text-violet-600 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300">
+                <Terminal className="h-6 w-6" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-3xl font-semibold tracking-tight">System Logs</h1>
+                  <Badge variant="outline" className="rounded-full px-3 py-1 text-[11px] uppercase tracking-[0.16em]">
+                    Admin only
+                  </Badge>
+                </div>
+                <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                  Review platform events and user activity in a cleaner stream. Heavy visual noise has been removed so
+                  it&apos;s faster to scan and easier on the eyes.
+                </p>
+              </div>
+            </div>
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-blue-500/5" />
-        <motion.div
-          className="absolute -right-20 -top-20 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"
-          animate={{ scale: [1, 1.15, 1], rotate: [0, 180, 0] }}
-          transition={{ duration: 18, repeat: Infinity }}
-        />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <motion.h1
-              className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4 }}
-            >
-              <Terminal className="h-7 w-7 text-purple-500" />
-              System Logs
-            </motion.h1>
-            <motion.p
-              className="text-muted-foreground"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.15 }}
-            >
-              Monitor real-time system activity and user actions
-            </motion.p>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="secondary" className="rounded-full px-3 py-1">
+                {activeTab === "system" ? "Showing latest 24 logs" : "Showing latest 24 actions"}
+              </Badge>
+              <span>
+                Last updated{" "}
+                {lastUpdatedAt ? format(lastUpdatedAt, "MMM d, yyyy HH:mm:ss") : "when the first request completes"}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleRefresh()}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
-              Refresh
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
+          <div className="flex items-center gap-3">
+            <Button variant="outline" className="rounded-xl px-4" onClick={() => void handleRefresh()} disabled={isRefreshing}>
+              <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+              Refresh current view
             </Button>
           </div>
         </div>
+      </Card>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
+        <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
+        <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
+        <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
       </div>
 
-      {/* ── Stats cards ────────────────────────────────────────────────────── */}
-      {sysLoading && !sysCounts ? (
-        <StatsSkeleton />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-5">
-          <StatCard label="Total Logs"  value={counts.total}   icon={Activity}      colorClass="text-blue-500"   bgClass="bg-blue-500/10"   delay={0}    />
-          <StatCard label="Info"        value={counts.info}    icon={Info}          colorClass="text-blue-500"   bgClass="bg-blue-500/10"   delay={0.05} />
-          <StatCard label="Warnings"    value={counts.warning} icon={AlertTriangle} colorClass="text-yellow-500" bgClass="bg-yellow-500/10" delay={0.1}  />
-          <StatCard label="Errors"      value={counts.error}   icon={XCircle}       colorClass="text-red-500"    bgClass="bg-red-500/10"    delay={0.15} />
-          <StatCard label="Success"     value={counts.success} icon={CheckCircle2}  colorClass="text-green-500"  bgClass="bg-green-500/10"  delay={0.2}  />
-        </div>
-      )}
-
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="p-1 gap-0.5 bg-muted/50 backdrop-blur-sm border border-border/60">
-          <TabsTrigger
-            value="system"
-            className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-          >
-            <Server className="h-4 w-4 mr-2" />
-            System Logs
-            {sysTotal > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                {sysTotal}
-              </Badge>
-            )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid h-auto w-full max-w-md grid-cols-2 rounded-2xl border border-border/60 bg-muted/40 p-1">
+          <TabsTrigger value="system" className="rounded-xl px-4 py-2.5 text-sm font-medium">
+            <Server className="mr-2 h-4 w-4" />
+            System
+            <Badge variant="secondary" className="ml-2 h-5 rounded-full px-2 text-[11px]">
+              {sysTotal}
+            </Badge>
           </TabsTrigger>
-          <TabsTrigger
-            value="activity"
-            className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
-          >
-            <Activity className="h-4 w-4 mr-2" />
-            User Activity
-            {actTotal > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-xs">
-                {actTotal}
-              </Badge>
-            )}
+          <TabsTrigger value="activity" className="rounded-xl px-4 py-2.5 text-sm font-medium">
+            <Activity className="mr-2 h-4 w-4" />
+            Activity
+            <Badge variant="secondary" className="ml-2 h-5 rounded-full px-2 text-[11px]">
+              {actTotal}
+            </Badge>
           </TabsTrigger>
         </TabsList>
 
-        {/* ═══════ System Logs ════════════════════════════════════════════════ */}
-        <TabsContent value="system" className="space-y-4 mt-4">
-          {/* Filters */}
-          <Card className="p-4 border-border/50">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <TabsContent value="system" className="mt-0 space-y-4">
+          <Card className="border-border/60 p-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">System events</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Search by message or source, then open a row only when you need the full payload.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  {sysTotal} total records
+                </Badge>
+                {systemFilterCount > 0 && (
+                  <Badge variant="outline" className="rounded-full px-3 py-1">
+                    {systemFilterCount} active filters
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_170px_170px_auto]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by message, source…"
-                  className="pl-9"
                   value={sysSearch}
-                  onChange={(e) => { setSysSearch(e.target.value); setSysPage(1) }}
+                  onChange={(event) => setSysSearch(event.target.value)}
+                  className="h-11 rounded-xl pl-9"
+                  placeholder="Search message or source"
                 />
               </div>
-              <Select value={sysLevel} onValueChange={(v) => { setSysLevel(v); setSysPage(1) }}>
-                <SelectTrigger className="w-[145px]">
+
+              <Select value={sysLevel} onValueChange={setSysLevel}>
+                <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder="Level" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Levels</SelectItem>
+                  <SelectItem value="all">All levels</SelectItem>
                   <SelectItem value="info">Info</SelectItem>
                   <SelectItem value="warning">Warning</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                   <SelectItem value="success">Success</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={sysCategory} onValueChange={(v) => { setSysCategory(v); setSysPage(1) }}>
-                <SelectTrigger className="w-[145px]">
+
+              <Select value={sysCategory} onValueChange={setSysCategory}>
+                <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="all">All categories</SelectItem>
                   <SelectItem value="system">System</SelectItem>
+                  <SelectItem value="user">User</SelectItem>
                 </SelectContent>
               </Select>
-              {(sysSearch || sysLevel !== "all" || sysCategory !== "all") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setSysSearch(""); setSysLevel("all"); setSysCategory("all"); setSysPage(1) }}
-                >
-                  <Filter className="h-4 w-4 mr-1.5" />
-                  Clear
-                </Button>
-              )}
+
+              <Button
+                variant="ghost"
+                className="h-11 rounded-xl px-4"
+                onClick={clearSystemFilters}
+                disabled={systemFilterCount === 0}
+              >
+                Clear filters
+              </Button>
             </div>
           </Card>
 
-          {/* Log List */}
-          <Card className="border-border/50 overflow-hidden">
-            <ScrollArea className="h-[520px]">
+          <Card className="overflow-hidden border-border/60 shadow-sm">
+            <ScrollArea className="h-[560px]">
               {sysLoading ? (
-                <LogListSkeleton />
+                <ListSkeleton />
               ) : sysError ? (
                 <ErrorState onRetry={fetchSystemLogs} />
               ) : sysLogs.length === 0 ? (
-                <EmptyState message="No logs match your filters" />
+                <EmptyState title="No logs matched these filters" description="Try a different keyword or clear the active filters to see more system events." />
               ) : (
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <div className="divide-y divide-border/50">
-                    {sysLogs.map((log, index) => (
-                      <motion.div
-                        key={log.id}
-                        initial={{ opacity: 0, x: -16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 16 }}
-                        transition={{ delay: index * 0.02, duration: 0.25 }}
-                        className="p-4 hover:bg-muted/30 transition-colors cursor-pointer group"
-                        onClick={() => setSelectedLog(log)}
-                      >
-                        <div className="flex items-start gap-4">
-                          <div className={cn("p-2 rounded-lg border shrink-0", getLevelColor(log.level))}>
-                            {getLevelIcon(log.level)}
+                <div className="space-y-3 p-4">
+                  {sysLogs.map((log) => (
+                    <button
+                      key={log.id}
+                      type="button"
+                      onClick={() => setSelectedLog(log)}
+                      className="w-full rounded-2xl border border-border/60 bg-card/80 p-4 text-left transition-colors hover:border-border hover:bg-muted/20"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className={cn("rounded-2xl border p-2.5", getLevelTone(log.level))}>{getLevelIcon(log.level)}</div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className={cn("rounded-full capitalize", getLevelTone(log.level))}>
+                              {log.level}
+                            </Badge>
+                            <Badge variant="outline" className="rounded-full capitalize">
+                              {log.category}
+                            </Badge>
+                            <Badge variant="secondary" className="rounded-full font-mono text-[11px]">
+                              {log.source}
+                            </Badge>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <Badge
-                                variant="outline"
-                                className={cn("text-xs capitalize", getLevelBadge(log.level))}
-                              >
-                                {log.level}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {log.category}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">{log.source}</span>
-                            </div>
-                            <p className="font-medium text-sm mb-1 line-clamp-1">{log.message}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {format(new Date(log.timestamp), "MMM d, yyyy HH:mm:ss")}
-                              </span>
-                              <span className="font-mono opacity-60">{log.id}</span>
-                            </div>
+
+                          <p className="mt-3 text-sm font-semibold leading-6 text-foreground">{log.message}</p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              {format(new Date(log.timestamp), "MMM d, yyyy HH:mm:ss")}
+                            </span>
+                            <span className="font-mono">#{log.id.slice(0, 8)}</span>
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 h-8 w-8"
-                            onClick={(e) => { e.stopPropagation(); setSelectedLog(log) }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
                         </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </AnimatePresence>
+
+                        <div className="hidden shrink-0 self-center text-xs font-medium text-primary md:block">
+                          View details
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </ScrollArea>
           </Card>
         </TabsContent>
 
-        {/* ═══════ User Activity ══════════════════════════════════════════════ */}
-        <TabsContent value="activity" className="space-y-4 mt-4">
-          {/* Filters */}
-          <Card className="p-4 border-border/50">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <TabsContent value="activity" className="mt-0 space-y-4">
+          <Card className="border-border/60 p-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">User activity</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Focus on who did what, with less visual clutter and fewer distractions.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary" className="rounded-full px-3 py-1">
+                  {actTotal} recent actions
+                </Badge>
+                {activityFilterCount > 0 && (
+                  <Badge variant="outline" className="rounded-full px-3 py-1">
+                    {activityFilterCount} active filters
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_190px_auto]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by name, action, team…"
-                  className="pl-9"
                   value={actSearch}
-                  onChange={(e) => { setActSearch(e.target.value); setActPage(1) }}
+                  onChange={(event) => setActSearch(event.target.value)}
+                  className="h-11 rounded-xl pl-9"
+                  placeholder="Search user, action, or team"
                 />
               </div>
-              <Select value={actRole} onValueChange={(v) => { setActRole(v); setActPage(1) }}>
-                <SelectTrigger className="w-[145px]">
+
+              <Select value={actRole} onValueChange={setActRole}>
+                <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
+                  <SelectItem value="all">All roles</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="doctor">Doctor</SelectItem>
                   <SelectItem value="ta">TA</SelectItem>
@@ -562,150 +566,174 @@ export default function AdminLogsPage() {
                   <SelectItem value="member">Member</SelectItem>
                 </SelectContent>
               </Select>
-              {(actSearch || actRole !== "all") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setActSearch(""); setActRole("all"); setActPage(1) }}
-                >
-                  <Filter className="h-4 w-4 mr-1.5" />
-                  Clear
-                </Button>
-              )}
+
+              <Button
+                variant="ghost"
+                className="h-11 rounded-xl px-4"
+                onClick={clearActivityFilters}
+                disabled={activityFilterCount === 0}
+              >
+                Clear filters
+              </Button>
             </div>
           </Card>
 
-          {/* Activity List */}
-          <Card className="border-border/50 overflow-hidden">
-            <ScrollArea className="h-[520px]">
+          <Card className="overflow-hidden border-border/60 shadow-sm">
+            <ScrollArea className="h-[560px]">
               {actLoading ? (
-                <ActivityListSkeleton />
+                <ListSkeleton activity />
               ) : actError ? (
                 <ErrorState onRetry={fetchActivity} />
               ) : activities.length === 0 ? (
-                <EmptyState message="No activity found" />
+                <EmptyState title="No activity found" description="Try broadening the search or resetting the role filter to see more actions." />
               ) : (
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <div className="divide-y divide-border/50">
-                    {activities.map((act, index) => (
-                      <motion.div
-                        key={act.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ delay: index * 0.025, duration: 0.25 }}
-                        className="p-4 hover:bg-muted/30 transition-colors"
-                      >
-                        <div className="flex items-start gap-4">
-                          <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border/40">
-                            <AvatarImage src={act.user.avatarUrl ?? undefined} />
-                            <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                              {getUserInitials(act.user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className="font-semibold text-sm">{act.user.name}</span>
-                              <Badge
-                                variant="outline"
-                                className={cn("text-xs capitalize", getRoleColor(act.user.role))}
-                              >
-                                {act.user.role}
-                              </Badge>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-primary text-sm font-medium">{act.action}</span>
-                              <span className="text-muted-foreground text-sm truncate max-w-[200px]">{act.target}</span>
-                            </div>
-                            {act.details && (
-                              <p className="text-xs text-muted-foreground mb-1.5">{act.details}</p>
-                            )}
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {format(new Date(act.timestamp), "MMM d, yyyy HH:mm")}
+                <div className="space-y-3 p-4">
+                  {activities.map((activity) => (
+                    <div key={activity.id} className="rounded-2xl border border-border/60 bg-card/80 p-4">
+                      <div className="flex items-start gap-4">
+                        <Avatar className="h-11 w-11 shrink-0 border border-border/60">
+                          <AvatarImage src={activity.user.avatarUrl ?? undefined} />
+                          <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                            {getUserInitials(activity.user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold">{activity.user.name}</span>
+                            <Badge variant="outline" className={cn("rounded-full capitalize", getRoleTone(activity.user.role))}>
+                              {activity.user.role}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                            <span className="font-medium text-primary">{activity.action}</span>
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-muted-foreground">{activity.target}</span>
+                          </div>
+
+                          {activity.details && (
+                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{activity.details}</p>
+                          )}
+
+                          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              {format(new Date(activity.timestamp), "MMM d, yyyy HH:mm")}
+                            </span>
+                            {activity.user.email && (
+                              <span className="inline-flex items-center gap-1">
+                                <User className="h-3.5 w-3.5" />
+                                {activity.user.email}
                               </span>
-                              {act.user.email && (
-                                <span className="flex items-center gap-1">
-                                  <User className="h-3 w-3" />
-                                  {act.user.email}
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
                         </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </AnimatePresence>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </ScrollArea>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* ── Log Details Dialog ────────────────────────────────────────────── */}
       <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedLog && (
-                <span className={cn("p-1.5 rounded-lg border", getLevelColor(selectedLog.level))}>
-                  {getLevelIcon(selectedLog.level)}
-                </span>
-              )}
-              Log Details
-            </DialogTitle>
-          </DialogHeader>
+        <DialogContent className="flex max-h-[92vh] max-w-5xl flex-col gap-0 overflow-hidden border-border/60 bg-background p-0 shadow-2xl">
+          {selectedLog ? (
+            <>
+              <DialogHeader className="border-b border-border/60 bg-gradient-to-r from-slate-50 via-background to-blue-50/60 px-4 py-4 text-left sm:px-5 dark:from-slate-950 dark:to-blue-950/20">
+                <div className="flex items-start gap-3 pr-8">
+                  <span className={cn("mt-0.5 rounded-2xl border p-2.5 shadow-sm", getLevelTone(selectedLog.level))}>
+                    {getLevelIcon(selectedLog.level)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <DialogTitle className="text-xl font-semibold tracking-tight sm:text-2xl">Log details</DialogTitle>
+                    <p className="mt-1.5 text-sm leading-6 text-muted-foreground">
+                      Review the event metadata, message summary, and raw payload for this log.
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={cn("rounded-full px-3 py-1 capitalize", getLevelTone(selectedLog.level))}>
+                        {selectedLog.level}
+                      </Badge>
+                      <Badge variant="outline" className="rounded-full px-3 py-1 capitalize">
+                        {selectedLog.category}
+                      </Badge>
+                      <Badge variant="secondary" className="rounded-full px-3 py-1">
+                        {selectedLog.source}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </DialogHeader>
 
-          {selectedLog && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Log ID</p>
-                  <p className="font-mono">{selectedLog.id}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Timestamp</p>
-                  <p>{format(new Date(selectedLog.timestamp), "MMM d, yyyy HH:mm:ss")}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Level</p>
-                  <Badge variant="outline" className={cn("capitalize", getLevelBadge(selectedLog.level))}>
-                    {selectedLog.level}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Category</p>
-                  <Badge variant="outline" className="capitalize">{selectedLog.category}</Badge>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-muted-foreground mb-1">Source</p>
-                  <p>{selectedLog.source}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-muted-foreground mb-1">Message</p>
-                  <p className="font-medium">{selectedLog.message}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-muted-foreground mb-1">Details</p>
-                  <pre className="p-3 rounded-xl bg-muted text-xs font-mono overflow-auto max-h-48">
-                    {JSON.stringify(selectedLog.details, null, 2)}
-                  </pre>
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="space-y-4 px-4 py-4 pb-10 sm:px-5 sm:py-5 sm:pb-12">
+                  <div className="grid gap-3 lg:grid-cols-[1.15fr_0.85fr]">
+                    <DetailCard label="Message">
+                      <p className="text-sm font-semibold leading-6 text-foreground sm:text-base">{selectedLog.message}</p>
+                    </DetailCard>
+
+                    <DetailCard label="Timestamp">
+                      <div className="flex flex-col gap-2">
+                        <p className="text-sm font-medium text-foreground sm:text-base">
+                          {format(new Date(selectedLog.timestamp), "MMM d, yyyy")}
+                        </p>
+                        <p className="text-sm text-muted-foreground">{format(new Date(selectedLog.timestamp), "HH:mm:ss")}</p>
+                      </div>
+                    </DetailCard>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <DetailCard label="Log ID" className="md:col-span-2 xl:col-span-2">
+                      <p className="break-all font-mono text-xs leading-6 text-foreground sm:text-sm">{selectedLog.id}</p>
+                    </DetailCard>
+
+                    <DetailCard label="Level">
+                      <Badge variant="outline" className={cn("rounded-full px-3 py-1 capitalize", getLevelTone(selectedLog.level))}>
+                        {selectedLog.level}
+                      </Badge>
+                    </DetailCard>
+
+                    <DetailCard label="Category">
+                      <Badge variant="outline" className="rounded-full px-3 py-1 capitalize">
+                        {selectedLog.category}
+                      </Badge>
+                    </DetailCard>
+                  </div>
+
+                  <DetailCard label="Source">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl border border-border/60 bg-muted/50 p-2">
+                        <Server className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{selectedLog.source}</p>
+                        <p className="text-xs text-muted-foreground">Service or module that emitted this system event</p>
+                      </div>
+                    </div>
+                  </DetailCard>
+
+                  <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 shadow-xl">
+                    <div className="flex flex-col gap-3 border-b border-slate-800 bg-slate-950/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">Payload</p>
+                        <p className="mt-1 text-xs text-slate-300 sm:text-sm">Raw JSON captured with this log entry.</p>
+                      </div>
+                      <Button variant="secondary" size="sm" className="shrink-0" onClick={() => copyLogJson(selectedLog)}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy JSON
+                      </Button>
+                    </div>
+                    <pre className="overflow-auto px-4 py-3 font-mono text-[11px] leading-6 text-slate-100 sm:max-h-[280px] sm:text-xs md:max-h-[320px]">
+                      {JSON.stringify(selectedLog.details, null, 2)}
+                    </pre>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex justify-end">
-                <Button variant="outline" size="sm" onClick={() => copyLogJson(selectedLog)}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy JSON
-                </Button>
-              </div>
-            </motion.div>
-          )}
+            </>
+          ) : null}
         </DialogContent>
       </Dialog>
     </motion.div>

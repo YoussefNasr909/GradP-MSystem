@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   HelpCircle,
@@ -16,7 +16,6 @@ import {
   Shield,
   MessageSquare,
   ThumbsUp,
-  ThumbsDown,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -24,6 +23,34 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import Link from "next/link"
+
+const FAQ_HELPFUL_STORAGE_KEY = "gpms-faq-helpful-users"
+
+function getFaqId(categoryId: string, question: string) {
+  return `${categoryId}:${question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`
+}
+
+function readHelpfulUsers() {
+  if (typeof window === "undefined") return {}
+
+  try {
+    const raw = window.localStorage.getItem(FAQ_HELPFUL_STORAGE_KEY)
+    if (!raw) return {}
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+
+    return Object.fromEntries(
+      Object.entries(parsed).map(([faqId, userIds]) => [faqId, Array.isArray(userIds) ? userIds.filter((id) => typeof id === "string") : []]),
+    ) as Record<string, string[]>
+  } catch {
+    return {}
+  }
+}
+
+function writeHelpfulUsers(value: Record<string, string[]>) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(FAQ_HELPFUL_STORAGE_KEY, JSON.stringify(value))
+}
 
 const faqCategories = [
   { id: "getting-started", label: "Getting Started", icon: HelpCircle },
@@ -279,28 +306,64 @@ export default function FAQPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("getting-started")
   const [expandedQuestions, setExpandedQuestions] = useState<string[]>([])
-  const [helpfulVotes, setHelpfulVotes] = useState<Record<string, "up" | "down" | null>>({})
+  const [helpfulUsersByFaq, setHelpfulUsersByFaq] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    setHelpfulUsersByFaq(readHelpfulUsers())
+  }, [])
 
   const toggleQuestion = (question: string) => {
     setExpandedQuestions((prev) => (prev.includes(question) ? prev.filter((q) => q !== question) : [...prev, question]))
   }
 
-  const handleVote = (question: string, vote: "up" | "down") => {
-    setHelpfulVotes((prev) => ({
-      ...prev,
-      [question]: prev[question] === vote ? null : vote,
-    }))
+  const handleVote = (faqId: string) => {
+    if (!currentUser?.id) return
+
+    setHelpfulUsersByFaq((prev) => {
+      const currentVoters = new Set(prev[faqId] || [])
+
+      if (currentVoters.has(currentUser.id)) {
+        currentVoters.delete(currentUser.id)
+      } else {
+        currentVoters.add(currentUser.id)
+      }
+
+      const next = {
+        ...prev,
+        [faqId]: Array.from(currentVoters),
+      }
+
+      writeHelpfulUsers(next)
+      return next
+    })
   }
 
-  const allFAQs = Object.entries(faqData).flatMap(([category, questions]) => questions.map((q) => ({ ...q, category })))
+  const allFAQs = useMemo(
+    () =>
+      Object.entries(faqData).flatMap(([category, questions]) =>
+        questions.map((q) => ({
+          ...q,
+          category,
+          id: getFaqId(category, q.question),
+        })),
+      ),
+    [],
+  )
 
-  const filteredFAQs: Array<{ question: string; answer: string; helpful?: number; category?: string }> = searchQuery
+  const getHelpfulCount = (faqId: string, baseHelpful = 0) => baseHelpful + (helpfulUsersByFaq[faqId]?.length || 0)
+  const getVoteState = (faqId: string) => (currentUser?.id && helpfulUsersByFaq[faqId]?.includes(currentUser.id) ? "up" : null)
+
+  const filteredFAQs: Array<{ id: string; question: string; answer: string; helpful?: number; category?: string }> = searchQuery
     ? allFAQs.filter(
         (faq) =>
           faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
           faq.answer.toLowerCase().includes(searchQuery.toLowerCase()),
       )
-    : faqData[activeCategory] || []
+    : (faqData[activeCategory] || []).map((faq) => ({
+        ...faq,
+        category: activeCategory,
+        id: getFaqId(activeCategory, faq.question),
+      }))
 
   return (
     <div className="space-y-6 pb-8">
@@ -357,16 +420,16 @@ export default function FAQPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredFAQs.map((faq, index) => (
+              {filteredFAQs.map((faq) => (
                 <FAQItem
-                  key={index}
+                  key={faq.id}
                   question={faq.question}
                   answer={faq.answer}
-                  helpful={faq.helpful}
+                  helpfulCount={getHelpfulCount(faq.id, faq.helpful)}
                   isExpanded={expandedQuestions.includes(faq.question)}
                   onToggle={() => toggleQuestion(faq.question)}
-                  vote={helpfulVotes[faq.question]}
-                  onVote={(vote) => handleVote(faq.question, vote)}
+                  vote={getVoteState(faq.id)}
+                  onVote={() => handleVote(faq.id)}
                   showCategory
                   category={faqCategories.find((c) => c.id === faq.category)?.label}
                 />
@@ -425,24 +488,28 @@ export default function FAQPage() {
             </div>
 
             <div className="space-y-3">
-              {(faqData[activeCategory] || []).map((faq, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                >
-                  <FAQItem
-                    question={faq.question}
-                    answer={faq.answer}
-                    helpful={faq.helpful}
-                    isExpanded={expandedQuestions.includes(faq.question)}
-                    onToggle={() => toggleQuestion(faq.question)}
-                    vote={helpfulVotes[faq.question]}
-                    onVote={(vote) => handleVote(faq.question, vote)}
-                  />
-                </motion.div>
-              ))}
+              {(faqData[activeCategory] || []).map((faq, index) => {
+                const faqId = getFaqId(activeCategory, faq.question)
+
+                return (
+                  <motion.div
+                    key={faqId}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                  >
+                    <FAQItem
+                      question={faq.question}
+                      answer={faq.answer}
+                      helpfulCount={getHelpfulCount(faqId, faq.helpful)}
+                      isExpanded={expandedQuestions.includes(faq.question)}
+                      onToggle={() => toggleQuestion(faq.question)}
+                      vote={getVoteState(faqId)}
+                      onVote={() => handleVote(faqId)}
+                    />
+                  </motion.div>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -487,7 +554,7 @@ export default function FAQPage() {
 function FAQItem({
   question,
   answer,
-  helpful,
+  helpfulCount,
   isExpanded,
   onToggle,
   vote,
@@ -497,11 +564,11 @@ function FAQItem({
 }: {
   question: string
   answer: string
-  helpful?: number
+  helpfulCount: number
   isExpanded: boolean
   onToggle: () => void
-  vote: "up" | "down" | null | undefined
-  onVote: (vote: "up" | "down") => void
+  vote: "up" | null | undefined
+  onVote: () => void
   showCategory?: boolean
   category?: string
 }) {
@@ -531,8 +598,8 @@ function FAQItem({
           >
             <div className="px-4 pb-4 pt-0 border-t">
               <p className="text-muted-foreground mt-4 leading-relaxed">{answer}</p>
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="mt-4 pt-4 border-t space-y-3">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                   <span>Was this helpful?</span>
                   <Button
                     variant={vote === "up" ? "default" : "ghost"}
@@ -540,24 +607,20 @@ function FAQItem({
                     className="h-8 px-2"
                     onClick={(e) => {
                       e.stopPropagation()
-                      onVote("up")
+                      onVote()
                     }}
                   >
                     <ThumbsUp className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant={vote === "down" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onVote("down")
-                    }}
-                  >
-                    <ThumbsDown className="h-4 w-4" />
-                  </Button>
+                  <span className="font-medium text-foreground">
+                    {helpfulCount} {helpfulCount === 1 ? "user finds" : "users found"} this helpful
+                  </span>
                 </div>
-                {helpful && <span className="text-sm text-muted-foreground">{helpful} found this helpful</span>}
+                {vote === "up" && (
+                  <p className="text-sm text-primary">
+                    Your helpful vote has been counted for this FAQ card.
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>
