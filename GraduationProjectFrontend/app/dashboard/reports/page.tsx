@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { DashboardMetricCard, DashboardPageHeader, DashboardStateCard } from "@/components/dashboard/page-shell"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   BarChart3, FileText, Lock, AlertCircle, FileSpreadsheet,
@@ -60,8 +61,7 @@ export default function ReportsPage() {
   const role = currentUser?.role?.toLowerCase() ?? ""
   const canView = role === "admin" || role === "doctor"
   const isDoctor = role === "doctor"
-  const reportActionButtonClass =
-    "w-full bg-blue-600 text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:text-white hover:shadow-md focus-visible:ring-blue-500 disabled:bg-blue-600/60 disabled:text-white disabled:hover:translate-y-0 disabled:hover:shadow-sm"
+  const reportActionButtonClass = "w-full gap-2"
 
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null)
   const [grades, setGrades]       = useState<GradesOverviewResponse | null>(null)
@@ -220,34 +220,28 @@ export default function ReportsPage() {
   if (!canView) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="min-h-[60vh] flex items-center justify-center">
-        <Card className="p-12 text-center max-w-md border-border/50">
-          <Lock className="h-16 w-16 mx-auto mb-6 text-destructive" />
-          <h2 className="text-2xl font-bold mb-3">Access Denied</h2>
-          <p className="text-muted-foreground">Reports are only available to admins and doctors.</p>
-        </Card>
+        className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center">
+        <DashboardStateCard
+          icon={Lock}
+          title="Access denied"
+          description="Reports are only available to admins and doctors."
+          tone="rose"
+        />
       </motion.div>
     )
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">
-      {/* Hero */}
-      <Card className="rounded-2xl p-6 border-border/50 relative overflow-hidden bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-emerald-500/5" />
-        <div className="relative space-y-6">
-          <div>
-            <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-              <BarChart3 className="h-7 w-7 text-blue-500" />
-              Reports
-            </motion.h1>
-            <motion.p className="text-muted-foreground"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              Generate and download program reports for grades, phases, and full analytics
-            </motion.p>
-          </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      <DashboardPageHeader
+        title="Reports"
+        description="Generate and download program reports for grades, SDLC phases, and full analytics."
+        icon={BarChart3}
+        tone="blue"
+        badge={<Badge variant="outline" className="rounded-md border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300">{isDoctor ? "Doctor view" : "Admin view"}</Badge>}
+      />
 
+      <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm sm:p-5">
           {loading ? (
             <div className="grid gap-4 md:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -264,46 +258,30 @@ export default function ReportsPage() {
             </div>
           ) : analytics && grades ? (
             <div className="grid gap-4 md:grid-cols-4">
-              {[
-                { label: "Teams",      value: analytics.overview.totalTeams,     icon: Users,        accent: "bg-blue-500" },
-                { label: "Tasks",      value: analytics.tasks.total,             icon: CheckSquare,  accent: "bg-amber-500" },
-                { label: "Submissions",value: analytics.submissions.total,       icon: FileText,     accent: "bg-purple-500" },
-                { label: "Avg Grade",  value: `${analytics.overview.averageGrade}/100`, icon: Award, accent: "bg-green-500" },
-              ].map((s, i) => (
-                <motion.div key={s.label}
-                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 * i }}
-                  className="rounded-xl border border-border/50 bg-background/70 p-5">
-                  <div className="flex items-center gap-3">
-                    <div className={cn("p-2.5 rounded-xl text-white", s.accent)}>
-                      <s.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold tabular-nums">{s.value}</p>
-                      <p className="text-xs text-muted-foreground">{s.label}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+              <DashboardMetricCard label="Teams" value={analytics.overview.totalTeams} icon={Users} tone="blue" />
+              <DashboardMetricCard label="Tasks" value={analytics.tasks.total} icon={CheckSquare} tone="amber" />
+              <DashboardMetricCard label="Submissions" value={analytics.submissions.total} icon={FileText} tone="violet" />
+              <DashboardMetricCard label="Avg grade" value={`${analytics.overview.averageGrade}/100`} icon={Award} tone="emerald" />
             </div>
           ) : null}
-        </div>
       </Card>
 
       {loading ? (
         null
       ) : error ? (
-        <Card className="p-12 text-center border-border/50">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-          <p className="text-muted-foreground mb-4">Failed to load report data</p>
-          <Button variant="outline" onClick={() => void fetchData()}>Try again</Button>
-        </Card>
+        <DashboardStateCard
+          icon={AlertCircle}
+          title="Failed to load report data"
+          description="The report endpoints did not respond successfully. Try again after the backend settles."
+          action={<Button variant="outline" onClick={() => void fetchData()}>Try again</Button>}
+          tone="rose"
+        />
       ) : analytics && grades ? (
         <>
           {/* Export cards */}
           <div className="grid gap-4 md:grid-cols-3">
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+              <Card className="flex h-full flex-col rounded-[20px] border-border/60 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2.5 rounded-xl bg-amber-500/10">
                     <Award className="h-5 w-5 text-amber-500" />
@@ -328,7 +306,7 @@ export default function ReportsPage() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+              <Card className="flex h-full flex-col rounded-[20px] border-border/60 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2.5 rounded-xl bg-purple-500/10">
                     <BarChart3 className="h-5 w-5 text-purple-500" />
@@ -355,7 +333,7 @@ export default function ReportsPage() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <Card className="p-6 border-border/50 hover:border-border hover:shadow-lg transition-all flex flex-col h-full">
+              <Card className="flex h-full flex-col rounded-[20px] border-border/60 p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="p-2.5 rounded-xl bg-blue-500/10">
                     <FileText className="h-5 w-5 text-blue-500" />
@@ -373,8 +351,8 @@ export default function ReportsPage() {
                   <Badge variant="outline" className="text-[10px]">PDF</Badge>
                 </div>
                 <Button onClick={() => void exportReportPdf("analytics")} className={reportActionButtonClass} disabled={downloadingPdf === "analytics"}>
-                  <FileDown className="h-4 w-4 mr-2" />
-                  Download PDF
+                  <FileDown className="h-4 w-4" />
+                  {downloadingPdf === "analytics" ? "Preparing PDF..." : "Download PDF"}
                 </Button>
               </Card>
             </motion.div>

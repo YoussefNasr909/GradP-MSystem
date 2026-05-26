@@ -8,6 +8,7 @@ import {
   Award,
   BarChart3,
   CalendarDays,
+  ChevronDown,
   CheckCircle2,
   ClipboardList,
   Clock3,
@@ -17,6 +18,7 @@ import {
   Layers3,
   ListTodo,
   Loader2,
+  PanelLeftOpen,
   Pencil,
   Play,
   Plus,
@@ -64,6 +66,7 @@ import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DashboardMetricCard, DashboardStateCard } from "@/components/dashboard/page-shell"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -1178,6 +1181,8 @@ export default function SprintsPage() {
   const [loadError, setLoadError] = useState("")
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null)
   const [sprintPage, setSprintPage] = useState(1)
+  const [isBacklogOpen, setIsBacklogOpen] = useState(false)
+  const [isSprintListOpen, setIsSprintListOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("board")
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [sprintDialogMode, setSprintDialogMode] = useState<SprintDialogMode>("create")
@@ -1326,6 +1331,62 @@ export default function SprintsPage() {
     setSelectedSprintId(sprintId)
     const index = board?.sprints.findIndex((sprint) => sprint.id === sprintId) ?? -1
     if (index >= 0) setSprintPage(Math.floor(index / SPRINTS_PER_PAGE) + 1)
+  }
+
+  function renderSprintNavigation() {
+    if (!board?.sprints.length) {
+      return (
+        <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
+          Create a sprint to start organizing the board.
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-2">
+        {board.sprints.map((sprint) => {
+          const isActive = selectedSprint?.id === sprint.id
+
+          return (
+            <button
+              key={sprint.id}
+              type="button"
+              onClick={() => {
+                selectSprintAndPage(sprint.id)
+                setIsSprintListOpen(false)
+              }}
+              className={cn(
+                "w-full rounded-2xl border px-3 py-3 text-left transition-all hover:border-primary/35 hover:bg-primary/[0.035] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45",
+                isActive
+                  ? "border-primary/45 bg-primary/[0.07] shadow-sm ring-1 ring-primary/10"
+                  : "border-border/70 bg-background/70",
+              )}
+              aria-pressed={isActive}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{sprint.name}</span>
+                    {isActive ? <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden="true" /> : null}
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{sprint.goal || formatSprintRange(sprint)}</p>
+                </div>
+                <Badge variant="outline" className={cn("shrink-0 rounded-md text-[11px]", getSprintBadgeClass(sprint.status))}>
+                  {formatSprintStatus(sprint.status)}
+                </Badge>
+              </div>
+              <div className="mt-3 grid gap-1">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{sprint.stats.completedTasks}/{sprint.stats.totalTasks} tasks</span>
+                  <span>{sprint.stats.progress}%</span>
+                </div>
+                <Progress value={sprint.stats.progress} className="h-1.5" />
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
   }
 
   function handleSprintPageChange(page: number) {
@@ -1627,15 +1688,18 @@ export default function SprintsPage() {
       pageDescription="Plan, track, and visualize sprint work for your team."
       icon={<Layers3 className="h-10 w-10 text-primary" />}
     >
-      <div className="mx-auto max-w-[1500px] space-y-6 p-4 sm:p-6">
+      <div className="mx-auto max-w-[1500px] space-y-5">
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: -14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: shouldReduceMotion ? 0 : 0.35, ease: EASE_OUT_QUINT }}
-          className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+          className="flex flex-col gap-5 rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.03] p-5 shadow-sm sm:p-6 lg:flex-row lg:items-end lg:justify-between"
         >
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+                <Layers3 className="h-5 w-5" />
+              </span>
               <Badge variant="outline" className="rounded-md border-primary/25 bg-primary/10 text-primary">
                 Sprint workspace
               </Badge>
@@ -1650,8 +1714,8 @@ export default function SprintsPage() {
                 </Badge>
               ) : null}
             </div>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Sprints</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Sprints</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
               {isSupervisorView
                 ? "Review assigned team sprints, inspect progress, and evaluate sprint outcomes without changing student planning work."
                 : "Plan sprint goals, pull tasks from your team backlog, and watch progress through burndown, velocity, and workload charts."}
@@ -1672,7 +1736,7 @@ export default function SprintsPage() {
         </motion.div>
 
         {isSupportView ? (
-          <Card className="rounded-lg border-border/70 p-4">
+          <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Team supervision filter</h2>
@@ -1710,15 +1774,15 @@ export default function SprintsPage() {
             </div>
             {selectedTeam ? (
               <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
-                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
                   <span className="block text-xs font-medium uppercase text-muted-foreground">Leader</span>
                   <span className="font-semibold">{selectedTeam.leader.fullName}</span>
                 </div>
-                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
                   <span className="block text-xs font-medium uppercase text-muted-foreground">Doctor</span>
                   <span className="font-semibold">{selectedTeam.doctor?.fullName ?? "Not assigned"}</span>
                 </div>
-                <div className="rounded-lg bg-muted/35 px-3 py-2">
+                <div className="rounded-2xl bg-muted/35 px-3 py-2">
                   <span className="block text-xs font-medium uppercase text-muted-foreground">TA</span>
                   <span className="font-semibold">{selectedTeam.ta?.fullName ?? "Not assigned"}</span>
                 </div>
@@ -1746,24 +1810,21 @@ export default function SprintsPage() {
         </AnimatePresence>
 
         {isLoading || isAssignedTeamsLoading ? (
-          <Card className="flex min-h-[360px] items-center justify-center rounded-lg p-8">
+          <Card className="flex min-h-[360px] items-center justify-center rounded-[22px] border-border/60 p-8 shadow-sm">
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Loader2 className="h-5 w-5 animate-spin" />
               {isAssignedTeamsLoading ? "Loading assigned teams" : "Loading sprints"}
             </div>
           </Card>
         ) : isSupportView && assignedTeams.length === 0 ? (
-          <Card className="flex min-h-[360px] items-center justify-center rounded-lg border-dashed p-8 text-center">
-            <div className="max-w-md">
-              <Award className="mx-auto h-10 w-10 text-muted-foreground" />
-              <h2 className="mt-4 text-xl font-semibold">No assigned teams</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                You will see sprint boards here after a team assigns you as its {currentUser?.role === "doctor" ? "doctor" : "TA"}.
-              </p>
-            </div>
-          </Card>
+          <DashboardStateCard
+            icon={Award}
+            title="No assigned teams"
+            description={`You will see sprint boards here after a team assigns you as its ${currentUser?.role === "doctor" ? "doctor" : "TA"}.`}
+            tone="amber"
+          />
         ) : !activeTeamId ? (
-          <Card className="rounded-lg border-dashed p-6">
+          <Card className="rounded-[20px] border-dashed p-6 shadow-sm">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Select a team workspace</h2>
@@ -1805,89 +1866,74 @@ export default function SprintsPage() {
                 transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
                 whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               >
-              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Active progress</p>
-                    <p className="mt-2 text-3xl font-bold">{board.metrics.activeProgress}%</p>
-                  </div>
-                  <Gauge className="h-8 w-8 text-emerald-600" />
-                </div>
-                <Progress value={board.metrics.activeProgress} className="mt-4 h-2" />
-              </Card>
+              <DashboardMetricCard
+                label="Active progress"
+                value={`${board.metrics.activeProgress}%`}
+                description={<Progress value={board.metrics.activeProgress} className="h-2" />}
+                icon={Gauge}
+                tone="emerald"
+              />
               </motion.div>
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
                 whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               >
-              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Evaluations</p>
-                    <p className="mt-2 text-3xl font-bold">{board.metrics.evaluations.averageScore ?? "-"}</p>
-                  </div>
-                  <Award className="h-8 w-8 text-amber-600" />
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {currentUser?.role === "doctor"
+              <DashboardMetricCard
+                label="Evaluations"
+                value={board.metrics.evaluations.averageScore ?? "-"}
+                description={
+                  currentUser?.role === "doctor"
                     ? `${board.metrics.evaluations.submitted} submitted, ${board.metrics.evaluations.approved} approved`
-                    : `${board.metrics.evaluations.approved} approved, ${board.metrics.evaluations.submitted} pending review`}
-                </p>
-              </Card>
+                    : `${board.metrics.evaluations.approved} approved, ${board.metrics.evaluations.submitted} pending review`
+                }
+                icon={Award}
+                tone="amber"
+              />
               </motion.div>
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
                 whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               >
-              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Backlog</p>
-                    <p className="mt-2 text-3xl font-bold">{board.metrics.backlogCount}</p>
-                  </div>
-                  <ClipboardList className="h-8 w-8 text-blue-600" />
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">{board.metrics.backlogStoryPoints} story points waiting</p>
-              </Card>
+              <DashboardMetricCard
+                label="Backlog"
+                value={board.metrics.backlogCount}
+                description={`${board.metrics.backlogStoryPoints} story points waiting`}
+                icon={ClipboardList}
+                tone="blue"
+              />
               </motion.div>
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
                 whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               >
-              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Velocity</p>
-                    <p className="mt-2 text-3xl font-bold">{board.metrics.velocity.at(-1)?.completedStoryPoints ?? 0}</p>
-                  </div>
-                  <Sparkles className="h-8 w-8 text-violet-600" />
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">completed SP in the latest tracked sprint</p>
-              </Card>
+              <DashboardMetricCard
+                label="Velocity"
+                value={board.metrics.velocity.at(-1)?.completedStoryPoints ?? 0}
+                description="Completed SP in the latest tracked sprint"
+                icon={Sparkles}
+                tone="violet"
+              />
               </motion.div>
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
                 transition={{ duration: shouldReduceMotion ? 0 : 0.28, ease: EASE_OUT_QUINT }}
                 whileHover={shouldReduceMotion ? undefined : { y: -3 }}
               >
-              <Card className="h-full rounded-lg p-4 transition-shadow hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-medium uppercase text-muted-foreground">Needs attention</p>
-                    <p className="mt-2 text-3xl font-bold">{board.metrics.overdueTasks}</p>
-                  </div>
-                  <Flag className="h-8 w-8 text-rose-600" />
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">overdue tasks outside Done</p>
-              </Card>
+              <DashboardMetricCard
+                label="Needs attention"
+                value={board.metrics.overdueTasks}
+                description="Overdue tasks outside Done"
+                icon={Flag}
+                tone="rose"
+              />
               </motion.div>
             </motion.div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-              <TabsList className="max-w-full justify-start overflow-x-auto rounded-lg">
+              <TabsList className="h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-[20px] p-1">
                 <TabsTrigger value="board" className="gap-2 rounded-md">
                   <Layers3 className="h-4 w-4" />
                   Sprint board
@@ -1907,93 +1953,175 @@ export default function SprintsPage() {
               </TabsList>
 
               <TabsContent value="board" className="space-y-4">
-                <section className="rounded-lg border border-border/70 bg-background/70">
-                  <div className="flex flex-col gap-2 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-lg font-semibold">Backlog</h2>
-                      <p className="text-sm text-muted-foreground">All newly created website tasks appear here until they are placed into a sprint.</p>
-                    </div>
-                    <Badge variant="outline" className="w-fit rounded-md">
-                      {board.backlogTasks.length} tasks
-                    </Badge>
-                  </div>
-                  <div className="grid gap-3 p-4 lg:grid-cols-2 xl:grid-cols-3">
-                    {board.backlogTasks.length > 0 ? (
-                      board.backlogTasks.map((task) => (
-                        <SprintTaskCard
-                          key={task.id}
-                          task={task}
-                          board={board}
-                          canManage={canManage}
-                          isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
-                          reduceMotion={Boolean(shouldReduceMotion)}
-                          onMove={handleMoveTask}
-                          onMetaChange={handleTaskMetaChange}
-                        />
-                      ))
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-border/80 p-5 text-sm text-muted-foreground">
-                        The backlog is clear.
+                <section className="rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-lg font-semibold">Sprint board</h2>
+                        {selectedSprint ? (
+                          <Badge variant="outline" className={cn("rounded-md", getSprintBadgeClass(selectedSprint.status))}>
+                            {formatSprintStatus(selectedSprint.status)}
+                          </Badge>
+                        ) : null}
                       </div>
-                    )}
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {selectedSprint
+                          ? `${selectedSprint.name} - ${formatSprintRange(selectedSprint)}`
+                          : "Select a sprint to see its tasks, actions, and evaluation panel."}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={isBacklogOpen ? "secondary" : "outline"}
+                        className="gap-2 rounded-lg"
+                        onClick={() => setIsBacklogOpen((open) => !open)}
+                        aria-expanded={isBacklogOpen}
+                      >
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", isBacklogOpen && "rotate-180")} />
+                        {isBacklogOpen ? "Hide backlog" : "Show backlog"}
+                        <Badge variant="outline" className="ml-1 rounded-full bg-background px-2">
+                          {board.backlogTasks.length}
+                        </Badge>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="gap-2 rounded-lg lg:hidden"
+                        onClick={() => setIsSprintListOpen((open) => !open)}
+                        aria-expanded={isSprintListOpen}
+                      >
+                        <PanelLeftOpen className="h-4 w-4" />
+                        Sprints
+                      </Button>
+                    </div>
                   </div>
                 </section>
 
-                <div className="space-y-4">
-                  {board.sprints.length > 0 ? (
-                    <>
-                      {paginatedSprints.map((sprint) => (
-                        <SprintGroup
-                          key={sprint.id}
-                          sprint={sprint}
-                          board={board}
-                          canManage={canManage}
-                          currentUserId={currentUser?.id}
-                          currentUserRole={currentUser?.role}
-                          canEvaluate={canEvaluate}
-                          canReviewEvaluations={canReviewEvaluations}
-                          isSelected={selectedSprint?.id === sprint.id}
-                          actionInFlight={actionInFlight}
-                          evaluationDrafts={evaluationDrafts}
-                          evaluationErrors={evaluationErrors}
-                          reviewComments={reviewComments}
-                          reduceMotion={Boolean(shouldReduceMotion)}
-                          onSelect={selectSprintAndPage}
-                          onEdit={openEditDialog}
-                          onDeleteRequest={setSprintPendingDelete}
-                          onStart={handleStartSprint}
-                          onComplete={handleCompleteSprint}
-                          onMove={handleMoveTask}
-                          onMetaChange={handleTaskMetaChange}
-                          onEvaluationDraftChange={handleEvaluationDraftChange}
-                          onReviewCommentChange={handleReviewCommentChange}
-                          onSaveEvaluation={handleSaveEvaluation}
-                          onReviewEvaluation={handleReviewEvaluation}
-                        />
-                      ))}
-                      <SprintPagination
-                        page={sprintPage}
-                        totalPages={sprintTotalPages}
-                        totalItems={board.sprints.length}
-                        pageSize={SPRINTS_PER_PAGE}
-                        onPageChange={handleSprintPageChange}
-                      />
-                    </>
-                  ) : (
-                    <Card className="rounded-lg p-8 text-center">
-                      <Target className="mx-auto h-10 w-10 text-muted-foreground" />
-                      <h3 className="mt-4 text-lg font-semibold">{isSupportView ? "No sprints found for this team" : "No sprints yet"}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {isSupportView ? "When students create sprints, they will appear here for supervision." : "Create your first sprint to group backlog tasks into an iteration."}
-                      </p>
-                      {canManage ? (
-                        <Button className="mx-auto mt-5 rounded-lg" onClick={openCreateDialog} disabled={Boolean(actionInFlight)}>
-                          <Plus className="mr-2 h-4 w-4" />
-                          New Sprint
-                        </Button>
-                      ) : null}
+                <AnimatePresence initial={false}>
+                  {isBacklogOpen ? (
+                    <motion.section
+                      key="backlog"
+                      initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                      transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: EASE_OUT_QUINT }}
+                      className="overflow-hidden rounded-2xl border border-border/70 bg-background/80 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-2 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h2 className="text-lg font-semibold">Backlog</h2>
+                          <p className="text-sm text-muted-foreground">Tasks waiting to be placed into a sprint.</p>
+                        </div>
+                        <Badge variant="outline" className="w-fit rounded-full">
+                          {board.backlogTasks.length} tasks
+                        </Badge>
+                      </div>
+                      <div className="grid gap-3 p-4 lg:grid-cols-2 xl:grid-cols-3">
+                        {board.backlogTasks.length > 0 ? (
+                          board.backlogTasks.map((task) => (
+                            <SprintTaskCard
+                              key={task.id}
+                              task={task}
+                              board={board}
+                              canManage={canManage}
+                              isBusy={actionInFlight === `move-${task.id}` || actionInFlight === `meta-${task.id}`}
+                              reduceMotion={Boolean(shouldReduceMotion)}
+                              onMove={handleMoveTask}
+                              onMetaChange={handleTaskMetaChange}
+                            />
+                          ))
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-border/80 bg-muted/30 p-5 text-sm text-muted-foreground lg:col-span-2 xl:col-span-3">
+                            The backlog is clear.
+                          </div>
+                        )}
+                      </div>
+                    </motion.section>
+                  ) : null}
+                </AnimatePresence>
+
+                <div className="grid min-w-0 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+                  <aside className="hidden lg:block">
+                    <Card className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-hidden rounded-2xl border-border/70 bg-background/80 p-4 shadow-sm">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-sm font-semibold">Sprints</h3>
+                          <p className="text-xs text-muted-foreground">{board.sprints.length} created</p>
+                        </div>
+                        <Badge variant="secondary" className="rounded-full">{board.sprints.length}</Badge>
+                      </div>
+                      <div className="max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
+                        {renderSprintNavigation()}
+                      </div>
                     </Card>
-                  )}
+                  </aside>
+
+                  <div className="min-w-0 space-y-4">
+                    <AnimatePresence initial={false}>
+                      {isSprintListOpen ? (
+                        <motion.aside
+                          key="mobile-sprint-list"
+                          initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                          transition={{ duration: shouldReduceMotion ? 0 : 0.2, ease: EASE_OUT_QUINT }}
+                          className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm lg:hidden"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-sm font-semibold">Choose a sprint</h3>
+                              <p className="text-xs text-muted-foreground">Only the selected sprint is shown below.</p>
+                            </div>
+                            <Badge variant="secondary" className="rounded-full">{board.sprints.length}</Badge>
+                          </div>
+                          {renderSprintNavigation()}
+                        </motion.aside>
+                      ) : null}
+                    </AnimatePresence>
+
+                    {selectedSprint ? (
+                      <SprintGroup
+                        key={selectedSprint.id}
+                        sprint={selectedSprint}
+                        board={board}
+                        canManage={canManage}
+                        currentUserId={currentUser?.id}
+                        currentUserRole={currentUser?.role}
+                        canEvaluate={canEvaluate}
+                        canReviewEvaluations={canReviewEvaluations}
+                        isSelected
+                        actionInFlight={actionInFlight}
+                        evaluationDrafts={evaluationDrafts}
+                        evaluationErrors={evaluationErrors}
+                        reviewComments={reviewComments}
+                        reduceMotion={Boolean(shouldReduceMotion)}
+                        onSelect={selectSprintAndPage}
+                        onEdit={openEditDialog}
+                        onDeleteRequest={setSprintPendingDelete}
+                        onStart={handleStartSprint}
+                        onComplete={handleCompleteSprint}
+                        onMove={handleMoveTask}
+                        onMetaChange={handleTaskMetaChange}
+                        onEvaluationDraftChange={handleEvaluationDraftChange}
+                        onReviewCommentChange={handleReviewCommentChange}
+                        onSaveEvaluation={handleSaveEvaluation}
+                        onReviewEvaluation={handleReviewEvaluation}
+                      />
+                    ) : (
+                      <DashboardStateCard
+                        icon={Target}
+                        title={isSupportView ? "No sprints found for this team" : "No sprints yet"}
+                        description={isSupportView ? "When students create sprints, they will appear here for supervision." : "Create your first sprint to group backlog tasks into an iteration."}
+                        action={
+                          canManage ? (
+                            <Button className="rounded-lg" onClick={openCreateDialog} disabled={Boolean(actionInFlight)}>
+                              <Plus className="mr-2 h-4 w-4" />
+                              New Sprint
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
               </TabsContent>
 
@@ -2115,11 +2243,12 @@ export default function SprintsPage() {
                     />
                   </>
                 ) : (
-                  <Card className="rounded-lg p-8 text-center">
-                    <Award className="mx-auto h-10 w-10 text-muted-foreground" />
-                    <h3 className="mt-4 text-lg font-semibold">No sprints found for this team</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">Evaluation records appear after the team creates sprints.</p>
-                  </Card>
+                  <DashboardStateCard
+                    icon={Award}
+                    title="No sprints found for this team"
+                    description="Evaluation records appear after the team creates sprints."
+                    tone="amber"
+                  />
                 )}
               </TabsContent>
 

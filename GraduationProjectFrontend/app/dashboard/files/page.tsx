@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { DashboardMetricCard, DashboardStateCard } from "@/components/dashboard/page-shell"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -289,6 +290,7 @@ export default function FilesPage() {
 
   const deliverables = documents.filter((file) => file.category === "deliverable")
   const documentation = documents.filter((file) => file.category === "documentation")
+  const otherDocuments = documents.filter((file) => file.category === "other")
   const totalSize = documents.reduce((acc, file) => acc + (file.fileSize || 0), 0)
 
   return (
@@ -297,11 +299,19 @@ export default function FilesPage() {
       pageDescription="Manage your team's non-code deliverables, reports, and shared resources."
       icon={<FolderOpen className="h-10 w-10 text-primary" />}
     >
-      <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Documents</h1>
-            <p className="text-muted-foreground mt-1">
+      <div className="space-y-5">
+        <div className="flex flex-col gap-5 rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.03] p-5 shadow-sm sm:p-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-sm">
+                <FolderOpen className="h-5 w-5" />
+              </span>
+              <Badge variant="outline" className="rounded-md border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                {isSupervisor ? "Supervised documents" : isLeader ? "Team leader access" : "Team documents"}
+              </Badge>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Documents</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
               Keep reports, deliverables, and supporting files organized in one place.
             </p>
           </div>
@@ -471,46 +481,23 @@ export default function FilesPage() {
         </div>
 
         {isSupervisor && supervisedTeams.length === 0 && !loading && (
-          <Card className="p-6 border-dashed">
-            <p className="text-sm text-muted-foreground text-center">
-              You are not assigned as a supervisor to any team yet.
-            </p>
-          </Card>
+          <DashboardStateCard
+            icon={Users}
+            title="No supervised teams yet"
+            description="Documents from student teams appear here after you are assigned as their doctor or teaching assistant."
+            tone="slate"
+          />
         )}
 
-        <div className="grid gap-4 sm:gap-6 grid-cols-2 md:grid-cols-4">
-          <Card className="p-4 sm:p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <FolderOpen className="h-5 w-5 text-primary" />
-              <span className="font-medium text-sm">Total Documents</span>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{loading ? "..." : documents.length}</p>
-          </Card>
-          <Card className="p-4 sm:p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <FileText className="h-5 w-5 text-blue-500" />
-              <span className="font-medium text-sm">Deliverables</span>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{loading ? "..." : deliverables.length}</p>
-          </Card>
-          <Card className="p-4 sm:p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <File className="h-5 w-5 text-green-500" />
-              <span className="font-medium text-sm">Documentation</span>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{loading ? "..." : documentation.length}</p>
-          </Card>
-          <Card className="p-4 sm:p-6">
-            <div className="flex items-center gap-3 mb-2">
-              <FileArchive className="h-5 w-5 text-amber-500" />
-              <span className="font-medium text-sm">Storage Used</span>
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold">{loading ? "..." : formatFileSize(totalSize)}</p>
-          </Card>
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          <DashboardMetricCard label="Total documents" value={documents.length} icon={FolderOpen} tone="emerald" loading={loading} />
+          <DashboardMetricCard label="Deliverables" value={deliverables.length} icon={FileText} tone="blue" loading={loading} />
+          <DashboardMetricCard label="Documentation" value={documentation.length} icon={File} tone="violet" loading={loading} />
+          <DashboardMetricCard label="Storage used" value={formatFileSize(totalSize)} icon={FileArchive} tone="amber" loading={loading} />
         </div>
 
-        <Card className="p-4 sm:p-6">
-          <div className="flex items-center gap-4 mb-6">
+        <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm sm:p-5">
+          <div className="mb-5 flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -523,15 +510,18 @@ export default function FilesPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="all" className="text-xs sm:text-sm">
+            <TabsList className="grid h-auto w-full grid-cols-4 gap-1 rounded-xl p-1 sm:w-auto">
+              <TabsTrigger value="all" className="rounded-lg text-xs sm:text-sm">
                 All ({loading ? "..." : documents.length})
               </TabsTrigger>
-              <TabsTrigger value="deliverable" className="text-xs sm:text-sm">
+              <TabsTrigger value="deliverable" className="rounded-lg text-xs sm:text-sm">
                 Deliverables ({loading ? "..." : deliverables.length})
               </TabsTrigger>
-              <TabsTrigger value="documentation" className="text-xs sm:text-sm">
+              <TabsTrigger value="documentation" className="rounded-lg text-xs sm:text-sm">
                 Docs ({loading ? "..." : documentation.length})
+              </TabsTrigger>
+              <TabsTrigger value="other" className="rounded-lg text-xs sm:text-sm">
+                Other ({loading ? "..." : otherDocuments.length})
               </TabsTrigger>
             </TabsList>
 
@@ -542,12 +532,12 @@ export default function FilesPage() {
                   <p>Loading documents...</p>
                 </div>
               ) : !effectiveTeamId ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-xl">
-                  <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <p className="text-muted-foreground">
-                    {isSupervisor ? "Select a team to view documents." : "No team found."}
-                  </p>
-                </div>
+                <DashboardStateCard
+                  icon={FolderOpen}
+                  title={isSupervisor ? "Select a team" : "No team found"}
+                  description={isSupervisor ? "Choose one of your supervised teams to view its documents." : "Join or create a team to start using the document library."}
+                  tone="emerald"
+                />
               ) : (
                 <FileTable
                   files={documents}
@@ -603,15 +593,81 @@ function FileTable({
 }) {
   if (files.length === 0) {
     return (
-      <div className="text-center py-12 border-2 border-dashed rounded-xl">
-        <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-        <p className="text-muted-foreground">No documents found.</p>
-      </div>
+      <DashboardStateCard
+        icon={FolderOpen}
+        title="No documents found"
+        description="Try changing the search or category, or upload the first team document when you have permission."
+        tone="emerald"
+      />
     )
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    <div className="grid gap-3 md:hidden">
+      {files.map((file) => {
+        const fileType = getDocumentVisualType(file)
+        const Icon = fileIcons[fileType]
+        const colorClass = fileTypeColors[fileType]
+
+        return (
+          <Card key={file.id} className="rounded-[18px] border-border/60 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-muted">
+                  <Icon className={`h-5 w-5 ${colorClass}`} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{file.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">{file.fileName}</p>
+                  {showTeam ? <p className="mt-1 text-xs text-muted-foreground">{file.teamName}</p> : null}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" asChild>
+                  <a href={file.url} target="_blank" rel="noopener noreferrer" aria-label={`Download ${file.title}`}>
+                    <Download className="h-4 w-4" />
+                  </a>
+                </Button>
+                {isLeader ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => onDelete(file.id)}
+                    aria-label={`Delete ${file.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline" className="capitalize">
+                {file.fileType}
+              </Badge>
+              <span>{formatFileSize(file.fileSize)}</span>
+              <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>
+            </div>
+            {file.tags?.length ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {file.tags.slice(0, 3).map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-[10px]">
+                    {tag}
+                  </Badge>
+                ))}
+                {file.tags.length > 3 ? (
+                  <Badge variant="secondary" className="text-[10px]">
+                    +{file.tags.length - 3}
+                  </Badge>
+                ) : null}
+              </div>
+            ) : null}
+          </Card>
+        )
+      })}
+    </div>
+    <div className="hidden overflow-x-auto md:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -694,5 +750,6 @@ function FileTable({
         </TableBody>
       </Table>
     </div>
+    </>
   )
 }
