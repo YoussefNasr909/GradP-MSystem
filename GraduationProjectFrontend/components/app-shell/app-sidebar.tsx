@@ -45,7 +45,7 @@ import { Button } from "@/components/ui/button"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-type Role = "admin" | "doctor" | "ta" | "leader" | "member"
+type Role = "admin" | "doctor" | "ta" | "support" | "leader" | "member"
 
 type NavigationItem = {
   name: string
@@ -55,7 +55,7 @@ type NavigationItem = {
 }
 
 const navigationItems: NavigationItem[] = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "doctor", "ta", "support", "leader", "member"] },
   { name: "Supervision", href: "/dashboard/supervisor-toolkit", icon: StickyNote, roles: ["doctor", "ta"] },
   { name: "User Management", href: "/dashboard/admin", icon: ShieldCheck, roles: ["admin"] },
   { name: "My Team", href: "/dashboard/my-team", icon: Crown, roles: ["leader", "member"] },
@@ -73,7 +73,7 @@ const navigationItems: NavigationItem[] = [
   { name: "Grades Overview", href: "/dashboard/evaluations", icon: Award, roles: ["admin", "doctor"] },
   { name: "Meetings", href: "/dashboard/meetings", icon: Video, roles: ["doctor", "ta", "leader", "member"] },
   { name: "Discussions", href: "/dashboard/discussions", icon: MessageCircle, roles: ["doctor", "ta", "leader", "member"] },
-  { name: "Chat", href: "/dashboard/chat", icon: MessageSquare, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Chat", href: "/dashboard/chat", icon: MessageSquare, roles: ["admin", "doctor", "ta", "support", "leader", "member"] },
   { name: "Resources", href: "/dashboard/resources", icon: BookOpen, roles: ["doctor", "ta", "leader", "member"] },
   { name: "Documents", href: "/dashboard/files", icon: FolderOpen, roles: ["leader", "member", "doctor", "ta"] },
   { name: "Announcements", href: "/dashboard/announcements", icon: Megaphone, roles: ["admin", "doctor", "ta", "leader", "member"] },
@@ -84,6 +84,7 @@ const navigationItems: NavigationItem[] = [
   { name: "Help Center", href: "/dashboard/help", icon: HelpCircle, roles: ["admin", "doctor", "ta", "leader", "member"] },
   { name: "FAQs", href: "/dashboard/faq", icon: BookOpen, roles: ["admin", "doctor", "ta", "leader", "member"] },
   { name: "Contact Support", href: "/dashboard/support", icon: LifeBuoy, roles: ["admin", "doctor", "ta", "leader", "member"] },
+  { name: "Support Queue", href: "/dashboard/support", icon: LifeBuoy, roles: ["support"] },
 ]
 
 const navigationItemByName = Object.fromEntries(navigationItems.map((item) => [item.name, item])) as Record<
@@ -114,6 +115,9 @@ const roleNavigationGroups: Record<Role, { name: string; items: string[] }[]> = 
       items: ["Meetings", "Calendar", "Announcements", "Resources", "Documents", "GitHub", "Discussions", "Chat"],
     },
     { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
+  ],
+  support: [
+    { name: "Main", items: ["Dashboard", "Support Queue", "Chat"] },
   ],
   leader: [
     { name: "Main", items: ["Dashboard", "My Team", "Tasks & Boards", "Sprints", "Submissions", "Proposals", "Review Tasks"] },

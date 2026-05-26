@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Switch } from "@/components/ui/switch"
 import {
   Megaphone, Plus, Pin, Trash2, Send, Users, Globe,
-  AlertCircle, RefreshCw,
+  AlertCircle, RefreshCw, Loader2, Filter, Search, ShieldCheck, GraduationCap, User,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -24,6 +24,7 @@ import { toast } from "sonner"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { teamsApi } from "@/lib/api/teams"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 
 function getInitials(name: string) {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
@@ -73,6 +74,22 @@ export default function AnnouncementsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Filters
+  const [roleFilter, setRoleFilter] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filteredItems = useMemo(() => {
+    return items.filter((a) => {
+      const matchesRole = roleFilter === "all" || a.authorRole.toLowerCase() === roleFilter.toLowerCase()
+      const matchesSearch = 
+        a.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        a.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        a.author?.fullName.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      return matchesRole && matchesSearch
+    })
+  }, [items, roleFilter, searchQuery])
 
   // Create dialog
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -205,154 +222,290 @@ export default function AnnouncementsPage() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">
-      {/* Hero */}
-      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-pink-500/5 via-transparent to-violet-500/5" />
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 p-4 sm:p-8">
+      {/* Hero Section */}
+      <div className="group relative overflow-hidden rounded-[32px] border border-border/50 bg-background/50 p-8 shadow-sm backdrop-blur-md">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.03] via-transparent to-primary/[0.03]" />
         <motion.div
-          className="absolute -right-20 -top-20 w-72 h-72 bg-pink-500/10 rounded-full blur-3xl pointer-events-none"
-          animate={{ scale: [1, 1.15, 1], rotate: [0, 120, 0] }}
-          transition={{ duration: 20, repeat: Infinity }}
+          className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none"
+          animate={{ scale: [1, 1.1, 1], rotate: [0, 90, 0] }}
+          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-              <Megaphone className="h-7 w-7 text-pink-500" />
-              Announcements
-            </motion.h1>
-            <motion.p className="text-muted-foreground"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <motion.div 
+              className="flex items-center gap-3.5"
+              initial={{ opacity: 0, x: -20 }} 
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-indigo-500/10 text-indigo-500 shadow-inner ring-1 ring-indigo-500/20">
+                <Megaphone className="h-6 w-6" />
+              </div>
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground/90">Announcements</h1>
+            </motion.div>
+            <motion.p 
+              className="max-w-lg text-[13px] font-normal leading-relaxed text-muted-foreground/70"
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              transition={{ delay: 0.1 }}
+            >
               {canPost
-                ? "Broadcast updates to all your supervised teams or target a specific team"
-                : "Updates from your supervisors"}
+                ? "Broadcast important updates to your supervised teams or target specific groups with smart audience filters."
+                : "Stay updated with the latest news and announcements from your project supervisors."}
             </motion.p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
-              <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
+          <div className="flex items-center gap-3">
+            <Button 
+              variant="outline" 
+              className="h-11 rounded-2xl border-border/40 bg-background/50 px-5 text-xs font-semibold uppercase tracking-wider transition-all hover:bg-muted hover:text-foreground"
+              onClick={() => void handleRefresh()} 
+              disabled={refreshing}
+            >
+              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
               Refresh
             </Button>
             {canPost && (
-              <Button size="sm" onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-1.5" /> New Announcement
+              <Button 
+                className="h-11 rounded-2xl bg-primary px-6 text-xs font-semibold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30"
+                onClick={() => setDialogOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> 
+                New Post
               </Button>
             )}
           </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="p-5"><Skeleton className="h-24" /></Card>
-          ))}
-        </div>
-      ) : error ? (
-        <Card className="p-12 text-center border-border/50">
-          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-          <p className="text-muted-foreground mb-4">Failed to load announcements</p>
-          <Button variant="outline" onClick={() => void load()}>Try again</Button>
-        </Card>
-      ) : items.length === 0 ? (
-        <Card className="p-12 text-center border-dashed border-border/60">
-          <Megaphone className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            {canPost
-              ? "No announcements yet — click \"New Announcement\" to post one."
-              : "No announcements from your supervisors yet."}
-          </p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          <AnimatePresence>
-            {items.map((a, i) => {
-              const isMine = a.authorUserId === currentUser?.id
-              const reachedTeamCount = a.targetTeamCount ?? a.targetTeams?.length ?? (a.team ? 1 : 0)
-              return (
-                <motion.div
-                  key={a.id}
-                  layout
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                >
-                  <Card className={cn(
-                    "p-5 border-border/50 transition-all relative overflow-hidden",
-                    a.pinned && "border-pink-500/30 bg-pink-500/[0.04]",
-                  )}>
-                    <div className="flex items-start gap-3">
-                      <Avatar className="h-10 w-10 shrink-0 ring-2 ring-border/40">
-                        <AvatarImage src={a.author?.avatarUrl ?? undefined} />
-                        <AvatarFallback className="text-xs bg-pink-500/10 text-pink-500">
-                          {getInitials(a.author?.fullName ?? "?")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className="font-semibold text-sm">{a.author?.fullName ?? "Unknown"}</span>
-                          <Badge variant="outline" className="text-[10px] capitalize">{a.authorRole.toLowerCase()}</Badge>
-                          {a.team ? (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-blue-500/30 text-blue-500">
-                              <Users className="h-3 w-3" /> {a.team.name}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-purple-500/30 text-purple-500">
-                              <Globe className="h-3 w-3" /> All supervised teams
-                            </Badge>
-                          )}
-                          {canPost && (
-                            <Badge variant="outline" className="text-[10px] gap-1 border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
-                              <Users className="h-3 w-3" /> Reached {reachedTeamCount} team{reachedTeamCount === 1 ? "" : "s"}
-                            </Badge>
-                          )}
-                          {a.pinned && (
-                            <Badge className="gap-1 border-0 bg-pink-500/10 px-2 text-[10px] font-medium text-pink-600 shadow-none hover:bg-pink-500/10 dark:text-pink-300">
-                              <Pin className="h-3 w-3" /> Pinned
-                            </Badge>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(a.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <h3 className="font-semibold text-base mb-1">{a.title}</h3>
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground">
-                          {a.content}
-                        </p>
-                      </div>
+      {/* Main Content Card */}
+      <Card className="overflow-hidden rounded-[32px] border-border/50 bg-background/50 shadow-xl backdrop-blur-md">
+        {/* Filters Header */}
+        <div className="border-b border-border/40 bg-muted/5 p-6">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Filter className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold tracking-tight">Recent Updates</h2>
+                <p className="text-xs font-medium text-muted-foreground/60">Filter announcements by role or search content.</p>
+              </div>
+            </div>
 
-                      {isMine && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn("h-8 w-8 rounded-lg", a.pinned && "text-pink-500 hover:bg-pink-500/10")}
-                            onClick={() => togglePin(a)}
-                            title={a.pinned ? "Unpin" : "Pin"}
-                            aria-label={a.pinned ? "Unpin announcement" : "Pin announcement"}
-                          >
-                            <Pin className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10"
-                            onClick={() => setDeleteTargetId(a.id)}
-                            aria-label="Delete announcement"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
+                <Input 
+                  placeholder="Search updates..." 
+                  className="h-10 w-full rounded-xl border-border/40 bg-background/50 pl-9 transition-all focus:ring-primary/20 sm:w-64"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+
+              {/* Role Filters */}
+              <ToggleGroup 
+                type="single" 
+                value={roleFilter} 
+                onValueChange={(v) => v && setRoleFilter(v)}
+                className="justify-start rounded-xl border border-border/40 bg-background/50 p-1"
+              >
+                <ToggleGroupItem value="all" className="h-8 rounded-lg px-3 text-[10px] font-semibold uppercase tracking-wider">
+                  All
+                </ToggleGroupItem>
+                <ToggleGroupItem value="admin" className="h-8 gap-1.5 rounded-lg px-3 text-[10px] font-semibold uppercase tracking-wider">
+                  <ShieldCheck className="h-3 w-3" /> Admin
+                </ToggleGroupItem>
+                <ToggleGroupItem value="doctor" className="h-8 gap-1.5 rounded-lg px-3 text-[10px] font-semibold uppercase tracking-wider">
+                  <GraduationCap className="h-3 w-3" /> Doctor
+                </ToggleGroupItem>
+                <ToggleGroupItem value="ta" className="h-8 gap-1.5 rounded-lg px-3 text-[10px] font-semibold uppercase tracking-wider">
+                  <User className="h-3 w-3" /> TA
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
         </div>
-      )}
+
+        <div className="p-6">
+          {loading ? (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="overflow-hidden rounded-[28px] border border-border/40 p-6">
+                  <div className="flex items-start gap-4">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="flex-1 space-y-3">
+                      <div className="flex gap-2">
+                        <Skeleton className="h-4 w-24 rounded-full" />
+                        <Skeleton className="h-4 w-16 rounded-full" />
+                      </div>
+                      <Skeleton className="h-6 w-1/3 rounded-lg" />
+                      <Skeleton className="h-16 w-full rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[32px] border border-red-500/10 bg-red-500/5 p-12 text-center">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-600 shadow-sm ring-1 ring-red-500/20">
+                <AlertCircle className="h-8 w-8" />
+              </div>
+              <h4 className="text-xl font-semibold tracking-tight text-red-900 dark:text-red-100">Couldn't load announcements</h4>
+              <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-red-700/60 dark:text-red-300/60 leading-relaxed">
+                There was a technical issue fetching the latest updates. Please try again.
+              </p>
+              <Button variant="outline" className="mt-8 rounded-xl border-red-200/50 bg-background text-red-600 hover:bg-red-50" onClick={() => void load()}>
+                Try again
+              </Button>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="flex min-h-[400px] flex-col items-center justify-center rounded-[32px] border border-dashed border-border/60 bg-muted/5 p-12 text-center">
+              <div className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-[24px] bg-background text-muted-foreground/30 shadow-sm ring-1 ring-border/50">
+                <Megaphone className="h-10 w-10" />
+              </div>
+              <h4 className="text-xl font-semibold tracking-tight text-foreground/80">
+                {searchQuery || roleFilter !== "all" ? "No matches found" : "No announcements found"}
+              </h4>
+              <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
+                {searchQuery || roleFilter !== "all" 
+                  ? "Try adjusting your filters or search query to find what you're looking for."
+                  : canPost
+                    ? "You haven't posted any updates yet. Click \"New Post\" to reach your teams."
+                    : "Your supervisors haven't posted any updates for you yet."}
+              </p>
+              {(searchQuery || roleFilter !== "all") && (
+                <Button 
+                  variant="ghost" 
+                  className="mt-6 text-xs font-semibold uppercase tracking-wider text-primary hover:bg-primary/5"
+                  onClick={() => {
+                    setSearchQuery("")
+                    setRoleFilter("all")
+                  }}
+                >
+                  Clear all filters
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <AnimatePresence mode="popLayout">
+                {filteredItems.map((a, i) => {
+                  const isMine = a.authorUserId === currentUser?.id
+                  const reachedTeamCount = a.targetTeamCount ?? a.targetTeams?.length ?? (a.team ? 1 : 0)
+                  const date = new Date(a.createdAt)
+                  
+                  return (
+                    <motion.div
+                      key={a.id}
+                      layout
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ 
+                        duration: 0.4,
+                        delay: Math.min(i * 0.05, 0.4),
+                        ease: [0.22, 1, 0.36, 1]
+                      }}
+                    >
+                      <Card className={cn(
+                        "group relative overflow-hidden rounded-[28px] border border-border/50 bg-background/50 p-6 transition-all hover:border-primary/20 hover:bg-background hover:shadow-xl hover:shadow-primary/5",
+                        a.pinned && "border-indigo-500/20 bg-indigo-500/[0.02] ring-1 ring-indigo-500/10",
+                      )}>
+                        {a.pinned && (
+                          <div className="absolute right-0 top-0 h-20 w-20">
+                            <div className="absolute right-[-24px] top-[12px] rotate-45 bg-indigo-600 px-8 py-1 shadow-lg">
+                              <Pin className="h-3 w-3 text-white" />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-start gap-5">
+                          <Avatar className="h-12 w-12 shrink-0 border border-border/40 shadow-sm transition-transform duration-300 group-hover:scale-105">
+                            <AvatarImage src={a.author?.avatarUrl ?? undefined} />
+                            <AvatarFallback className="bg-indigo-500/10 font-semibold text-indigo-600 text-sm">
+                              {getInitials(a.author?.fullName ?? "?")}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          <div className="flex-1 min-w-0 space-y-4">
+                            <div className="flex flex-col gap-3">
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="text-sm font-semibold tracking-tight text-foreground/90">{a.author?.fullName}</span>
+                                <Badge variant="outline" className="rounded-full border-none bg-muted/60 px-2 py-0 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/80 shadow-none">
+                                  {a.authorRole.toLowerCase()}
+                                </Badge>
+                                
+                                <div className="h-1 w-1 rounded-full bg-border/60" />
+                                
+                                {a.team ? (
+                                  <Badge className="rounded-full border-none bg-blue-500/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-blue-600 shadow-none">
+                                    <Users className="mr-1 h-3 w-3" /> {a.team.name}
+                                  </Badge>
+                                ) : (
+                                  <Badge className="rounded-full border-none bg-purple-500/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-purple-600 shadow-none">
+                                    <Globe className="mr-1 h-3 w-3" /> All teams
+                                  </Badge>
+                                )}
+
+                                {canPost && reachedTeamCount > 0 && (
+                                  <Badge className="rounded-full border-none bg-emerald-500/10 px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-600 shadow-none">
+                                    <Send className="mr-1 h-3 w-3" /> Reached {reachedTeamCount}
+                                  </Badge>
+                                )}
+
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+                                  {date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} at {date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              
+                              <h3 className="text-xl font-semibold tracking-tight text-foreground/90 group-hover:text-primary transition-colors leading-tight">
+                                {a.title}
+                              </h3>
+                            </div>
+
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <p className="whitespace-pre-wrap text-[15px] font-normal leading-relaxed text-muted-foreground/80">
+                                {a.content}
+                              </p>
+                            </div>
+                          </div>
+
+                          {isMine && (
+                            <div className="flex flex-col items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className={cn(
+                                  "h-9 w-9 rounded-xl border-border/40 bg-background/50 transition-all",
+                                  a.pinned ? "text-indigo-600 bg-indigo-500/10 border-indigo-500/20 hover:bg-indigo-500/20" : "hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                                )}
+                                onClick={() => togglePin(a)}
+                                title={a.pinned ? "Unpin" : "Pin"}
+                              >
+                                <Pin className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 rounded-xl border-red-200/40 bg-red-500/5 text-red-600 transition-all hover:bg-red-500 hover:text-white hover:border-red-500"
+                                onClick={() => setDeleteTargetId(a.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Delete confirmation */}
       <ConfirmDialog
@@ -367,7 +520,6 @@ export default function AnnouncementsPage() {
         onConfirm={async () => { if (deleteTargetId) await performDelete(deleteTargetId) }}
       />
 
-      {/* Create dialog */}
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
@@ -378,151 +530,172 @@ export default function AnnouncementsPage() {
           }
         }}
       >
-        <DialogContent className="max-h-[calc(100vh-2rem)] max-w-md overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Megaphone className="h-5 w-5 text-pink-500" />
-              New Announcement
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Submission deadline moved to Friday"
-                className={cn(
-                  "mt-1.5",
-                  isTitleInvalid && "border-destructive focus-visible:ring-destructive/30",
-                )}
-                aria-invalid={isTitleInvalid}
-                aria-describedby="announcement-title-error"
-                maxLength={200}
-              />
-              <p
-                id="announcement-title-error"
-                className="mt-1 min-h-4 text-xs leading-4 text-destructive"
-                aria-live="polite"
-              >
-                {isTitleInvalid ? "Title is required and must be at least 3 characters." : null}
-              </p>
-            </div>
-            <div>
-              <Label>Message</Label>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Write your announcement..."
-                className={cn(
-                  "mt-1.5 resize-none",
-                  isContentInvalid && "border-destructive focus-visible:ring-destructive/30",
-                )}
-                aria-invalid={isContentInvalid}
-                aria-describedby="announcement-message-error announcement-message-count"
-                rows={5}
-                maxLength={5000}
-              />
-              <div className="mt-1 flex min-h-4 items-start justify-between gap-3">
-                <p
-                  id="announcement-message-error"
-                  className="text-xs leading-4 text-destructive"
-                  aria-live="polite"
-                >
-                  {isContentInvalid ? "Message is required and must be at least 5 characters." : null}
-                </p>
-                <p id="announcement-message-count" className="shrink-0 text-[10px] leading-4 text-muted-foreground">
-                  {content.length}/5000
-                </p>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-[32px] border-border/50 bg-background/95 p-0 shadow-2xl backdrop-blur-xl">
+          <div className="sticky top-0 z-10 border-b border-border/40 bg-background/80 p-6 backdrop-blur-md">
+            <DialogHeader>
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">
+                  <Megaphone className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-semibold tracking-tight">New Post</DialogTitle>
+                  <p className="text-xs font-normal text-muted-foreground/60">Broadcast updates to your teams.</p>
+                </div>
               </div>
-            </div>
-            <div>
-              <Label>Send to</Label>
-              <Select value={targetTeam} onValueChange={setTargetTeam}>
-                <SelectTrigger className="mt-1.5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">
-                    <span className="flex items-center gap-2">
-                      <Globe className="h-3.5 w-3.5" /> {role === "admin" ? "All teams (filtered)" : "All supervised teams (filtered)"}
-                    </span>
-                  </SelectItem>
-                  {supervisedTeams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            </DialogHeader>
+          </div>
 
-            {targetTeam === "ALL" && (
-              <div className="space-y-2 border-l-2 border-primary/30 pl-3">
-                <Label className="text-xs">Audience filter</Label>
-                <Select value={audience} onValueChange={(v) => setAudience(v as AnnouncementAudience)}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{role === "admin" ? "Every team in the program" : "All my supervised teams"}</SelectItem>
-                    <SelectItem value="byStage">Teams in a specific SDLC stage</SelectItem>
-                    <SelectItem value="overdue">Teams with overdue deadlines</SelectItem>
-                    <SelectItem value="needsProposalApproval">Teams whose proposal isn&apos;t approved yet</SelectItem>
-                  </SelectContent>
-                </Select>
+          <div className="space-y-6 p-8">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Post Title</Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Project Phase 2 Deadline Updated"
+                  className={cn(
+                    "h-12 rounded-2xl border-border/40 bg-background/80 transition-all focus:ring-indigo-500/20",
+                    isTitleInvalid && "border-red-500/50 focus:ring-red-500/20",
+                  )}
+                  maxLength={200}
+                />
+                {isTitleInvalid && (
+                  <p className="px-1 text-[10px] font-semibold text-red-500 uppercase tracking-wider">
+                    Title must be at least 3 characters
+                  </p>
+                )}
+              </div>
 
-                {audience === "byStage" && (
-                  <Select value={audienceParam} onValueChange={setAudienceParam}>
-                    <SelectTrigger className="h-9">
+              <div className="space-y-2">
+                <Label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Message Content</Label>
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Write your detailed announcement here..."
+                  className={cn(
+                    "min-h-[160px] rounded-2xl border-border/40 bg-background/80 p-4 transition-all focus:ring-indigo-500/20 resize-none",
+                    isContentInvalid && "border-red-500/50 focus:ring-red-500/20",
+                  )}
+                  maxLength={5000}
+                />
+                <div className="flex items-center justify-between px-1">
+                  {isContentInvalid ? (
+                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">
+                      Content must be at least 5 characters
+                    </p>
+                  ) : <div />}
+                  <p className="text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-wider">
+                    {content.length}/5000
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">Target Group</Label>
+                  <Select value={targetTeam} onValueChange={setTargetTeam}>
+                    <SelectTrigger className="h-11 rounded-2xl border-border/40 bg-background/80">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      {["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"].map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                    <SelectContent className="rounded-2xl">
+                      <SelectItem value="ALL" className="rounded-xl">
+                        <span className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5" /> All teams
+                        </span>
+                      </SelectItem>
+                      {supervisedTeams.map((t) => (
+                        <SelectItem key={t.id} value={t.id} className="rounded-xl">{t.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                </div>
 
-                {/* Live preview */}
-                <div className="rounded-lg bg-muted/40 border border-border/40 p-2 text-xs">
-                  {previewLoading ? (
-                    <span className="text-muted-foreground">Calculating audience…</span>
-                  ) : audiencePreview.length === 0 ? (
-                    <span className="text-amber-600">⚠ This filter currently matches no teams.</span>
-                  ) : (
-                    <>
-                      <p className="font-medium mb-1">
-                        Will reach <b>{audiencePreview.length} team{audiencePreview.length === 1 ? "" : "s"}</b>:
-                      </p>
-                      <p className="text-muted-foreground line-clamp-2">
-                        {audiencePreview.map((t) => t.name).join(", ")}
-                      </p>
-                    </>
-                  )}
+                <div className="flex items-center justify-between rounded-2xl border border-border/40 bg-muted/5 px-4 py-2 mt-auto h-11">
+                  <Label className="text-xs font-semibold text-foreground/70">Pin to top</Label>
+                  <Switch checked={pinned} onCheckedChange={setPinned} className="data-[state=checked]:bg-primary" />
                 </div>
               </div>
-            )}
-            <div className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-              <div>
-                <Label className="cursor-pointer flex items-center gap-2"><Pin className="h-3.5 w-3.5" /> Pin to top</Label>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Pinned announcements stay at the top of the list.
-                </p>
-              </div>
-              <Switch checked={pinned} onCheckedChange={setPinned} />
+
+              {targetTeam === "ALL" && (
+                <div className="rounded-[24px] border border-primary/10 bg-primary/5 p-5 space-y-4">
+                  <div className="space-y-2">
+                    <Label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-primary/60">Smart Audience Filter</Label>
+                    <Select value={audience} onValueChange={(v) => setAudience(v as AnnouncementAudience)}>
+                      <SelectTrigger className="h-10 rounded-xl border-primary/20 bg-background/80">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        <SelectItem value="all" className="rounded-lg">{role === "admin" ? "Global Broadcast" : "All Supervised Teams"}</SelectItem>
+                        <SelectItem value="byStage" className="rounded-lg">Target by SDLC Stage</SelectItem>
+                        <SelectItem value="overdue" className="rounded-lg">Teams with Overdue Tasks</SelectItem>
+                        <SelectItem value="needsProposalApproval" className="rounded-lg">Pending Proposal Approval</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {audience === "byStage" && (
+                    <div className="space-y-2">
+                      <Label className="px-1 text-[10px] font-semibold uppercase tracking-wider text-primary/60">Select Stage</Label>
+                      <Select value={audienceParam} onValueChange={setAudienceParam}>
+                        <SelectTrigger className="h-10 rounded-xl border-primary/20 bg-background/80">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          {["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"].map((s) => (
+                            <SelectItem key={s} value={s} className="rounded-lg">{s}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl bg-background/60 border border-primary/10 p-3">
+                    {previewLoading ? (
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Calculating audience...
+                      </div>
+                    ) : audiencePreview.length === 0 ? (
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-amber-600">
+                        <AlertCircle className="h-3 w-3" />
+                        No teams match this filter
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-primary/70">
+                          Will reach {audiencePreview.length} team{audiencePreview.length === 1 ? "" : "s"}:
+                        </p>
+                        <p className="text-[11px] font-normal text-muted-foreground/60 line-clamp-1 italic">
+                          {audiencePreview.map((t) => t.name).join(", ")}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
+
             {submitError && (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-600">
                 {submitError}
               </p>
             )}
-            <div className="flex gap-2 pt-2">
-              <Button type="button" onClick={() => void handleCreate()} disabled={saving} className="flex-1">
-                <Send className="h-4 w-4 mr-2" />
-                {saving ? "Posting…" : "Post Announcement"}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
+
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                className="h-12 flex-1 rounded-2xl border-border/40 font-semibold text-xs uppercase tracking-widest"
+                onClick={() => setDialogOpen(false)}
+              >
                 Cancel
+              </Button>
+              <Button 
+                className="h-12 flex-[2] rounded-2xl bg-primary font-semibold text-xs uppercase tracking-widest text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98]"
+                onClick={() => void handleCreate()}
+                disabled={saving}
+              >
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Post Announcement
               </Button>
             </div>
           </div>

@@ -61,6 +61,7 @@ import {
   CheckCircle2,
   Crown,
   GraduationCap,
+  LifeBuoy,
   Loader2,
   Lock,
   MailCheck,
@@ -131,6 +132,8 @@ function avatarFallback(
 function roleBadgeClass(role: Role) {
   return role === "ADMIN"
     ? "border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400"
+    : role === "SUPPORT"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
     : role === "LEADER"
       ? "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400"
       : role === "DOCTOR"
@@ -176,7 +179,7 @@ function validateForm(form: AdminUserFormState, requirePassword: boolean) {
     !form.email.trim() ||
     !form.academicId.trim()
   ) {
-    return "First name, last name, email, and academic ID are required.";
+    return `First name, last name, email, and ${form.role === "SUPPORT" ? "staff ID" : "academic ID"} are required.`;
   }
   if (requirePassword && form.password.trim().length < 6) {
     return "Password must be at least 6 characters.";
@@ -314,6 +317,14 @@ export default function AdminPage() {
       icon: Crown,
       tone: "text-amber-600 dark:text-amber-400",
       surface: "bg-amber-500/10",
+    },
+    {
+      title: "Support",
+      value: summary?.byRole.support ?? 0,
+      subtitle: "Ticket queue operators",
+      icon: LifeBuoy,
+      tone: "text-emerald-600 dark:text-emerald-400",
+      surface: "bg-emerald-500/10",
     },
     {
       title: "Active Users",
@@ -491,7 +502,7 @@ export default function AdminPage() {
                   Admin User Management
                 </h1>
                 <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                  Manage students, team leaders, doctors, TAs, and admins with
+                  Manage students, team leaders, doctors, TAs, support, and admins with
                   real backend data in a layout that stays clear on both mobile
                   and desktop.
                 </p>
@@ -1047,6 +1058,7 @@ function UserRoleBadge({ role }: { role: Role }) {
 
 function RoleGlyph({ role }: { role: Role }) {
   if (role === "ADMIN") return <Shield className="h-3.5 w-3.5" />;
+  if (role === "SUPPORT") return <LifeBuoy className="h-3.5 w-3.5" />;
   if (role === "LEADER") return <Crown className="h-3.5 w-3.5" />;
   if (role === "DOCTOR") return <GraduationCap className="h-3.5 w-3.5" />;
   if (role === "TA") return <UserRound className="h-3.5 w-3.5" />;

@@ -125,7 +125,7 @@ router.get("/teams/:teamId/activity", async (req, res, next) => {
       if (!allowed) return res.status(403).json({ ok: false, code: "FORBIDDEN", message: "You can't view this team's activity" });
     }
 
-    const events = await getTeamActivity(teamId, { limit: 80 });
+    const events = await getTeamActivity(teamId, { limit: 150 });
     res.json({ ok: true, data: events });
   } catch (err) {
     next(err);

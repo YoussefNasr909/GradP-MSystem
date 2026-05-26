@@ -103,6 +103,10 @@ export const teamsApi = {
     apiRequest<ApiTeamJoinRequest>(`/teams/join-requests/${joinRequestId}/reject`, {
       method: "POST",
     }),
+  cancelJoinRequest: (joinRequestId: string) =>
+    apiRequest<ApiTeamJoinRequest>(`/teams/join-requests/${joinRequestId}/cancel`, {
+      method: "POST",
+    }),
   invite: (teamId: string, payload: CreateInvitationPayload) =>
     apiRequest<ApiTeamInvitation>(`/teams/${teamId}/invitations`, {
       method: "POST",

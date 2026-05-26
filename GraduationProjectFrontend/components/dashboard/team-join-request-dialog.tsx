@@ -80,12 +80,12 @@ function JoinRequestPanel({
 
   return (
     <div className="flex max-h-[92vh] flex-col bg-background">
-      <div className="relative shrink-0 overflow-hidden border-b border-border/60 bg-gradient-to-b from-primary/[0.08] via-background to-background px-4 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-6">
+      <div className="relative shrink-0 overflow-hidden border-b border-border/60 bg-background px-4 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-6">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="absolute right-3 top-3 rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground sm:right-4 sm:top-4"
+          className="absolute right-3 top-3 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground sm:right-4 sm:top-4"
           onClick={() => onOpenChange(false)}
           aria-label="Close join request"
         >
@@ -93,7 +93,7 @@ function JoinRequestPanel({
         </Button>
 
         <div className="flex items-start gap-4 pr-10">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-primary/12 text-primary shadow-sm ring-1 ring-primary/10">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/10">
             <Send className="h-6 w-6" />
           </div>
           <div className="min-w-0 space-y-2">
@@ -105,7 +105,7 @@ function JoinRequestPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-4 sm:px-6 sm:pb-5 sm:pt-5">
         <div className="space-y-4">
-          <section className="rounded-[26px] border border-border/60 bg-background/95 p-4 shadow-sm sm:p-5">
+          <section className="rounded-xl border border-border/60 bg-background p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
@@ -122,7 +122,7 @@ function JoinRequestPanel({
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-lg font-semibold tracking-tight sm:text-xl">{team.name}</h3>
+                <h3 className="text-lg font-semibold sm:text-xl">{team.name}</h3>
                 <p className="text-sm leading-6 text-muted-foreground sm:text-[15px]">{team.bio}</p>
               </div>
 
@@ -152,14 +152,14 @@ function JoinRequestPanel({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 sm:w-[180px]">
-                  <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Members</p>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase text-muted-foreground">Members</p>
                     <p className="mt-2 text-sm font-semibold">
                       {team.memberCount}/{team.maxMembers}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/60 bg-muted/20 px-3 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Open</p>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-3">
+                    <p className="text-[11px] font-semibold uppercase text-muted-foreground">Open</p>
                     <p className="mt-2 text-sm font-semibold">{team.isFull ? "0" : String(team.slotsRemaining)}</p>
                   </div>
                 </div>
@@ -180,14 +180,14 @@ function JoinRequestPanel({
               value={message}
               onChange={(event) => onMessageChange(event.target.value)}
               placeholder={placeholder}
-              className="min-h-[150px] rounded-[22px] border-border/70 bg-background px-4 py-3 shadow-sm focus-visible:ring-4"
+              className="min-h-[150px] rounded-lg border-border/70 bg-background px-4 py-3 shadow-sm focus-visible:ring-4"
             />
             <p className="text-sm leading-6 text-muted-foreground">{messageHint}</p>
           </section>
 
-          <section className="rounded-[24px] border border-primary/15 bg-primary/[0.05] p-4 sm:p-5">
+          <section className="rounded-xl border border-primary/15 bg-primary/[0.05] p-4 sm:p-5">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
               <div className="space-y-3">
@@ -210,14 +210,14 @@ function JoinRequestPanel({
           <Button
             type="button"
             variant="outline"
-            className="h-12 rounded-2xl sm:min-w-[120px]"
+            className="h-11 rounded-lg sm:min-w-[120px]"
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <Button
             type="button"
-            className="h-12 rounded-2xl px-5 sm:min-w-[170px]"
+            className="h-11 rounded-lg px-5 sm:min-w-[170px]"
             disabled={isSubmitting}
             onClick={onSubmit}
           >
@@ -251,9 +251,9 @@ export function TeamJoinRequestDialog({
   if (!team) return null
 
   const titleNode = isMobile ? (
-    <DrawerTitle className="text-left text-2xl font-semibold tracking-tight">{title}</DrawerTitle>
+    <DrawerTitle className="text-left text-2xl font-semibold">{title}</DrawerTitle>
   ) : (
-    <DialogTitle className="text-2xl tracking-tight">{title}</DialogTitle>
+    <DialogTitle className="text-2xl">{title}</DialogTitle>
   )
 
   const descriptionNode = isMobile ? (
@@ -283,7 +283,7 @@ export function TeamJoinRequestDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[92vh] rounded-t-[28px] border-border/70 bg-background p-0">
+        <DrawerContent className="max-h-[92vh] rounded-t-xl border-border/70 bg-background p-0">
           {panel}
         </DrawerContent>
       </Drawer>
@@ -294,7 +294,7 @@ export function TeamJoinRequestDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="w-[96vw] max-w-[42rem] overflow-hidden rounded-[32px] border border-border/70 p-0 shadow-2xl"
+        className="w-[96vw] max-w-[42rem] overflow-hidden rounded-xl border border-border/70 p-0 shadow-2xl"
       >
         {panel}
       </DialogContent>

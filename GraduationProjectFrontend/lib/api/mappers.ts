@@ -20,6 +20,8 @@ function mapApiRoleToUiRole(role: Role): User["role"] {
       return "doctor"
     case "TA":
       return "ta"
+    case "SUPPORT":
+      return "support"
     case "STUDENT":
     default:
       return "member"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   ArrowRight,
   Hash,
@@ -90,16 +90,20 @@ export function AppTopbar() {
     .charAt(0)
     .toUpperCase()
   const currentAvatarUrl = currentUser?.avatar || currentUser?.avatarUrl
-  const currentRoleLabel =
-    currentUser?.role === "admin"
-      ? "Admin"
-      : currentUser?.role === "doctor"
-        ? "Doctor"
-        : currentUser?.role === "ta"
-          ? "TA"
-          : currentUser?.role === "leader"
-            ? "Team Leader"
-            : "Student"
+  const getRoleBadge = (role: string) => {
+    const badges = {
+      admin: { label: "Admin", variant: "default" as const },
+      doctor: { label: "Supervisor", variant: "secondary" as const },
+      ta: { label: "TA", variant: "secondary" as const },
+      support: { label: "Support", variant: "secondary" as const },
+      leader: { label: "Leader", variant: "outline" as const },
+      member: { label: "Member", variant: "outline" as const },
+    }
+
+    return badges[role as keyof typeof badges] || badges.member
+  }
+
+  const badge = getRoleBadge(currentUser?.role || "member")
 
   const queryFromUrl = searchParams.get("q") ?? ""
   const typeFromUrl = searchParams.get("type")
@@ -425,7 +429,7 @@ export function AppTopbar() {
                   onFocus={handleDesktopSearchFocus}
                   onBlur={handleDesktopSearchBlur}
                   onKeyDown={handleSearchKeyDown}
-                  className="h-10 rounded-xl border-border/50 pl-9 text-sm glass focus-visible:ring-primary/50"
+                  className="h-10 rounded-xl border-border/60 pl-9 text-sm glass transition-all focus-visible:border-primary/40 focus-visible:ring-primary/10"
                 />
               </motion.div>
             </PopoverAnchor>
@@ -549,7 +553,7 @@ export function AppTopbar() {
                 </Avatar>
                 <div className="hidden text-left sm:block">
                   <div className="max-w-[80px] truncate text-sm font-medium lg:max-w-[100px]">{displayName}</div>
-                  <div className="text-xs text-muted-foreground">{currentRoleLabel}</div>
+                  <div className="text-xs text-muted-foreground">{badge.label}</div>
                 </div>
               </motion.button>
             </DropdownMenuTrigger>
@@ -619,130 +623,225 @@ function SearchSuggestionsPanel({
   const hasResults = users.length > 0 || teams.length > 0
   const totalResults = userTotal + teamTotal
 
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case "doctor":
+      case "ta":
+        return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+      case "admin":
+        return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+      default:
+        return "bg-primary/10 text-primary border-primary/20"
+    }
+  }
+
   return (
     <div
       className={cn(
-        "flex max-h-[min(32rem,calc(100vh-5.5rem))] flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/98",
-        !isMobile && "shadow-lg",
+        "flex max-h-[min(32rem,calc(100vh-5.5rem))] flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/98 backdrop-blur-md",
+        !isMobile && "shadow-2xl shadow-primary/5",
       )}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Search Results</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {hasResults ? `${totalResults} quick matches` : "Search by person name, academic ID, or team name."}
+      <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-muted/20 px-4 py-3">
+        <div className="space-y-0.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/80">Search Results</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            {hasResults ? (
+              <>
+                <span className="text-foreground">{totalResults}</span> quick matches
+              </>
+            ) : (
+              "Find people, IDs, or team workspaces."
+            )}
           </p>
         </div>
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
-          className="h-8 rounded-full px-3"
+          className="h-8 rounded-lg bg-background/50 px-3 text-[11px] font-bold shadow-sm transition-all hover:bg-background"
           onMouseDown={(event) => event.preventDefault()}
           onClick={onOpenAll}
         >
-          View all
+          View all results
         </Button>
       </div>
 
       {isLoading ? (
-        <div className="flex items-center gap-3 px-4 py-5 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          Searching live results...
+        <div className="flex items-center justify-center gap-3 px-4 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          <span className="font-medium animate-pulse">Searching the directory...</span>
         </div>
       ) : error ? (
-        <div className="px-4 py-5 text-sm text-destructive">{error}</div>
+        <div className="flex items-center gap-2 px-4 py-8 text-sm text-destructive">
+          <X className="h-4 w-4" />
+          <p className="font-medium">{error}</p>
+        </div>
       ) : !hasResults ? (
-        <div className="space-y-2 px-4 py-5">
-          <p className="text-sm font-medium">No quick matches for “{query}”</p>
-          <p className="text-sm text-muted-foreground">Try a shorter name, an academic ID, or open the full search page.</p>
+        <div className="space-y-3 px-4 py-10 text-center">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-muted/50 text-muted-foreground">
+            <Search className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm font-bold">No quick matches for “{query}”</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">Try a shorter name, an academic ID, or open the full search page.</p>
+          </div>
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3">
-            <div className="space-y-4 pb-3">
-              {users.length > 0 && (
-                <div className="space-y-1">
-                  <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Users</p>
-                  {users.map((user, index) => (
-                    <button
-                      key={user.id}
-                      type="button"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onMouseEnter={() => onHighlight(index)}
-                      onClick={() => onSelect(`/dashboard/users/${user.id}`)}
-                      className={cn(
-                        "flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
-                        highlightedIndex === index ? "bg-primary/[0.07]" : "hover:bg-muted/60",
-                      )}
-                    >
-                      <Avatar className="h-10 w-10 border border-border/50">
-                        <AvatarImage src={user.avatarUrl || "/placeholder.svg"} />
-                        <AvatarFallback>{getAvatarInitial(user)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-medium text-foreground">{getFullName(user)}</p>
-                          <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
-                            {formatRoleLabel(user.role)}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                          <Hash className="h-3.5 w-3.5" />
-                          {user.academicId || user.email}
-                        </p>
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {user.currentTeam
-                            ? `Team ${user.currentTeam.name}`
-                            : user.bio?.trim() || user.email}
-                        </p>
-                      </div>
-                      <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {teams.length > 0 && (
-                <div className="space-y-1">
-                  <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Teams</p>
-                  {teams.map((team, index) => {
-                    const suggestionIndex = users.length + index
-
-                    return (
-                      <button
-                        key={team.id}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 custom-scrollbar">
+            <div className="space-y-6 pb-2">
+              <AnimatePresence mode="popLayout">
+                {users.length > 0 && (
+                  <motion.div 
+                    key="search-users-section"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-center gap-2 px-2 pb-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Users</p>
+                      <div className="h-px flex-1 bg-border/40" />
+                    </div>
+                    {users.map((user, index) => (
+                      <motion.button
+                        key={user.id}
+                        initial={{ opacity: 0, x: -5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.04 }}
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
-                        onMouseEnter={() => onHighlight(suggestionIndex)}
-                        onClick={() => onSelect(`/dashboard/teams/${team.id}`)}
+                        onMouseEnter={() => onHighlight(index)}
+                        onClick={() => onSelect(`/dashboard/users/${user.id}`)}
                         className={cn(
-                          "flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors",
-                          highlightedIndex === suggestionIndex ? "bg-primary/[0.07]" : "hover:bg-muted/60",
+                          "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200",
+                          highlightedIndex === index 
+                            ? "bg-primary/[0.08] shadow-sm shadow-primary/5" 
+                            : "hover:bg-muted/40",
                         )}
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                          <Users className="h-4 w-4" />
+                        <div className="relative shrink-0">
+                          <Avatar className="h-10 w-10 border-2 border-background shadow-sm ring-1 ring-border/50">
+                            <AvatarImage src={user.avatarUrl || "/placeholder.svg"} />
+                            <AvatarFallback className="bg-primary/5 font-bold text-primary">{getAvatarInitial(user)}</AvatarFallback>
+                          </Avatar>
+                          {highlightedIndex === index && (
+                            <motion.div 
+                              layoutId="search-user-active"
+                              className="absolute -inset-1 rounded-full border border-primary/20"
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                            />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-medium text-foreground">{team.name}</p>
-                          <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px]">
-                            Team
-                          </Badge>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-sm font-bold text-foreground group-hover:text-primary transition-colors">{getFullName(user)}</p>
+                            <Badge variant="outline" className={cn("rounded-md px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider", getRoleColor(user.role))}>
+                              {formatRoleLabel(user.role)}
+                            </Badge>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                            <span className="flex items-center gap-1 opacity-80">
+                              <Hash className="h-3 w-3" />
+                              {user.academicId || "No ID"}
+                            </span>
+                            <span className="h-1 w-1 rounded-full bg-border" />
+                            <span className="truncate">{user.currentTeam ? user.currentTeam.name : "Unassigned"}</span>
+                          </div>
                         </div>
-                        <p className="mt-1 text-xs text-muted-foreground">Leader {getFullName(team.leader)}</p>
-                        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                          {team.memberCount}/{team.maxMembers} members · {team.bio}
-                        </p>
+                        <div className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+                          highlightedIndex === index ? "bg-primary text-primary-foreground translate-x-0 opacity-100" : "opacity-0 -translate-x-2"
+                        )}>
+                          <ArrowRight className="h-3.5 w-3.5" />
                         </div>
-                        <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+                      </motion.button>
+                    ))}
+                  </motion.div>
+                )}
+
+                {teams.length > 0 && (
+                  <motion.div 
+                    key="search-teams-section"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: users.length * 0.04 }}
+                    className="space-y-1.5"
+                  >
+                    <div className="flex items-center gap-2 px-2 pb-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/60">Teams</p>
+                      <div className="h-px flex-1 bg-border/40" />
+                    </div>
+                    {teams.map((team, index) => {
+                      const suggestionIndex = users.length + index
+
+                      return (
+                        <motion.button
+                          key={team.id}
+                          initial={{ opacity: 0, x: -5 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: suggestionIndex * 0.04 }}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() => onHighlight(suggestionIndex)}
+                          onClick={() => onSelect(`/dashboard/teams/${team.id}`)}
+                          className={cn(
+                            "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-200",
+                            highlightedIndex === suggestionIndex 
+                              ? "bg-primary/[0.08] shadow-sm shadow-primary/5" 
+                              : "hover:bg-muted/40",
+                          )}
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm transition-transform group-hover:scale-105">
+                            <Users className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="truncate text-sm font-bold text-foreground group-hover:text-primary transition-colors">{team.name}</p>
+                              <Badge variant="outline" className="rounded-md border-border/50 bg-muted/30 px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Team
+                              </Badge>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                              <span className="truncate opacity-90">Lead: {getFullName(team.leader)}</span>
+                              <span className="h-1 w-1 rounded-full bg-border" />
+                              <span>{team.memberCount}/{team.maxMembers} members</span>
+                            </div>
+                          </div>
+                          <div className={cn(
+                            "flex h-7 w-7 items-center justify-center rounded-lg transition-all",
+                            highlightedIndex === suggestionIndex ? "bg-primary text-primary-foreground translate-x-0 opacity-100" : "opacity-0 -translate-x-2"
+                          )}>
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </div>
+                        </motion.button>
+                      )
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
+
+          {!isMobile && (
+            <div className="flex items-center gap-4 border-t border-border/60 bg-muted/10 px-4 py-2 text-[10px] font-medium text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <kbd className="flex h-4 w-4 items-center justify-center rounded border border-border/60 bg-background font-sans text-[9px]">↵</kbd>
+                <span>to select</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="flex gap-0.5">
+                  <kbd className="flex h-4 w-4 items-center justify-center rounded border border-border/60 bg-background font-sans text-[9px]">↑</kbd>
+                  <kbd className="flex h-4 w-4 items-center justify-center rounded border border-border/60 bg-background font-sans text-[9px]">↓</kbd>
+                </div>
+                <span>to navigate</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <kbd className="flex h-4 w-7 items-center justify-center rounded border border-border/60 bg-background font-sans text-[9px]">ESC</kbd>
+                <span>to close</span>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

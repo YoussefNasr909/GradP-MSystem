@@ -603,9 +603,15 @@ export async function approveMeetingService(actor, meetingId) {
     });
     const approvals = await tx.meetingApproval.findMany({ where: { meetingId } });
     const fullyApproved = approvals.every((item) => item.status === "APPROVED");
-    return tx.meeting.update({
+    if (fullyApproved) {
+      return tx.meeting.update({
+        where: { id: meetingId },
+        data: { status: "CONFIRMED", confirmedAt: new Date(), cancelledAt: null },
+        include: meetingInclude,
+      });
+    }
+    return tx.meeting.findUnique({
       where: { id: meetingId },
-      data: fullyApproved ? { status: "CONFIRMED", confirmedAt: new Date(), cancelledAt: null } : undefined,
       include: meetingInclude,
     });
   });

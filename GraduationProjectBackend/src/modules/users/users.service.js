@@ -368,6 +368,7 @@ export async function getUsersSummaryService() {
     leaders,
     doctors,
     tas,
+    support,
     admins,
     active,
     inactive,
@@ -379,6 +380,7 @@ export async function getUsersSummaryService() {
     countUsers({ role: ROLES.LEADER }),
     countUsers({ role: ROLES.DOCTOR }),
     countUsers({ role: ROLES.TA }),
+    countUsers({ role: ROLES.SUPPORT }),
     countUsers({ role: ROLES.ADMIN }),
     countUsers({ accountStatus: ACCOUNT_STATUSES.ACTIVE }),
     countUsers({ accountStatus: ACCOUNT_STATUSES.INACTIVE }),
@@ -393,6 +395,7 @@ export async function getUsersSummaryService() {
       leaders,
       doctors,
       tas,
+      support,
       admins,
     },
     byStatus: {

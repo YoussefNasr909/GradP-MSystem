@@ -44,6 +44,7 @@ function getNotificationPreferenceKey(notification: ApiNotification): Notificati
   if (type.startsWith("TASK")) return "taskReminders"
   if (type.startsWith("SUBMISSION")) return "submissionAlerts"
   if (type.startsWith("TEAM") || type.startsWith("SUPERVISOR")) return "teamUpdates"
+  if (type.startsWith("SUPPORT")) return "mentionNotifications"
   if (type.startsWith("MESSAGE") || type.includes("MENTION")) return "mentionNotifications"
   if (text.includes("deadline")) return "deadlineWarnings"
   if (text.includes("grade")) return "gradeNotifications"

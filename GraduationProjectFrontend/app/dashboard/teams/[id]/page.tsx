@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import { motion, useReducedMotion } from "framer-motion"
@@ -187,7 +187,7 @@ export default function TeamDetailPage() {
                 <motion.div {...getActionMotion(reduceMotion)} className="w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    className="group h-11 w-full justify-between bg-transparent transition-colors duration-200 hover:border-primary/25 hover:bg-primary/[0.03] sm:min-w-[210px]"
+                    className="group h-11 w-full justify-between bg-transparent transition-all duration-200 hover:bg-primary/20 hover:border-primary/40 hover:text-primary sm:min-w-[210px] shadow-sm"
                     onClick={() => void copyInviteCode()}
                   >
                     {copied ? (
@@ -220,7 +220,7 @@ export default function TeamDetailPage() {
               <motion.div {...getActionMotion(reduceMotion)} className="w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  className="group h-11 w-full justify-between bg-transparent transition-colors duration-200 hover:border-primary/25 hover:bg-primary/[0.03] sm:min-w-[210px]"
+                  className="group h-11 w-full justify-between bg-transparent transition-all duration-200 hover:bg-primary/20 hover:border-primary/40 hover:text-primary sm:min-w-[210px] shadow-sm"
                   asChild
                 >
                   <Link href="/dashboard/teams">
@@ -561,12 +561,12 @@ function DetailMemberCard({ member }: { member: ApiTeamMember }) {
 
         <Button
           variant="outline"
-          className="group mt-4 h-10 w-full justify-between rounded-xl bg-transparent px-4 transition-colors duration-200 hover:border-primary/25 hover:bg-primary/[0.03]"
+          className="group mt-4 h-10 w-full justify-between rounded-lg border-border/70 bg-background px-4 text-foreground transition-all duration-200 hover:border-primary/40 hover:bg-primary/5 hover:text-primary shadow-sm"
           asChild
         >
           <Link href={`/dashboard/users/${member.user.id}`}>
             View Profile
-            <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            <ArrowRight className="ml-2 h-4 w-4 text-muted-foreground transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-primary" />
           </Link>
         </Button>
       </CardContent>

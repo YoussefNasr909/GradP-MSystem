@@ -31,7 +31,7 @@ export type Track =
   | "QUALITY_ASSURANCE"
   | "GAME_DEVELOPMENT"
 
-export type Role = "STUDENT" | "LEADER" | "TA" | "DOCTOR" | "ADMIN"
+export type Role = "STUDENT" | "LEADER" | "TA" | "DOCTOR" | "SUPPORT" | "ADMIN"
 
 export type AccountStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED"
 
@@ -925,6 +925,19 @@ export type ApiGitHubWorkflowRun = {
   }
 }
 
+export type ApiGitHubReleaseAsset = {
+  id: number
+  name: string
+  label: string | null
+  state: string | null
+  contentType: string | null
+  size: number
+  downloadCount: number
+  browserDownloadUrl: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type ApiGitHubRelease = {
   id: string
   tagName: string
@@ -941,6 +954,7 @@ export type ApiGitHubRelease = {
     login: string | null
     avatarUrl: string | null
   }
+  assets: ApiGitHubReleaseAsset[]
 }
 
 export type ApiGitHubCompare = {
@@ -981,6 +995,7 @@ export type UsersSummary = {
     leaders: number
     doctors: number
     tas: number
+    support: number
     admins: number
   }
   byStatus: {
@@ -1068,6 +1083,7 @@ export type ApiChatRelation =
   | "TEAM_TA"
   | "SUPERVISED_TEAM_LEADER"
   | "ADMIN_DIRECT"
+  | "SUPPORT_DIRECT"
   | "STUDENT_PEER"
   | "STAFF_PEER"
 
@@ -1167,6 +1183,137 @@ export type ApiChatClearResult = {
   conversationId: string
   clearedAt: string
   unreadCount: number
+}
+
+export type ApiSupportTicketStatus = "OPEN" | "IN_PROGRESS" | "WAITING_ON_USER" | "RESOLVED" | "CLOSED"
+export type ApiSupportTicketPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+export type ApiSupportTicketCategory = "BUG" | "FEATURE" | "QUESTION" | "ACCOUNT" | "TECHNICAL" | "GENERAL"
+export type ApiSupportTicketSource = "FORM" | "CHAT"
+export type ApiSupportTicketMessageVisibility = "PUBLIC" | "INTERNAL"
+export type ApiSupportTicketSlaState = "OVERDUE" | "DUE_SOON" | "OK" | "PAUSED" | "SNOOZED"
+export type ApiSupportTicketActivityType =
+  | "CREATED"
+  | "MESSAGE_ADDED"
+  | "INTERNAL_NOTE_ADDED"
+  | "STATUS_CHANGED"
+  | "PRIORITY_CHANGED"
+  | "CATEGORY_CHANGED"
+  | "ASSIGNED"
+  | "REOPENED"
+
+export type ApiSupportUser = {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  role: Role
+  academicId: string | null
+  avatarUrl: string | null
+  accountStatus: AccountStatus
+}
+
+export type ApiSupportTicketAttachment = {
+  id: string
+  ticketId: string
+  messageId: string | null
+  fileUrl: string
+  fileName: string
+  fileSize: number
+  fileType: string
+  uploadedBy: ApiSupportUser | null
+  createdAt: string
+}
+
+export type ApiSupportTicketMessage = {
+  id: string
+  ticketId: string
+  author: ApiSupportUser | null
+  visibility: ApiSupportTicketMessageVisibility
+  body: string
+  attachments: ApiSupportTicketAttachment[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiSupportTicketActivity = {
+  id: string
+  ticketId: string
+  actor: ApiSupportUser | null
+  type: ApiSupportTicketActivityType
+  fromValue: string | null
+  toValue: string | null
+  metadata: unknown
+  createdAt: string
+}
+
+export type ApiSupportTicketSummary = {
+  id: string
+  ticketNumber: string
+  source: ApiSupportTicketSource
+  subject: string
+  category: ApiSupportTicketCategory
+  priority: ApiSupportTicketPriority
+  status: ApiSupportTicketStatus
+  tags: string[]
+  sla: {
+    state: ApiSupportTicketSlaState
+    dueAt: string | null
+    minutesRemaining: number | null
+    targetHours: number
+  }
+  requester: ApiSupportUser | null
+  assignedSupport: ApiSupportUser | null
+  lastMessage: ApiSupportTicketMessage | null
+  counts: {
+    publicMessages: number
+    internalNotes: number
+    attachments: number
+  }
+  firstResponseDueAt: string | null
+  nextResponseDueAt: string | null
+  firstSupportResponseAt: string | null
+  snoozedUntil: string | null
+  lastActivityAt: string
+  resolvedAt: string | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ApiSupportTicketDetail = ApiSupportTicketSummary & {
+  messages: ApiSupportTicketMessage[]
+  attachments: ApiSupportTicketAttachment[]
+  activities: ApiSupportTicketActivity[]
+}
+
+export type ApiSupportSummary = {
+  total: number
+  open: number
+  inProgress: number
+  waitingOnUser: number
+  resolved: number
+  closed: number
+  urgent: number
+  unassigned: number
+  assignedToMe: number
+  overdue: number
+  dueSoon: number
+  resolvedToday: number
+  closedToday: number
+  averageFirstResponseMinutes: number | null
+}
+
+export type ApiSupportSavedReply = {
+  id: string
+  title: string
+  body: string
+  category: ApiSupportTicketCategory | null
+  usageCount: number
+  isActive: boolean
+  createdBy: ApiSupportUser | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type ApiTeamGroupChatMessage = {

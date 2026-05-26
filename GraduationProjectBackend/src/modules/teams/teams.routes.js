@@ -1,12 +1,13 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { auth } from "../../middlewares/auth.middleware.js";
 import { allowRoles } from "../../middlewares/role.middleware.js";
 import { validate } from "../../middlewares/validate.middleware.js";
 import { ROLES } from "../../common/constants/roles.js";
 import {
   acceptInvitation,
-  cancelInvitation,
   approveJoinRequest,
+  cancelInvitation,
+  cancelJoinRequest,
   approveSupervisorRequest,
   createInvitation,
   createJoinRequest,
@@ -63,6 +64,12 @@ router.post(
   allowRoles(ROLES.LEADER, ROLES.ADMIN),
   validate(reviewJoinRequestSchema),
   rejectJoinRequest,
+);
+router.post(
+  "/join-requests/:id/cancel",
+  allowRoles(ROLES.STUDENT, ROLES.ADMIN),
+  validate(reviewJoinRequestSchema),
+  cancelJoinRequest,
 );
 router.post(
   "/invitations/:id/accept",

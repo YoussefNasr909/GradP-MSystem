@@ -19,9 +19,7 @@ import {
   FileText,
   ArrowRight,
   AlertTriangle,
-  Bell,
   MessageSquare,
-  Settings,
   CheckCircle,
   Video,
   Sparkles,
@@ -36,22 +34,42 @@ import {
   Target,
   Zap,
   GitBranch,
-  FolderOpen,
-  Database,
-  Download,
   Upload,
   ChevronRight,
   Plus,
-  HelpCircle,
   Check,
   ClipboardList,
   ClipboardCheck,
   UserPlus,
   Users2,
-  HardDrive,
   Megaphone,
   MessageCircle,
 } from "lucide-react"
+import { usersApi } from "@/lib/api/users"
+import { teamsApi } from "@/lib/api/teams"
+import { supportApi } from "@/lib/api/support"
+import { adminLogsApi, type ActivityEntry, type SystemLogsResponse } from "@/lib/api/admin-logs"
+import { calendarApi } from "@/lib/api/calendar"
+import { meetingsApi } from "@/lib/api/meetings"
+import { tasksApi } from "@/lib/api/tasks"
+import { sprintsApi } from "@/lib/api/sprints"
+import { submissionsApi } from "@/lib/api/submissions"
+import { proposalsApi } from "@/lib/api/proposals"
+import { githubApi } from "@/lib/api/github"
+import { chatApi } from "@/lib/api/chat"
+import { teamChatApi } from "@/lib/api/team-chat"
+import { getResources } from "@/lib/api/resources"
+import { listDiscussions } from "@/lib/api/discussions"
+import { announcementsApi } from "@/lib/api/supervisor-tools"
+import { API_BASE_URL } from "@/lib/api/http"
+import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
+import { getFullName, getTeamProgressFallback } from "@/lib/team-display"
+import type { ApiCalendarEvent, ApiMeeting, ApiTask, ApiSupportSummary, ApiSupportTicketSummary, UsersSummary } from "@/lib/api/types"
+import NextLink from "next/link"
+import { useState, useEffect, useRef } from "react"
+import { cn } from "@/lib/utils"
+import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
+import { useGamificationOverview } from "@/lib/hooks/use-gamification"
 // ─── Real data placeholders ─────────────────────────────────────────────────
 // The mock arrays from @/data/* used to drive these dashboards. They've been
 // replaced with empty placeholders so derived counts are honest (0 instead of
@@ -94,16 +112,276 @@ const meetings: DashboardMeetingPlaceholder[] = []
 function getUserById(_id: string): DashboardUserPlaceholder | null { return null }
 void users
 void proposals
-import { usersApi } from "@/lib/api/users"
-import { teamsApi } from "@/lib/api/teams"
-import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
-import { getFullName, getTeamProgressFallback } from "@/lib/team-display"
-import type { UsersSummary } from "@/lib/api/types"
-import NextLink from "next/link"
-import { useState, useEffect } from "react"
-import { cn } from "@/lib/utils"
-import { RoleActionInbox } from "@/components/dashboard/role-action-inbox"
-import { useGamificationOverview } from "@/lib/hooks/use-gamification"
+
+type AdminHealthStatus = "healthy" | "warning" | "error"
+
+function getBackendHealthUrl() {
+  const apiVersionSuffix = /\/api\/v\d+$/i
+  if (apiVersionSuffix.test(API_BASE_URL)) {
+    return API_BASE_URL.replace(apiVersionSuffix, "/health")
+  }
+  return `${API_BASE_URL.replace(/\/+$/, "")}/health`
+}
+
+function formatRelativeTime(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  const diffMs = date.getTime() - Date.now()
+  const absMs = Math.abs(diffMs)
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["year", 1000 * 60 * 60 * 24 * 365],
+    ["month", 1000 * 60 * 60 * 24 * 30],
+    ["week", 1000 * 60 * 60 * 24 * 7],
+    ["day", 1000 * 60 * 60 * 24],
+    ["hour", 1000 * 60 * 60],
+    ["minute", 1000 * 60],
+  ]
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
+
+  for (const [unit, unitMs] of units) {
+    if (absMs >= unitMs) {
+      return formatter.format(Math.round(diffMs / unitMs), unit)
+    }
+  }
+
+  return "just now"
+}
+
+function getAdminActivityIcon(action: string) {
+  const normalized = action.toLowerCase()
+  if (normalized.includes("schedule")) return Calendar
+  if (normalized.includes("join")) return Users
+  if (normalized.includes("accepted") || normalized.includes("approved")) return Check
+  if (normalized.includes("task")) return CheckSquare
+  return Activity
+}
+
+function formatScheduleTime(value: string) {
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+function formatDashboardDate(value: string) {
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
+}
+
+function isTaskComplete(task: ApiTask) {
+  return task.status === "DONE" || task.status === "APPROVED"
+}
+
+function ScheduleCard({ className }: { className?: string }) {
+  const [events, setEvents] = useState<ApiCalendarEvent[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    const now = new Date()
+    const rangeEnd = new Date(now)
+    rangeEnd.setDate(rangeEnd.getDate() + 90)
+
+    setIsLoading(true)
+    setError("")
+
+    calendarApi
+      .listEvents({ start: now.toISOString(), end: rangeEnd.toISOString() })
+      .then((result) => {
+        if (cancelled) return
+        setEvents(
+          result
+            .filter((event) => new Date(event.startAt).getTime() >= now.getTime())
+            .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())
+            .slice(0, 12),
+        )
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) return
+        setEvents([])
+        setError(caught instanceof Error ? caught.message : "Couldn't load your calendar.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <Card className={cn("glass-card flex min-h-0 flex-col p-6 rounded-2xl", className)}>
+      <div className="mb-4 flex shrink-0 items-center justify-between">
+        <h3 className="font-bold text-lg flex items-center gap-2">
+          <Calendar className="h-5 w-5 text-purple-500" /> Schedule
+        </h3>
+        <Button variant="ghost" size="sm" asChild>
+          <NextLink href="/dashboard/calendar">
+            <Plus className="h-4 w-4" />
+          </NextLink>
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 p-3">
+              <div className="h-8 w-8 rounded-lg bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-32 rounded bg-muted" />
+                <div className="h-3 w-24 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center text-sm text-muted-foreground">
+          Use the calendar to plan your schedule.
+        </div>
+      ) : (
+        <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
+          <div className="space-y-3">
+            {events.map((event) => (
+              <div key={`${event.sourceType}-${event.id}`} className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg bg-purple-500/10 p-2">
+                    {event.sourceType === "MEETING" ? (
+                      <Video className="h-4 w-4 text-purple-500" />
+                    ) : (
+                      <Clock className="h-4 w-4 text-amber-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="truncate text-sm font-medium">{event.title}</h4>
+                      <Badge variant="outline" className="shrink-0 text-[10px]">
+                        {event.sourceType === "MEETING" ? "Meeting" : "Deadline"}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {event.team.name} - {formatScheduleTime(event.startAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+    </Card>
+  )
+}
+
+function MeetingsCard({ className }: { className?: string }) {
+  const [upcomingMeetings, setUpcomingMeetings] = useState<ApiMeeting[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    const now = new Date()
+    const rangeEnd = new Date(now)
+    rangeEnd.setDate(rangeEnd.getDate() + 90)
+
+    setIsLoading(true)
+    setError("")
+
+    meetingsApi
+      .list({ start: now.toISOString(), end: rangeEnd.toISOString() })
+      .then((result) => {
+        if (cancelled) return
+        setUpcomingMeetings(
+          result
+            .filter((meeting) => new Date(meeting.startAt).getTime() >= now.getTime())
+            .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime())
+            .slice(0, 12),
+        )
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) return
+        setUpcomingMeetings([])
+        setError(caught instanceof Error ? caught.message : "Couldn't load your meetings.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <Card className={cn("glass-card flex min-h-0 flex-col p-6 rounded-2xl", className)}>
+      <div className="mb-4 flex shrink-0 items-center justify-between">
+        <h3 className="font-bold text-lg flex items-center gap-2">
+          <Video className="h-5 w-5 text-purple-500" /> Meetings
+        </h3>
+        <Button variant="ghost" size="sm" asChild>
+          <NextLink href="/dashboard/meetings">
+            <Plus className="h-4 w-4" />
+          </NextLink>
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 p-3">
+              <div className="h-8 w-8 rounded-lg bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 w-32 rounded bg-muted" />
+                <div className="h-3 w-24 rounded bg-muted" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+          {error}
+        </div>
+      ) : upcomingMeetings.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/20 p-5 text-center text-sm text-muted-foreground">
+          No upcoming meetings scheduled.
+        </div>
+      ) : (
+        <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
+          <div className="space-y-3">
+            {upcomingMeetings.map((meeting) => (
+              <div key={meeting.id} className="rounded-lg border border-border/50 bg-muted/30 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg bg-purple-500/10 p-2">
+                    <Video className="h-4 w-4 text-purple-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="truncate text-sm font-medium">{meeting.title}</h4>
+                      <Badge variant="outline" className="shrink-0 text-[10px] capitalize">
+                        {meeting.status.replace(/_/g, " ").toLowerCase()}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {meeting.team.name} - {formatScheduleTime(meeting.startAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      )}
+    </Card>
+  )
+}
 
 export default function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -132,12 +410,273 @@ export default function DashboardPage() {
     return <TADashboard />
   }
 
+  if (currentUser.role === "support") {
+    return <SupportDashboard />
+  }
+
   // Admin
   if (currentUser.role === "admin") {
     return <AdminDashboard />
   }
 
   return null
+}
+
+function formatSupportDashboardDate(value?: string | null) {
+  if (!value) return "No activity"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "No activity"
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function supportDashboardLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function SupportDashboard() {
+  const { currentUser } = useAuthStore()
+  const [summary, setSummary] = useState<ApiSupportSummary | null>(null)
+  const [recentTickets, setRecentTickets] = useState<ApiSupportTicketSummary[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    let cancelled = false
+    setIsLoading(true)
+    setError("")
+
+    Promise.all([
+      supportApi.summary(),
+      supportApi.listTickets({ limit: 6, assignedTo: "me" }),
+    ])
+      .then(([summaryResult, ticketsResult]) => {
+        if (cancelled) return
+        setSummary(summaryResult)
+        setRecentTickets(ticketsResult.items)
+      })
+      .catch((loadError: unknown) => {
+        if (cancelled) return
+        setError(loadError instanceof Error ? loadError.message : "Support dashboard could not load.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.id])
+
+  const activeTicketCount = (summary?.open ?? 0) + (summary?.inProgress ?? 0) + (summary?.waitingOnUser ?? 0)
+  const attentionTicketCount = (summary?.urgent ?? 0) + (summary?.overdue ?? 0)
+  const metrics = [
+    {
+      label: "Active tickets",
+      value: activeTicketCount,
+      helper: "Open, working, or waiting",
+      icon: ClipboardList,
+      href: "/dashboard/support",
+    },
+    {
+      label: "Assigned to me",
+      value: summary?.assignedToMe ?? 0,
+      helper: "Your queue",
+      icon: UserPlus,
+      href: "/dashboard/support?view=mine",
+    },
+    {
+      label: "Unassigned",
+      value: summary?.unassigned ?? 0,
+      helper: "Needs an owner",
+      icon: Users,
+      href: "/dashboard/support?view=unassigned",
+    },
+    {
+      label: "Needs attention",
+      value: attentionTicketCount,
+      helper: "Urgent or overdue",
+      icon: AlertTriangle,
+      href: "/dashboard/support?view=overdue",
+      danger: true,
+    },
+  ]
+
+  const healthRows = [
+    { label: "Overdue", value: summary?.overdue ?? 0 },
+    { label: "Due soon", value: summary?.dueSoon ?? 0 },
+    { label: "Resolved today", value: summary?.resolvedToday ?? 0 },
+    { label: "Closed today", value: summary?.closedToday ?? 0 },
+    {
+      label: "Avg first response",
+      value: summary?.averageFirstResponseMinutes == null ? "No data" : `${summary.averageFirstResponseMinutes}m`,
+    },
+  ]
+
+  return (
+    <div className="space-y-6 pb-8">
+      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Support workspace</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Support dashboard</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Welcome, {currentUser?.name || "Support"}. Start with your assigned tickets, then scan the queue for anything urgent.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button asChild className="gap-2">
+            <NextLink href="/dashboard/support">
+              Open queue
+              <ArrowRight className="h-4 w-4" />
+            </NextLink>
+          </Button>
+          <Button asChild variant="outline" className="gap-2 bg-transparent">
+            <NextLink href="/dashboard/chat">
+              <MessageSquare className="h-4 w-4" />
+              Chat
+            </NextLink>
+          </Button>
+        </div>
+      </section>
+
+      {error ? (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4" />
+          <div>
+            <p className="font-medium">Dashboard data could not load</p>
+            <p>{error}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => {
+          const MetricIcon = metric.icon
+          return (
+            <NextLink
+              key={metric.label}
+              href={metric.href}
+              className="group rounded-xl border border-border/70 bg-card p-4 shadow-sm shadow-black/[0.02] transition hover:border-primary/30 hover:bg-accent/20"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
+                  <p className={cn("mt-2 text-2xl font-semibold tracking-tight", metric.danger && !isLoading && metric.value > 0 && "text-red-600 dark:text-red-300")}>
+                    {isLoading ? "..." : metric.value}
+                  </p>
+                </div>
+                <span className="rounded-lg bg-muted p-2 text-muted-foreground transition group-hover:text-foreground">
+                  <MetricIcon className="h-4 w-4" />
+                </span>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">{metric.helper}</p>
+            </NextLink>
+          )
+        })}
+      </section>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Assigned to you</h2>
+              <p className="text-sm text-muted-foreground">Assigned tickets that need a next step.</p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="gap-2 bg-transparent">
+              <NextLink href="/dashboard/support">
+                View queue
+                <ArrowRight className="h-4 w-4" />
+              </NextLink>
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-20 rounded-lg border border-border/60 bg-muted/20" />
+              ))
+            ) : recentTickets.length ? (
+              recentTickets.map((ticket) => (
+                <NextLink
+                  key={ticket.id}
+                  href={`/dashboard/support?ticket=${ticket.id}`}
+                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition hover:border-primary/30 hover:bg-accent/20 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs text-muted-foreground">{ticket.ticketNumber}</span>
+                      <Badge variant={ticket.priority === "URGENT" ? "destructive" : "secondary"} className="rounded-md">
+                        {supportDashboardLabel(ticket.priority)}
+                      </Badge>
+                      <Badge variant="outline" className="rounded-md">{supportDashboardLabel(ticket.status)}</Badge>
+                    </div>
+                    <p className="mt-2 line-clamp-1 text-sm font-medium">{ticket.subject}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {ticket.requester?.fullName ?? "Unknown requester"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />
+                    {formatSupportDashboardDate(ticket.lastActivityAt)}
+                  </div>
+                </NextLink>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed p-8 text-center">
+                <ClipboardCheck className="mx-auto h-8 w-8 text-muted-foreground" />
+                <h3 className="mt-3 font-semibold">No assigned tickets</h3>
+                <p className="mt-1 text-sm text-muted-foreground">Open the queue to pick up new requester work.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+          <h2 className="text-lg font-semibold">Queue health</h2>
+          <p className="mt-1 text-sm text-muted-foreground">SLA and closure signals for today.</p>
+
+          <div className="mt-5 divide-y divide-border/60 text-sm">
+            {healthRows.map((row) => (
+              <div key={row.label} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="font-semibold">{isLoading ? "..." : row.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 grid gap-2">
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/support">
+                <Activity className="h-4 w-4" />
+                Open queue
+              </NextLink>
+            </Button>
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/support?view=overdue">
+                <AlertCircle className="h-4 w-4" />
+                Overdue
+              </NextLink>
+            </Button>
+            <Button asChild variant="outline" className="justify-start gap-2 bg-transparent">
+              <NextLink href="/dashboard/chat">
+                <MessageSquare className="h-4 w-4" />
+                Message anyone
+              </NextLink>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
 }
 
 // ============================================
@@ -149,6 +688,23 @@ function StudentMemberDashboard() {
   const [greeting, setGreeting] = useState("")
   const [currentTime, setCurrentTime] = useState(new Date())
   const [availableTeamCount, setAvailableTeamCount] = useState(0)
+  const [studentTasks, setStudentTasks] = useState<ApiTask[]>([])
+  const [calendarEvents, setCalendarEvents] = useState<ApiCalendarEvent[]>([])
+  const [isTasksLoading, setIsTasksLoading] = useState(false)
+  const [isCalendarLoading, setIsCalendarLoading] = useState(true)
+  const [tasksError, setTasksError] = useState("")
+  const [calendarError, setCalendarError] = useState("")
+  const [dashboardCounts, setDashboardCounts] = useState({
+    activeSprints: 0,
+    pendingSubmissions: 0,
+    openPullRequests: 0,
+    unreadMessages: 0,
+    proposalItems: 0,
+    resources: 0,
+    discussions: 0,
+    announcements: 0,
+    focusSessionsToday: 0,
+  })
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -199,21 +755,158 @@ function StudentMemberDashboard() {
         progress: getTeamProgressFallback(liveTeam),
         memberIds: liveTeam.members.map((member) => member.user.id),
         stage: liveTeam.stage.toLowerCase().replaceAll("_", "-"),
-        health: liveTeam.isFull ? "at-risk" : "healthy",
+        isFull: liveTeam.isFull,
+        slotsRemaining: liveTeam.slotsRemaining,
         stack: liveTeam.stack,
       }
     : null
   const hasTeam = !!myTeam
 
-  const myTasks = tasks.filter((t) => {
-    if (!currentUser?.id) return false
-    if ("assigneeId" in t) return t.assigneeId === currentUser.id
-    if ("assigneeIds" in t && Array.isArray(t.assigneeIds)) return t.assigneeIds.includes(currentUser.id)
-    return false
-  })
-  const activeTasks = myTasks.filter((t) => t.status !== "done")
-  const completedTasks = myTasks.filter((t) => t.status === "done")
-  const upcomingMeetings = meetings.filter((m) => new Date(m.date) > new Date()).slice(0, 3)
+  useEffect(() => {
+    if (!liveTeam?.id) {
+      setStudentTasks([])
+      setTasksError("")
+      setIsTasksLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setIsTasksLoading(true)
+    setTasksError("")
+
+    tasksApi
+      .list({ teamId: liveTeam.id })
+      .then((result) => {
+        if (cancelled) return
+        setStudentTasks(result)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setStudentTasks([])
+        setTasksError(error instanceof Error ? error.message : "Couldn't load your tasks.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsTasksLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [liveTeam?.id])
+
+  useEffect(() => {
+    let cancelled = false
+    const now = new Date()
+    const rangeEnd = new Date(now)
+    rangeEnd.setDate(rangeEnd.getDate() + 90)
+
+    setIsCalendarLoading(true)
+    setCalendarError("")
+
+    calendarApi
+      .listEvents({ start: now.toISOString(), end: rangeEnd.toISOString() })
+      .then((result) => {
+        if (cancelled) return
+        setCalendarEvents(
+          result
+            .filter((event) => new Date(event.startAt).getTime() >= now.getTime())
+            .sort((left, right) => new Date(left.startAt).getTime() - new Date(right.startAt).getTime()),
+        )
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        setCalendarEvents([])
+        setCalendarError(error instanceof Error ? error.message : "Couldn't load your calendar.")
+      })
+      .finally(() => {
+        if (!cancelled) setIsCalendarLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const teamId = liveTeam?.id
+
+    async function loadDashboardCounts() {
+      const [
+        sprintBoard,
+        submissionList,
+        githubWorkspace,
+        directUnread,
+        teamChatBootstrap,
+        proposalCount,
+        resourceList,
+        discussionFeed,
+        announcementList,
+      ] = await Promise.all([
+        teamId ? sprintsApi.board({ teamId }).catch(() => null) : Promise.resolve(null),
+        teamId ? submissionsApi.list({ teamId }).catch(() => []) : Promise.resolve([]),
+        teamId ? githubApi.getWorkspace(teamId).catch(() => null) : Promise.resolve(null),
+        chatApi.unreadCount().catch(() => ({ unreadCount: 0 })),
+        teamId ? teamChatApi.bootstrap().catch(() => null) : Promise.resolve(null),
+        teamId
+          ? proposalsApi
+              .getMine()
+              .then((proposal) => (proposal && proposal.status !== "APPROVED" ? 1 : 0))
+              .catch(() => 0)
+          : proposalsApi
+              .list()
+              .then((proposalList) => proposalList.length)
+              .catch(() => 0),
+        getResources().catch(() => []),
+        listDiscussions({ page: 1 }).catch(() => null),
+        announcementsApi.list().catch(() => []),
+      ])
+
+      if (cancelled) return
+
+      const groupUnread =
+        teamChatBootstrap?.conversations.reduce((total, conversation) => total + conversation.unreadCount, 0) ?? 0
+
+      setDashboardCounts((current) => ({
+        activeSprints: sprintBoard?.sprints.filter((sprint) => sprint.status !== "COMPLETED").length ?? 0,
+        pendingSubmissions: submissionList.filter((submission) => submission.status !== "APPROVED").length,
+        openPullRequests: githubWorkspace?.stats?.openPullRequests ?? 0,
+        unreadMessages: directUnread.unreadCount + groupUnread,
+        proposalItems: proposalCount,
+        resources: resourceList.length,
+        discussions: discussionFeed?.meta.total ?? 0,
+        announcements: announcementList.length,
+        focusSessionsToday: current.focusSessionsToday,
+      }))
+    }
+
+    void loadDashboardCounts()
+
+    return () => {
+      cancelled = true
+    }
+  }, [liveTeam?.id])
+
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    try {
+      const savedLog = window.localStorage.getItem(`gpms-focus-timer-log:${currentUser.id}`)
+      const parsed = savedLog ? JSON.parse(savedLog) : []
+      const today = new Date().toDateString()
+      const focusSessionsToday = Array.isArray(parsed)
+        ? parsed.filter((session) => new Date(session?.endedAt).toDateString() === today).length
+        : 0
+
+      setDashboardCounts((current) => ({ ...current, focusSessionsToday }))
+    } catch {
+      setDashboardCounts((current) => ({ ...current, focusSessionsToday: 0 }))
+    }
+  }, [currentUser?.id])
+
+  const myTasks = studentTasks.filter((task) => !currentUser?.id || task.assignee?.id === currentUser.id)
+  const activeTasks = myTasks.filter((task) => !isTaskComplete(task))
+  const upcomingMeetings = calendarEvents.filter((event) => event.sourceType === "MEETING").slice(0, 3)
 
   const quickLinks = hasTeam
     ? [
@@ -234,58 +927,58 @@ function StudentMemberDashboard() {
           description: "Team collaboration",
         },
         {
-          title: "Calendar",
-          icon: Calendar,
-          href: "/dashboard/calendar",
-          count: upcomingMeetings.length,
-          color: "from-orange-500 to-amber-500",
-          description: "Upcoming events",
+          title: "Sprints",
+          icon: ClipboardList,
+          href: "/dashboard/sprints",
+          count: dashboardCounts.activeSprints,
+          color: "from-cyan-500 to-blue-600",
+          description: "Sprint goals",
         },
         {
-          title: "Chat",
-          icon: MessageSquare,
-          href: "/dashboard/chat",
-          count: 3,
-          color: "from-emerald-600 to-green-600",
-          description: "Team messages",
-        },
-        {
-          title: "Files",
-          icon: FolderOpen,
-          href: "/dashboard/files",
-          count: 24,
-          color: "from-indigo-600 to-violet-600",
-          description: "Project documents",
+          title: "Submissions",
+          icon: Upload,
+          href: "/dashboard/submissions",
+          count: dashboardCounts.pendingSubmissions,
+          color: "from-sky-600 to-blue-600",
+          description: "Submit deliverables",
         },
         {
           title: "GitHub",
           icon: GitBranch,
           href: "/dashboard/github",
-          count: 12, // Changed from 8
+          count: dashboardCounts.openPullRequests,
           color: "from-slate-600 to-slate-800",
-          description: "Code repository",
+          description: "Repository work",
         },
         {
-          title: "Submissions",
-          icon: Upload, // Changed from FileText
-          href: "/dashboard/submissions",
-          count: 2,
-          color: "from-sky-600 to-blue-600",
-          description: "Submit deliverables", // Changed description
+          title: "Meetings",
+          icon: Video,
+          href: "/dashboard/meetings",
+          count: upcomingMeetings.length,
+          color: "from-violet-500 to-purple-600",
+          description: "Team meetings",
         },
         {
-          title: "Gamification",
-          icon: Trophy,
-          href: "/dashboard/gamification",
-          count: xp,
-          color: "from-yellow-500 to-orange-500",
-          description: "XP & achievements", // Changed description
+          title: "Chat",
+          icon: MessageSquare,
+          href: "/dashboard/chat",
+          count: dashboardCounts.unreadMessages,
+          color: "from-emerald-600 to-green-600",
+          description: "Team messages",
+        },
+        {
+          title: "Time Tracker",
+          icon: Clock,
+          href: "/dashboard/time-tracker",
+          count: dashboardCounts.focusSessionsToday,
+          color: "from-amber-500 to-orange-500",
+          description: "Log progress",
         },
       ]
     : [
         // Student without team - show join team options
         {
-          title: "Join Team",
+          title: "Find a Team",
           icon: UserPlus,
           href: "/dashboard/teams",
           count: availableTeamCount,
@@ -293,12 +986,12 @@ function StudentMemberDashboard() {
           description: "Browse & join a team",
         },
         {
-          title: "Browse Teams",
-          icon: Users,
-          href: "/dashboard/teams",
-          count: availableTeamCount,
+          title: "Proposals",
+          icon: FileText,
+          href: "/dashboard/proposals",
+          count: dashboardCounts.proposalItems,
           color: "from-blue-600 to-indigo-600",
-          description: "View available teams",
+          description: "Project ideas",
         },
         {
           title: "Calendar",
@@ -309,26 +1002,26 @@ function StudentMemberDashboard() {
           description: "Academic calendar",
         },
         {
-          title: "Chat",
-          icon: MessageSquare,
-          href: "/dashboard/chat",
-          count: 0,
+          title: "Announcements",
+          icon: Megaphone,
+          href: "/dashboard/announcements",
+          count: dashboardCounts.announcements,
           color: "from-emerald-600 to-green-600",
-          description: "Messages",
+          description: "Course updates",
         },
         {
           title: "Resources",
           icon: BookOpen,
           href: "/dashboard/resources",
-          count: 15,
+          count: dashboardCounts.resources,
           color: "from-indigo-500 to-violet-500",
           description: "Learning materials",
         },
         {
           title: "Discussions",
-          icon: MessageCircle, // Added icon
+          icon: MessageCircle,
           href: "/dashboard/discussions",
-          count: 8,
+          count: dashboardCounts.discussions,
           color: "from-sky-600 to-blue-600",
           description: "Community forums",
         },
@@ -341,53 +1034,18 @@ function StudentMemberDashboard() {
           description: "XP & achievements",
         },
         {
-          title: "Settings",
-          icon: Settings,
-          href: "/dashboard/settings",
-          count: 0,
-          color: "from-gray-500 to-gray-700", // Changed color
-          description: "Profile settings",
+          title: "Chat",
+          icon: MessageSquare,
+          href: "/dashboard/chat",
+          count: dashboardCounts.unreadMessages,
+          color: "from-gray-500 to-gray-700",
+          description: "Messages",
         },
       ]
 
-  const recentActivities = [
-    {
-      id: 1,
-      type: "task",
-      message: "Completed 'Database Schema Design'",
-      time: "2 hours ago",
-      icon: CheckCircle,
-      color: "text-green-500",
-    },
-    {
-      id: 2,
-      type: "comment",
-      message: "New comment on your submission",
-      time: "4 hours ago",
-      icon: MessageSquare,
-      color: "text-blue-500",
-    },
-    {
-      id: 3,
-      type: "meeting",
-      message: "Meeting scheduled with Dr. Ahmed",
-      time: "6 hours ago",
-      icon: Video,
-      color: "text-purple-500",
-    },
-    {
-      id: 4,
-      type: "achievement",
-      message: "Earned 'Code Warrior' badge",
-      time: "1 day ago",
-      icon: Award,
-      color: "text-amber-500",
-    },
-  ]
-
   const upcomingDeadlines = myTasks
-    .filter((t) => t.dueDate && new Date(t.dueDate) > new Date() && t.status !== "done")
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+    .filter((task) => task.endDate && new Date(task.endDate).getTime() > Date.now() && !isTaskComplete(task))
+    .sort((left, right) => new Date(left.endDate!).getTime() - new Date(right.endDate!).getTime())
     .slice(0, 5)
 
   return (
@@ -446,11 +1104,6 @@ function StudentMemberDashboard() {
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
           </h2>
-          <Button variant="ghost" size="sm" asChild>
-            <NextLink href="/dashboard/settings">
-              <Settings className="h-4 w-4 mr-1" /> Customize
-            </NextLink>
-          </Button>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {quickLinks.map((link, index) => (
@@ -532,19 +1185,10 @@ function StudentMemberDashboard() {
                       <div className="text-xs text-muted-foreground">Stage</div>
                     </div>
                     <div className="text-center p-3 rounded-xl bg-muted/30">
-                      <Badge
-                        variant={
-                          myTeam.health === "healthy"
-                            ? "default"
-                            : myTeam.health === "at-risk"
-                              ? "secondary"
-                              : "destructive"
-                        }
-                        className="text-xs"
-                      >
-                        {myTeam.health}
+                      <Badge variant={myTeam.isFull ? "secondary" : "default"} className="text-xs">
+                        {myTeam.isFull ? "Full" : `${myTeam.slotsRemaining} open`}
                       </Badge>
-                      <div className="text-xs text-muted-foreground mt-1">Health</div>
+                      <div className="text-xs text-muted-foreground mt-1">Availability</div>
                     </div>
                   </div>
 
@@ -604,10 +1248,21 @@ function StudentMemberDashboard() {
               </div>
 
               <div className="space-y-3">
-                {upcomingDeadlines.length > 0 ? (
+                {isTasksLoading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="rounded-xl border border-border/50 bg-muted/20 p-4">
+                      <div className="h-4 w-40 rounded bg-muted" />
+                      <div className="mt-3 h-3 w-28 rounded bg-muted" />
+                    </div>
+                  ))
+                ) : tasksError ? (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+                    {tasksError}
+                  </div>
+                ) : upcomingDeadlines.length > 0 ? (
                   upcomingDeadlines.map((task, index) => {
                     const daysUntilDue = Math.ceil(
-                      (new Date(task.dueDate!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+                      (new Date(task.endDate!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
                     )
                     const isUrgent = daysUntilDue <= 2
 
@@ -637,7 +1292,7 @@ function StudentMemberDashboard() {
                             <div>
                               <h4 className="font-medium">{task.title}</h4>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                                <span>{new Date(task.dueDate!).toLocaleDateString()}</span>
+                                <span>{formatDashboardDate(task.endDate!)}</span>
                                 <span>•</span>
                                 <span className={isUrgent ? "text-destructive font-medium" : ""}>
                                   {daysUntilDue === 0
@@ -667,46 +1322,11 @@ function StudentMemberDashboard() {
           </motion.div>
         </div>
 
-        {/* Right Column - Activity & Meetings */}
+        {/* Right Column - Meetings & Progress */}
         <div className="space-y-6">
-          {/* Recent Activity */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
-            <Card className="glass-card p-6 rounded-2xl">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-lg flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-green-500" /> Recent Activity
-                </h3>
-                <Badge variant="secondary" className="animate-pulse">
-                  Live
-                </Badge>
-              </div>
-
-              <div className="space-y-3">
-                {recentActivities.map((activity, index) => (
-                  <motion.div
-                    key={activity.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                    whileHover={{ x: 4 }}
-                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-muted/30 transition-all cursor-pointer"
-                  >
-                    <div className={cn("p-2 rounded-lg", `bg-${activity.color.replace("text-", "")}/10`)}>
-                      <activity.icon className={cn("h-4 w-4", activity.color)} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{activity.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{activity.time}</p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </Card>
-          </motion.div>
-
           {/* Upcoming Meetings */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }}>
-            <Card className="glass-card p-6 rounded-2xl">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
+            <Card className="glass-card min-h-[292px] p-6 rounded-2xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Video className="h-5 w-5 text-purple-500" /> Upcoming Meetings
@@ -719,10 +1339,21 @@ function StudentMemberDashboard() {
               </div>
 
               <div className="space-y-3">
-                {upcomingMeetings.length > 0 ? (
+                {isCalendarLoading ? (
+                  Array.from({ length: 3 }).map((_, index) => (
+                    <div key={index} className="rounded-xl border border-border/50 bg-muted/20 p-4">
+                      <div className="h-4 w-36 rounded bg-muted" />
+                      <div className="mt-3 h-3 w-24 rounded bg-muted" />
+                    </div>
+                  ))
+                ) : calendarError ? (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+                    {calendarError}
+                  </div>
+                ) : upcomingMeetings.length > 0 ? (
                   upcomingMeetings.map((meeting, index) => (
                     <motion.div
-                      key={meeting.id}
+                      key={`${meeting.sourceType}-${meeting.id}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4 + index * 0.05 }}
@@ -735,11 +1366,11 @@ function StudentMemberDashboard() {
                         <div className="flex-1">
                           <h4 className="font-medium text-sm">{meeting.title}</h4>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(meeting.date).toLocaleDateString()} at {meeting.time}
+                            {meeting.team.name} - {formatScheduleTime(meeting.startAt)}
                           </p>
                         </div>
                         <Badge variant="outline" className="text-xs">
-                          {meeting.type}
+                          {meeting.mode?.replace("_", " ").toLowerCase() ?? "meeting"}
                         </Badge>
                       </div>
                     </motion.div>
@@ -755,7 +1386,7 @@ function StudentMemberDashboard() {
           </motion.div>
 
           {/* XP Progress */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.35 }}>
             <Card className="glass-card p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/20">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg flex items-center gap-2">
@@ -860,52 +1491,52 @@ function TeamLeaderDashboard() {
       description: "Team management",
     },
     {
-      title: "Calendar",
-      icon: Calendar,
-      href: "/dashboard/calendar",
-      count: upcomingMeetings.length,
+      title: "Sprints",
+      icon: ClipboardList,
+      href: "/dashboard/sprints",
+      count: 0,
+      color: "from-cyan-500 to-blue-600",
+      description: "Plan sprint work",
+    },
+    {
+      title: "Review Tasks",
+      icon: ClipboardCheck,
+      href: "/dashboard/reviews",
+      count: 0,
       color: "from-orange-500 to-amber-500",
-      description: "Schedule & meetings",
+      description: "Approve team work",
     },
     {
-      title: "Chat",
-      icon: MessageSquare,
-      href: "/dashboard/chat",
-      count: 5,
-      color: "from-green-500 to-emerald-500",
-      description: "Team communication",
-    },
-    {
-      title: "Files",
-      icon: FolderOpen,
-      href: "/dashboard/files",
-      count: 32,
-      color: "from-indigo-500 to-violet-500",
-      description: "Project documents",
+      title: "Submissions",
+      icon: Upload,
+      href: "/dashboard/submissions",
+      count: 0,
+      color: "from-teal-500 to-cyan-500",
+      description: "Project deliverables",
     },
     {
       title: "GitHub",
       icon: GitBranch,
       href: "/dashboard/github",
-      count: 15,
+      count: 0,
       color: "from-gray-600 to-gray-800",
       description: "Repository & PRs",
     },
     {
-      title: "Submissions",
+      title: "Proposals",
       icon: FileText,
-      href: "/dashboard/submissions",
-      count: 3,
-      color: "from-teal-500 to-cyan-500",
-      description: "Project deliverables",
-    },
-    {
-      title: "Analytics",
-      icon: BarChart3,
-      href: "/dashboard/analytics",
+      href: "/dashboard/proposals",
       count: 0,
       color: "from-rose-500 to-pink-500",
-      description: "Team performance",
+      description: "Proposal status",
+    },
+    {
+      title: "Meetings",
+      icon: Video,
+      href: "/dashboard/meetings",
+      count: upcomingMeetings.length,
+      color: "from-violet-500 to-purple-600",
+      description: "Supervisor syncs",
     },
   ]
 
@@ -971,49 +1602,6 @@ function TeamLeaderDashboard() {
             </div>
           </div>
 
-          {/* Team Health Banner */}
-          {myTeam && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={cn(
-                "mt-6 p-4 rounded-xl flex items-center justify-between",
-                myTeam.health === "healthy"
-                  ? "bg-green-500/10 border border-green-500/30"
-                  : myTeam.health === "at-risk"
-                    ? "bg-yellow-500/10 border border-yellow-500/30"
-                    : "bg-red-500/10 border border-red-500/30",
-              )}
-            >
-              <div className="flex items-center gap-3">
-                {myTeam.health === "healthy" ? (
-                  <CheckCircle className="h-5 w-5 text-green-500" />
-                ) : myTeam.health === "at-risk" ? (
-                  <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                ) : (
-                  <AlertCircle className="h-5 w-5 text-red-500" />
-                )}
-                <div>
-                  <h4 className="font-medium">{myTeam.name}</h4>
-                  <p className="text-sm text-muted-foreground">
-                    {myTeam.health === "healthy"
-                      ? "Team is performing well!"
-                      : myTeam.health === "at-risk"
-                        ? "Some tasks need attention"
-                        : "Immediate action required"}
-                  </p>
-                </div>
-              </div>
-              <Badge
-                variant={
-                  myTeam.health === "healthy" ? "default" : myTeam.health === "at-risk" ? "secondary" : "destructive"
-                }
-              >
-                {myTeam.health}
-              </Badge>
-            </motion.div>
-          )}
         </div>
       </motion.div>
 
@@ -1078,9 +1666,9 @@ function TeamLeaderDashboard() {
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column - Team Members Performance */}
-        <div className="lg:col-span-2 space-y-6">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            <Card className="glass-card p-6 rounded-2xl">
+        <div className="lg:col-span-2 flex min-h-[560px] flex-col space-y-6">
+          <motion.div className="flex flex-1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+            <Card className="glass-card flex min-h-0 flex-1 flex-col p-6 rounded-2xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Users className="h-5 w-5 text-purple-500" /> Team Performance
@@ -1092,44 +1680,53 @@ function TeamLeaderDashboard() {
                 </Button>
               </div>
 
-              <div className="space-y-4">
-                {memberPerformance.map((member, index) => (
-                  <motion.div
-                    key={member?.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                    className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/50 transition-all"
-                  >
-                    <div className="flex items-center gap-4">
-                      <Avatar className="h-12 w-12 border-2 border-background">
-                        <AvatarImage src={member?.avatar || "/placeholder.svg"} />
-                        <AvatarFallback>{member?.name?.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium truncate">{member?.name}</h4>
-                          {member?.id === currentUser?.id && (
-                            <Badge variant="outline" className="text-xs">
-                              You
-                            </Badge>
-                          )}
+              {memberPerformance.length > 0 ? (
+                <div
+                  className="grid min-h-0 flex-1 gap-4"
+                  style={{ gridTemplateRows: `repeat(${memberPerformance.length}, minmax(0, 1fr))` }}
+                >
+                  {memberPerformance.map((member, index) => (
+                    <motion.div
+                      key={member?.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 + index * 0.05 }}
+                      className="flex min-h-[112px] flex-col justify-center rounded-xl border border-border/50 bg-muted/30 p-5 transition-all hover:border-primary/50"
+                    >
+                      <div className="flex items-center gap-4">
+                        <Avatar className="h-12 w-12 border-2 border-background">
+                          <AvatarImage src={member?.avatar || "/placeholder.svg"} />
+                          <AvatarFallback>{member?.name?.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium truncate">{member?.name}</h4>
+                            {member?.id === currentUser?.id && (
+                              <Badge variant="outline" className="text-xs">
+                                You
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{member?.email}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{member?.email}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold">{member?.completionRate}%</div>
-                        <div className="text-xs text-muted-foreground">
-                          {member?.completedTasks}/{member?.totalTasks} tasks
+                        <div className="text-right">
+                          <div className="text-lg font-bold">{member?.completionRate}%</div>
+                          <div className="text-xs text-muted-foreground">
+                            {member?.completedTasks}/{member?.totalTasks} tasks
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="mt-3">
-                      <Progress value={member?.completionRate} className="h-2" />
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+                      <div className="mt-3">
+                        <Progress value={member?.completionRate} className="h-2" />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border/70 bg-muted/20 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">Add team members to start tracking performance.</p>
+                </div>
+              )}
             </Card>
           </motion.div>
 
@@ -1299,12 +1896,12 @@ function DoctorDashboard() {
 
   const quickLinks = [
     {
-      title: "All Teams",
-      icon: Users,
-      href: "/dashboard/teams",
+      title: "Supervision",
+      icon: ClipboardList,
+      href: "/dashboard/supervisor-toolkit",
       count: supervisedTeams.length,
       color: "from-blue-500 to-cyan-500",
-      description: "Supervised teams",
+      description: "Team oversight",
     },
     {
       title: "Proposals",
@@ -1316,28 +1913,28 @@ function DoctorDashboard() {
       urgent: pendingProposals.length > 0,
     },
     {
+      title: "Submissions",
+      icon: Upload,
+      href: "/dashboard/submissions",
+      count: 0,
+      color: "from-purple-500 to-pink-500",
+      description: "Grade deliverables",
+    },
+    {
+      title: "Meetings",
+      icon: Video,
+      href: "/dashboard/meetings",
+      count: upcomingMeetings.length,
+      color: "from-green-500 to-emerald-500",
+      description: "Student meetings",
+    },
+    {
       title: "Grades Overview",
       icon: ClipboardCheck,
       href: "/dashboard/evaluations",
-      count: 4,
-      color: "from-purple-500 to-pink-500",
-      description: "Final grades",
-    },
-    {
-      title: "Calendar",
-      icon: Calendar,
-      href: "/dashboard/calendar",
-      count: upcomingMeetings.length,
-      color: "from-green-500 to-emerald-500",
-      description: "Schedule",
-    },
-    {
-      title: "Discussions",
-      icon: MessageSquare,
-      href: "/dashboard/discussions",
-      count: 8,
+      count: 0,
       color: "from-indigo-500 to-violet-500",
-      description: "Team discussions",
+      description: "Final grades",
     },
     {
       title: "Analytics",
@@ -1348,20 +1945,20 @@ function DoctorDashboard() {
       description: "Performance metrics",
     },
     {
-      title: "Settings",
-      icon: Settings,
-      href: "/dashboard/settings",
+      title: "Reports",
+      icon: FileText,
+      href: "/dashboard/reports",
       count: 0,
       color: "from-gray-500 to-slate-500",
-      description: "Preferences",
+      description: "Academic reports",
     },
     {
-      title: "Help",
-      icon: HelpCircle,
-      href: "/dashboard/help",
+      title: "Risk Management",
+      icon: AlertTriangle,
+      href: "/dashboard/risk-management",
       count: 0,
       color: "from-teal-500 to-cyan-500",
-      description: "Support & FAQ",
+      description: "At-risk teams",
     },
   ]
 
@@ -1577,7 +2174,7 @@ function DoctorDashboard() {
         </motion.div>
 
         {/* Right Column */}
-        <div className="space-y-6">
+        <div className="flex h-full min-h-0 flex-col gap-6">
           {/* Team Health Overview */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
             <Card className="glass-card p-6 rounded-2xl">
@@ -1610,8 +2207,13 @@ function DoctorDashboard() {
             </Card>
           </motion.div>
 
+          {/* Schedule */}
+          <motion.div className="min-h-0 flex-1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            <ScheduleCard className="h-full" />
+          </motion.div>
+
           {/* Upcoming Meetings */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+          <motion.div className="hidden" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
             <Card className="glass-card p-6 rounded-2xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg flex items-center gap-2">
@@ -1680,68 +2282,68 @@ function TADashboard() {
 
   const quickLinks = [
     {
-      title: "My Teams",
-      icon: Users,
-      href: "/dashboard/teams",
-      count: supervisedTeams.length,
-      color: "from-blue-500 to-cyan-500",
-      description: "Assigned teams",
-    },
-    {
-      title: "Calendar",
-      icon: Calendar,
-      href: "/dashboard/calendar",
-      count: upcomingMeetings.length,
-      color: "from-green-500 to-emerald-500",
-      description: "Schedule & meetings",
-    },
-    {
-      title: "Discussions",
-      icon: MessageSquare,
-      href: "/dashboard/discussions",
-      count: 12,
-      color: "from-purple-500 to-pink-500",
-      description: "Team discussions",
-    },
-    {
       title: "Review Tasks",
       icon: ClipboardCheck,
       href: "/dashboard/reviews",
-      count: 3,
-      color: "from-orange-500 to-amber-500",
+      count: 0,
+      color: "from-blue-500 to-cyan-500",
       description: "TA task queue",
     },
     {
-      title: "Files",
-      icon: FolderOpen,
-      href: "/dashboard/files",
-      count: 45,
+      title: "Supervision",
+      icon: ClipboardList,
+      href: "/dashboard/supervisor-toolkit",
+      count: supervisedTeams.length,
+      color: "from-orange-500 to-amber-500",
+      description: "Assist teams",
+    },
+    {
+      title: "Submissions",
+      icon: Upload,
+      href: "/dashboard/submissions",
+      count: 0,
+      color: "from-purple-500 to-pink-500",
+      description: "First-pass grading",
+    },
+    {
+      title: "My Teams",
+      icon: Users,
+      href: "/dashboard/teams",
+      count: 0,
+      color: "from-green-500 to-emerald-500",
+      description: "Assigned teams",
+    },
+    {
+      title: "Risk Management",
+      icon: AlertTriangle,
+      href: "/dashboard/risk-management",
+      count: 0,
       color: "from-indigo-500 to-violet-500",
-      description: "Team documents",
+      description: "Team blockers",
+    },
+    {
+      title: "Meetings",
+      icon: Video,
+      href: "/dashboard/meetings",
+      count: upcomingMeetings.length,
+      color: "from-rose-500 to-pink-500",
+      description: "Review sessions",
+    },
+    {
+      title: "GitHub",
+      icon: GitBranch,
+      href: "/dashboard/github",
+      count: 0,
+      color: "from-gray-500 to-slate-500",
+      description: "Code activity",
     },
     {
       title: "Chat",
       icon: MessageSquare,
       href: "/dashboard/chat",
-      count: 8,
+      count: 0,
       color: "from-teal-500 to-cyan-500",
       description: "Direct messages",
-    },
-    {
-      title: "First-Pass Submissions",
-      icon: BarChart3,
-      href: "/dashboard/submissions",
-      count: 0,
-      color: "from-rose-500 to-pink-500",
-      description: "Recommend grades",
-    },
-    {
-      title: "Settings",
-      icon: Settings,
-      href: "/dashboard/settings",
-      count: 0,
-      color: "from-gray-500 to-slate-500",
-      description: "Preferences",
     },
   ]
 
@@ -1853,7 +2455,7 @@ function TADashboard() {
           <Card className="glass-card p-6 rounded-2xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <Users className="h-5 w-5 text-teal-500" /> Assigned Teams
+                <Users className="h-5 w-5 text-blue-500" /> Supervised Teams
               </h3>
               <Button variant="outline" size="sm" asChild className="bg-transparent">
                 <NextLink href="/dashboard/teams">
@@ -1862,84 +2464,77 @@ function TADashboard() {
               </Button>
             </div>
 
-            <div className="space-y-4">
-              {supervisedTeams.map((team, index) => {
-                const leader = team.leader
-                const doctor = team.doctor
-                const progress = getTeamProgressFallback(team)
-                return (
-                  <motion.div
-                    key={team.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                    className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/50 transition-all cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10">
-                          <AvatarImage src={leader?.avatarUrl || "/placeholder.svg"} />
-                          <AvatarFallback>{team.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium">{team.name}</h4>
-                          <p className="text-xs text-muted-foreground">
-                            Supervisor: Dr. {doctor?.fullName?.split(" ").slice(1).join(" ")}
-                          </p>
+            <ScrollArea className="h-[400px] pr-4">
+              <div className="space-y-4">
+                {supervisedTeams.map((team, index) => {
+                  const leader = team.leader
+                  const progress = getTeamProgressFallback(team)
+                  return (
+                    <motion.div
+                      key={team.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 + index * 0.05 }}
+                      className="p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/50 transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10">
+                            <AvatarImage src={leader?.avatarUrl || "/placeholder.svg"} />
+                            <AvatarFallback>{team.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-medium">{team.name}</h4>
+                            <p className="text-xs text-muted-foreground">Led by {leader?.fullName}</p>
+                          </div>
                         </div>
+                        <Badge
+                          variant={
+                            !team.isFull
+                              ? "default"
+                              : team.stage === "REQUIREMENTS"
+                                ? "secondary"
+                                : "destructive"
+                          }
+                        >
+                          {!team.isFull ? "healthy" : "at-risk"}
+                        </Badge>
                       </div>
-                      <Badge
-                        variant={
-                          !team.isFull
-                            ? "default"
-                            : team.stage === "REQUIREMENTS"
-                              ? "secondary"
-                              : "destructive"
-                        }
-                      >
-                        {!team.isFull ? "healthy" : "at-risk"}
-                      </Badge>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Progress</span>
-                        <span className="font-medium">{progress}%</span>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Progress</span>
+                          <span className="font-medium">{progress}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
                       </div>
-                      <Progress value={progress} className="h-2" />
-                    </div>
-                    <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                      <span>{team.memberCount} members</span>
-                      <Badge variant="outline" className="capitalize">
-                        {team.stage}
-                      </Badge>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
+                      <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                        <span>{team.memberCount} members</span>
+                        <Badge variant="outline" className="capitalize">
+                          {team.stage}
+                        </Badge>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </ScrollArea>
           </Card>
         </motion.div>
 
         {/* Right Column */}
-        <div className="space-y-6">
-          {/* Office Hours */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
-            <Card className="glass-card p-6 rounded-2xl bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border-teal-500/20">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Clock className="h-5 w-5 text-teal-500" /> Office Hours
-              </h3>
-              <div className="text-center py-4">
-                <div className="text-2xl font-bold mb-2">{currentUser?.officeHours}</div>
-                <p className="text-sm text-muted-foreground">Available for student consultations</p>
-              </div>
-              <Button className="w-full mt-2 bg-transparent" variant="outline">
-                <Calendar className="h-4 w-4 mr-2" /> Schedule Meeting
-              </Button>
-            </Card>
+        <div className="flex h-full min-h-0 flex-col gap-6">
+          {/* Schedule */}
+          <motion.div className="min-h-0 flex-1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
+            <ScheduleCard className="h-full" />
+          </motion.div>
+
+          {/* Meetings */}
+          <motion.div className="min-h-0 flex-1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+            <MeetingsCard className="h-full" />
           </motion.div>
 
           {/* Upcoming Meetings */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+          <motion.div className="hidden" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
             <Card className="glass-card p-6 rounded-2xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-bold text-lg flex items-center gap-2">
@@ -1985,11 +2580,22 @@ function TADashboard() {
 // ============================================
 function AdminDashboard() {
   const { currentUser, hasHydrated } = useAuthStore()
+  const systemHealthCardRef = useRef<HTMLDivElement | null>(null)
   const [greeting, setGreeting] = useState("")
   const [currentTime, setCurrentTime] = useState(new Date())
   const [usersSummary, setUsersSummary] = useState<UsersSummary | null>(null)
   const [isSummaryLoading, setIsSummaryLoading] = useState(true)
   const [summaryError, setSummaryError] = useState("")
+  const [backendHealth, setBackendHealth] = useState<{ ok: boolean; latencyMs: number | null; error: string }>({
+    ok: false,
+    latencyMs: null,
+    error: "",
+  })
+  const [systemLogs, setSystemLogs] = useState<SystemLogsResponse | null>(null)
+  const [recentActivities, setRecentActivities] = useState<ActivityEntry[]>([])
+  const [isAdminMetricsLoading, setIsAdminMetricsLoading] = useState(true)
+  const [adminMetricsError, setAdminMetricsError] = useState("")
+  const [recentActivityHeight, setRecentActivityHeight] = useState<number | null>(null)
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -2027,6 +2633,86 @@ function AdminDashboard() {
     }
   }, [currentUser?.role, hasHydrated])
 
+  useEffect(() => {
+    if (!hasHydrated || currentUser?.role !== "admin") return
+
+    const card = systemHealthCardRef.current
+    if (!card) return
+
+    const updateHeight = () => {
+      if (window.innerWidth < 1024) {
+        setRecentActivityHeight(null)
+        return
+      }
+      setRecentActivityHeight(Math.ceil(card.getBoundingClientRect().height))
+    }
+
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(card)
+    window.addEventListener("resize", updateHeight)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener("resize", updateHeight)
+    }
+  }, [currentUser?.role, hasHydrated, isSummaryLoading, summaryError, isAdminMetricsLoading, adminMetricsError])
+
+  useEffect(() => {
+    if (!hasHydrated || currentUser?.role !== "admin") return
+
+    let cancelled = false
+
+    async function loadAdminMetrics() {
+      setIsAdminMetricsLoading(true)
+      setAdminMetricsError("")
+
+      const startedAt = performance.now()
+      const healthPromise = fetch(getBackendHealthUrl(), { cache: "no-store" })
+        .then(async (response) => {
+          const body = await response.json().catch(() => null)
+          return {
+            ok: response.ok && body?.ok === true,
+            latencyMs: Math.round(performance.now() - startedAt),
+            error: response.ok ? "" : `Health check failed (${response.status})`,
+          }
+        })
+        .catch((error: unknown) => ({
+          ok: false,
+          latencyMs: Math.round(performance.now() - startedAt),
+          error: error instanceof Error ? error.message : "Health check failed.",
+        }))
+
+      try {
+        const [health, logsResult, activityResult] = await Promise.all([
+          healthPromise,
+          adminLogsApi.getSystemLogs({ page: 1, limit: 5 }),
+          adminLogsApi.getUserActivity({ page: 1, limit: 12 }),
+        ])
+
+        if (cancelled) return
+        setBackendHealth(health)
+        setSystemLogs(logsResult)
+        setRecentActivities(activityResult.activities)
+      } catch (error: unknown) {
+        if (cancelled) return
+        setBackendHealth(await healthPromise)
+        setSystemLogs(null)
+        setRecentActivities([])
+        setAdminMetricsError(error instanceof Error ? error.message : "Couldn't load admin dashboard activity.")
+      } finally {
+        if (!cancelled) setIsAdminMetricsLoading(false)
+      }
+    }
+
+    void loadAdminMetrics()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentUser?.role, hasHydrated])
+
   const totalUsers = usersSummary?.totalUsers
   const totalTeams = teams.length
   const totalDoctors = usersSummary?.byRole.doctors
@@ -2051,77 +2737,105 @@ function AdminDashboard() {
       description: "Manage all users",
     },
     {
-      title: "Team Management",
+      title: "All Teams",
       icon: Users2,
       href: "/dashboard/teams",
       count: totalTeams,
       color: "from-purple-500 to-pink-500",
-      description: "All teams",
+      description: "Team directory",
+    },
+    {
+      title: "Audit Logs",
+      icon: ClipboardList,
+      href: "/dashboard/admin/logs",
+      count: 0,
+      color: "from-green-500 to-emerald-500",
+      description: "Activity history",
     },
     {
       title: "Analytics",
       icon: BarChart3,
       href: "/dashboard/analytics",
       count: 0,
-      color: "from-green-500 to-emerald-500",
-      description: "System analytics",
-    },
-    {
-      title: "Settings",
-      icon: Settings,
-      href: "/dashboard/settings",
-      count: 0,
       color: "from-orange-500 to-amber-500",
-      description: "System settings",
-    },
-    {
-      title: "Audit Logs",
-      icon: ClipboardList,
-      href: "/dashboard/admin/logs",
-      count: 156,
-      color: "from-indigo-500 to-violet-500",
-      description: "Activity logs",
+      description: "System analytics",
     },
     {
       title: "Reports",
       icon: FileText,
-      href: "/dashboard/admin/reports",
-      count: 12,
+      href: "/dashboard/reports",
+      count: 0,
+      color: "from-indigo-500 to-violet-500",
+      description: "Platform reports",
+    },
+    {
+      title: "Grades Overview",
+      icon: Award,
+      href: "/dashboard/evaluations",
+      count: 0,
       color: "from-rose-500 to-pink-500",
-      description: "System reports",
+      description: "Academic outcomes",
     },
     {
-      title: "Notifications",
-      icon: Bell,
-      href: "/dashboard/admin/notifications",
-      count: 5,
+      title: "Announcements",
+      icon: Megaphone,
+      href: "/dashboard/announcements",
+      count: 0,
       color: "from-teal-500 to-cyan-500",
-      description: "Announcements",
+      description: "Broadcast updates",
     },
     {
-      title: "Backup",
-      icon: Database,
-      href: "/dashboard/admin/backup",
+      title: "Chat",
+      icon: MessageSquare,
+      href: "/dashboard/chat",
       count: 0,
       color: "from-gray-500 to-slate-500",
-      description: "Data backup",
+      description: "Operational messages",
     },
   ]
 
-  const systemHealth = [
-    { label: "Server Status", value: "Online", status: "healthy", icon: Server },
-    { label: "Database", value: "Connected", status: "healthy", icon: Database },
-    { label: "API Response", value: "45ms", status: "healthy", icon: Zap },
-    { label: "Storage", value: "67%", status: "warning", icon: HardDrive },
+  const apiLatencyStatus: AdminHealthStatus =
+    backendHealth.latencyMs === null ? "warning" : backendHealth.latencyMs <= 750 ? "healthy" : backendHealth.latencyMs <= 1500 ? "warning" : "error"
+  const adminDataStatus: AdminHealthStatus =
+    isSummaryLoading || isAdminMetricsLoading ? "warning" : summaryError || adminMetricsError ? "error" : "healthy"
+  const errorLogCount = systemLogs?.counts.error ?? 0
+  const systemHealth: Array<{
+    label: string
+    value: string
+    status: AdminHealthStatus
+    icon: typeof Activity
+    detail: string
+  }> = [
+    {
+      label: "Backend API",
+      value: isAdminMetricsLoading ? "Checking..." : backendHealth.ok ? "Online" : "Unavailable",
+      status: isAdminMetricsLoading ? "warning" : backendHealth.ok ? "healthy" : "error",
+      icon: Server,
+      detail: backendHealth.error || "Verified through the backend health endpoint.",
+    },
+    {
+      label: "Response Time",
+      value: backendHealth.latencyMs === null ? "..." : `${backendHealth.latencyMs}ms`,
+      status: backendHealth.ok ? apiLatencyStatus : "error",
+      icon: Zap,
+      detail: "Measured from this dashboard to the backend health endpoint.",
+    },
+    {
+      label: "Admin Data API",
+      value: adminDataStatus === "healthy" ? "Available" : isSummaryLoading || isAdminMetricsLoading ? "Checking..." : "Issue",
+      status: adminDataStatus,
+      icon: Shield,
+      detail: summaryError || adminMetricsError || "Users, logs, and activity endpoints responded successfully.",
+    },
+    {
+      label: "Error Logs",
+      value: isAdminMetricsLoading ? "Checking..." : `${errorLogCount} open`,
+      status: isAdminMetricsLoading ? "warning" : errorLogCount > 0 ? "warning" : "healthy",
+      icon: AlertTriangle,
+      detail: "Live count from the admin system logs endpoint.",
+    },
   ]
-
-  const recentActivities = [
-    { id: 1, user: "Dr. Ahmed Hassan", action: "Created new team", time: "5 min ago", icon: Plus },
-    { id: 2, user: "Layla Ibrahim", action: "Approved proposal", time: "15 min ago", icon: Check },
-    { id: 3, user: "Youssef Ahmed", action: "Submitted milestone", time: "1 hour ago", icon: Upload },
-    { id: 4, user: "System", action: "Backup completed", time: "2 hours ago", icon: Database },
-    { id: 5, user: "Dr. Fatima Ali", action: "Scheduled meeting", time: "3 hours ago", icon: Calendar },
-  ]
+  const visibleRecentActivities = recentActivities.slice(0, 6)
 
   return (
     <div className="space-y-6">
@@ -2176,7 +2890,7 @@ function AdminDashboard() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" /> Admin Controls
+            <Zap className="h-5 w-5 text-primary" /> Quick Access
           </h2>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2217,25 +2931,22 @@ function AdminDashboard() {
       </motion.div>
 
       {/* Main Content */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         {/* System Health */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-2"
+          className="lg:col-span-2 lg:row-start-1"
         >
-          <Card className="glass-card p-6 rounded-2xl">
+          <Card ref={systemHealthCardRef} className="glass-card p-6 pb-5 rounded-2xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Activity className="h-5 w-5 text-green-500" /> System Health
               </h3>
-              <Badge variant="outline" className="text-green-600 border-green-500/50">
-                All Systems Operational
-              </Badge>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
               {systemHealth.map((item, index) => (
                 <motion.div
                   key={item.label}
@@ -2265,6 +2976,7 @@ function AdminDashboard() {
                     <span className="text-sm font-medium">{item.label}</span>
                   </div>
                   <div className="text-lg font-bold">{item.value}</div>
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>
                 </motion.div>
               ))}
             </div>
@@ -2279,23 +2991,23 @@ function AdminDashboard() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="p-4 rounded-xl bg-muted/30 text-center">
+                <div className="p-3 rounded-xl bg-muted/30 text-center">
                   <div className="text-2xl font-bold text-blue-500">{formatSummaryValue(totalDoctors)}</div>
                   <div className="text-xs text-muted-foreground">Doctors</div>
                 </div>
-                <div className="p-4 rounded-xl bg-muted/30 text-center">
+                <div className="p-3 rounded-xl bg-muted/30 text-center">
                   <div className="text-2xl font-bold text-teal-500">{formatSummaryValue(totalTAs)}</div>
                   <div className="text-xs text-muted-foreground">TAs</div>
                 </div>
-                <div className="p-4 rounded-xl bg-muted/30 text-center">
+                <div className="p-3 rounded-xl bg-muted/30 text-center">
                   <div className="text-2xl font-bold text-purple-500">{formatSummaryValue(totalStudents)}</div>
                   <div className="text-xs text-muted-foreground">Students</div>
                 </div>
-                <div className="p-4 rounded-xl bg-muted/30 text-center">
+                <div className="p-3 rounded-xl bg-muted/30 text-center">
                   <div className="text-2xl font-bold text-amber-500">{formatSummaryValue(totalLeaders)}</div>
                   <div className="text-xs text-muted-foreground">Team Leaders</div>
                 </div>
-                <div className="p-4 rounded-xl bg-muted/30 text-center">
+                <div className="p-3 rounded-xl bg-muted/30 text-center">
                   <div className="text-2xl font-bold text-rose-500">{formatSummaryValue(totalAdmins)}</div>
                   <div className="text-xs text-muted-foreground">Admins</div>
                 </div>
@@ -2305,66 +3017,84 @@ function AdminDashboard() {
         </motion.div>
 
         {/* Right Column */}
-        <div className="space-y-6">
+        <div className="min-h-0 lg:row-start-1 lg:self-start" style={recentActivityHeight ? { height: recentActivityHeight } : undefined}>
           {/* Recent Activity */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
-            <Card className="glass-card p-6 rounded-2xl">
-              <div className="flex items-center justify-between mb-4">
+          <motion.div className="h-full max-h-full min-h-0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.25 }}>
+            <Card className="glass-card flex h-full min-h-0 flex-col overflow-hidden p-6 rounded-2xl">
+              <div className="mb-4 flex shrink-0 items-center justify-between">
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Activity className="h-5 w-5 text-blue-500" /> Recent Activity
                 </h3>
-                <Badge variant="secondary" className="animate-pulse">
-                  Live
-                </Badge>
               </div>
 
-              <div className="space-y-3">
-                {recentActivities.map((activity, index) => (
-                  <motion.div
-                    key={activity.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.05 }}
-                    className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/30 transition-all"
-                  >
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <activity.icon className="h-4 w-4 text-primary" />
+              <ScrollArea className="-mr-3 min-h-0 flex-1 pr-3">
+                <div className="space-y-3">
+                  {isAdminMetricsLoading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-muted/20">
+                        <div className="h-9 w-9 shrink-0 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-28 rounded bg-muted" />
+                          <div className="h-3 w-full rounded bg-muted" />
+                        </div>
+                      </div>
+                    ))
+                  ) : adminMetricsError ? (
+                    <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-600">
+                      {adminMetricsError}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{activity.user}</p>
-                      <p className="text-xs text-muted-foreground">{activity.action}</p>
+                  ) : recentActivities.length === 0 ? (
+                    <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-sm text-muted-foreground">
+                      No recent activity is available yet.
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.time}</span>
-                  </motion.div>
-                ))}
-              </div>
+                  ) : (
+                    visibleRecentActivities.map((activity, index) => {
+                      const ActivityIcon = getAdminActivityIcon(activity.action)
+                      return (
+                        <motion.div
+                          key={activity.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.3 + index * 0.05 }}
+                          className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/30 transition-all"
+                        >
+                          <Avatar className="h-9 w-9 shrink-0 border border-border/60">
+                            <AvatarImage src={activity.user.avatarUrl || "/placeholder.svg"} />
+                            <AvatarFallback className="text-xs">
+                              {activity.user.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <ActivityIcon className="h-3.5 w-3.5 shrink-0 text-primary" />
+                              <p className="truncate text-sm font-medium">{activity.user.name}</p>
+                            </div>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {activity.action} {activity.target}
+                            </p>
+                            {activity.teamName && (
+                              <Badge variant="outline" className="mt-2 text-[10px]">
+                                {activity.teamName}
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatRelativeTime(activity.timestamp)}
+                          </span>
+                        </motion.div>
+                      )
+                    })
+                  )}
+                </div>
+              </ScrollArea>
 
-              <Button variant="outline" className="w-full mt-4 bg-transparent" asChild>
+              <Button variant="outline" className="mt-4 w-full shrink-0 bg-transparent" asChild>
                 <NextLink href="/dashboard/admin/logs">View All Logs</NextLink>
               </Button>
-            </Card>
-          </motion.div>
-
-          {/* Quick Actions */}
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
-            <Card className="glass-card p-6 rounded-2xl">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Zap className="h-5 w-5 text-amber-500" /> Quick Actions
-              </h3>
-              <div className="space-y-2">
-                <Button className="w-full justify-start gap-2 bg-transparent" variant="outline">
-                  <UserPlus className="h-4 w-4" /> Add New User
-                </Button>
-                <Button className="w-full justify-start gap-2 bg-transparent" variant="outline">
-                  <Users2 className="h-4 w-4" /> Create Team
-                </Button>
-                <Button className="w-full justify-start gap-2 bg-transparent" variant="outline">
-                  <Megaphone className="h-4 w-4" /> Send Announcement
-                </Button>
-                <Button className="w-full justify-start gap-2 bg-transparent" variant="outline">
-                  <Download className="h-4 w-4" /> Export Data
-                </Button>
-              </div>
             </Card>
           </motion.div>
         </div>

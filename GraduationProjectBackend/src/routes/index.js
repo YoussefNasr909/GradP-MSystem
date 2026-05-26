@@ -28,6 +28,7 @@ import sprintsRouter from "../modules/sprints/sprints.routes.js";
 import gamificationRouter from "../modules/gamification/gamification.routes.js";
 import economyRouter from "../modules/economy/economy.routes.js";
 import weeklyReportsRouter from "../modules/weekly-reports/weekly-reports.routes.js";
+import supportRouter from "../modules/support/support.routes.js";
 const router = Router();
 
 router.get("/ping", (req, res) => {
@@ -61,5 +62,6 @@ router.use("/sprints", sprintsRouter);
 router.use("/gamification", gamificationRouter);
 router.use("/economy", economyRouter);
 router.use("/weekly-reports", weeklyReportsRouter);
+router.use("/support", supportRouter);
 export default router;
 

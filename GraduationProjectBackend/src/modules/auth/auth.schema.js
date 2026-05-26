@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ROLE_VALUES } from "../../common/constants/roles.js";
+import { ROLES } from "../../common/constants/roles.js";
 import { DEPARTMENT_VALUES } from "../../common/constants/departments.js";
 import { ACADEMIC_YEAR_VALUES } from "../../common/constants/academicYears.js";
 import { TRACK_VALUES } from "../../common/constants/tracks.js";
@@ -35,7 +35,7 @@ export const registerSchema = z.object({
       acceptTerms: z.literal(true),
 
       // اختياري (لو عايزين): مش موجود في UI غالبًا
-      role: z.enum(ROLE_VALUES).optional(),
+      role: z.literal(ROLES.STUDENT).optional(),
     })
     .refine((data) => data.password === data.confirmPassword, {
       message: "Passwords do not match",

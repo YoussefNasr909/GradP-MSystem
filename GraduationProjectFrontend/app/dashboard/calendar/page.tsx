@@ -19,12 +19,14 @@ import {
 } from "date-fns"
 import {
   AlertCircle,
+  Calendar,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCopy,
+  Clock3,
   ExternalLink,
   Filter,
   Link2,
@@ -328,10 +330,10 @@ export default function CalendarPage() {
   const connectedCount = integrations.filter((i) => i.syncEnabled).length
   const visibleRange = getLoadRange(view, month, selectedDay)
 
-  function selectDay(day: Date, nextView?: CalendarView) {
+  function selectDay(day: Date, nextView: CalendarView = "day") {
     setSelectedDay(day)
     setMonth(day)
-    if (nextView) setView(nextView)
+    setView(nextView)
   }
 
   function goToday() {
@@ -478,73 +480,154 @@ export default function CalendarPage() {
         className="space-y-5"
       >
         {/* ── PAGE HEADER ────────────────────────────────────────── */}
-        <div className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <CalendarDays className="h-3 w-3" />
-                Calendar
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">One schedule for everything.</h1>
-              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-                Navigate meetings and deadlines by day, week, month, or agenda. Open any item for details and actions.
-              </p>
+        <motion.div 
+          variants={{
+            initial: { opacity: 0, y: 20 },
+            animate: { opacity: 1, y: 0 }
+          }}
+          className="group/header relative overflow-hidden rounded-[40px] border border-white/10 bg-white/5 p-8 backdrop-blur-xl transition-all duration-700 hover:border-primary/20"
+        >
+          {/* Animated Background Elements */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.05] via-transparent to-indigo-500/[0.05]" />
+          <motion.div
+            className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-primary/10 blur-3xl pointer-events-none transition-all duration-1000 group-hover/header:bg-primary/20 group-hover/header:scale-125"
+            animate={{ 
+              scale: [1, 1.2, 1],
+              rotate: [0, 90, 0],
+              x: [0, 40, 0],
+              y: [0, -20, 0]
+            }}
+            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div 
+            className="absolute -left-20 -bottom-20 h-64 w-64 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none"
+            animate={{ 
+              scale: [1, 1.3, 1],
+              x: [0, -30, 0],
+              y: [0, 30, 0]
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          />
+
+          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-3">
+              <motion.div 
+                className="flex items-center gap-5"
+                initial={{ opacity: 0, x: -30 }} 
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-primary/20 text-primary shadow-2xl ring-1 ring-primary/30 transition-all duration-700 group-hover/header:scale-110 group-hover/header:rotate-6 group-hover/header:shadow-primary/20">
+                  <CalendarDays className="h-8 w-8" />
+                </div>
+                <div className="space-y-1">
+                  <h1 className="text-4xl font-black tracking-tighter text-foreground/90 sm:text-5xl">
+                    Calendar
+                  </h1>
+                  <p className="text-xs font-bold uppercase tracking-[0.3em] text-primary/60">
+                    {format(new Date(), "EEEE, MMMM do")}
+                  </p>
+                </div>
+              </motion.div>
+              <motion.p 
+                className="max-w-xl text-sm font-medium leading-relaxed text-muted-foreground/60"
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                transition={{ delay: 0.2, duration: 0.8 }}
+              >
+                Experience a unified schedule where meetings and deadlines converge. 
+                Navigate your project's timeline with precision and clarity.
+              </motion.p>
             </div>
 
-            {/* Nav group */}
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => void loadPage(true)} disabled={refreshing}>
-                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+            <div className="flex shrink-0 flex-wrap items-center gap-4">
+              <Button 
+                variant="outline" 
+                className="h-12 rounded-2xl border-white/10 bg-white/5 px-6 text-[11px] font-black uppercase tracking-[0.2em] transition-all hover:bg-white/10 hover:text-primary hover:scale-[1.05] active:scale-[0.95] shadow-sm hover:shadow-md"
+                onClick={() => void loadPage(true)} 
+                disabled={refreshing}
+              >
+                <RefreshCcw className={cn("mr-3 h-4 w-4", refreshing && "animate-spin")} />
                 Refresh
               </Button>
-              <div className="flex items-center rounded-lg border bg-background divide-x">
-                <Button variant="ghost" size="sm" className="h-8 rounded-none rounded-l-md px-2.5" onClick={() => moveCursor(-1)} aria-label={`Previous ${viewLabels[view]}`}>
-                  <ChevronLeft className="h-4 w-4" />
+              <div className="flex items-center rounded-2xl border border-white/10 bg-white/5 overflow-hidden shadow-sm transition-all hover:shadow-xl hover:border-primary/20">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-12 rounded-none px-4 hover:bg-primary/10 hover:text-primary transition-colors" 
+                  onClick={() => moveCursor(-1)} 
+                  aria-label={`Previous ${viewLabels[view]}`}
+                >
+                  <ChevronLeft className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="sm" className="h-8 rounded-none px-3 text-xs font-medium" onClick={goToday}>
+                <Separator orientation="vertical" className="h-8 bg-white/10" />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-12 rounded-none px-6 text-[11px] font-black uppercase tracking-[0.2em] hover:bg-primary/10 hover:text-primary transition-colors" 
+                  onClick={goToday}
+                >
                   Today
                 </Button>
-                <Button variant="ghost" size="sm" className="h-8 rounded-none rounded-r-md px-2.5" onClick={() => moveCursor(1)} aria-label={`Next ${viewLabels[view]}`}>
-                  <ChevronRight className="h-4 w-4" />
+                <Separator orientation="vertical" className="h-8 bg-white/10" />
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-12 rounded-none px-4 hover:bg-primary/10 hover:text-primary transition-colors" 
+                  onClick={goToday}
+                  aria-label={`Next ${viewLabels[view]}`}
+                >
+                  <ChevronRight className="h-5 w-5" />
                 </Button>
               </div>
             </div>
           </div>
 
           {/* Stats strip */}
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
-            <QuickStat label="Today" value={todayEvents.length} />
-            <QuickStat label="Meetings" value={meetingEvents.length} />
-            <QuickStat label="Deadlines" value={taskEvents.length} />
-            <QuickStat label="Needs attention" value={actionNeededEvents.length} tone="warning" />
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <QuickStat label="Today" value={todayEvents.length} icon={CalendarClock} />
+            <QuickStat label="Meetings" value={meetingEvents.length} icon={Users} />
+            <QuickStat label="Deadlines" value={taskEvents.length} icon={AlertCircle} />
+            <QuickStat label="Attention" value={actionNeededEvents.length} tone="warning" icon={CalendarDays} />
           </div>
-        </div>
+        </motion.div>
 
         {/* ── FILTER BAR ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 gap-2 rounded-xl bg-muted/30 p-3 sm:flex sm:flex-wrap sm:items-center">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md sm:flex-row sm:items-center"
+        >
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-full bg-background pl-8 text-sm sm:min-w-[180px] sm:flex-1"
-              placeholder="Search events..."
+              className="h-12 w-full rounded-2xl border-white/5 bg-white/5 pl-11 text-sm font-bold transition-all focus:bg-white/10 focus:ring-primary/20 placeholder:text-muted-foreground/40"
+              placeholder="Search events, teams, or locations..."
             />
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:contents">
+          <div className="grid grid-cols-2 gap-4 sm:flex sm:items-center">
             <Select value={sourceFilter} onValueChange={(v) => setSourceFilter(v as SourceFilter)}>
-              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All sources</SelectItem>
-                <SelectItem value="MEETING">Meetings</SelectItem>
-                <SelectItem value="TASK_DEADLINE">Deadlines</SelectItem>
+              <SelectTrigger className="h-12 w-full rounded-2xl border-white/5 bg-white/5 text-[10px] font-black uppercase tracking-[0.15em] sm:w-[160px] focus:ring-primary/20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-white/10 bg-background/95 backdrop-blur-xl">
+                <SelectItem value="ALL" className="text-xs font-bold uppercase tracking-wider">All sources</SelectItem>
+                <SelectItem value="MEETING" className="text-xs font-bold uppercase tracking-wider">Meetings</SelectItem>
+                <SelectItem value="TASK_DEADLINE" className="text-xs font-bold uppercase tracking-wider">Deadlines</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[140px]"><SelectValue /></SelectTrigger>
-              <SelectContent>
+              <SelectTrigger className="h-12 w-full rounded-2xl border-white/5 bg-white/5 text-[10px] font-black uppercase tracking-[0.15em] sm:w-[160px] focus:ring-primary/20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-white/10 bg-background/95 backdrop-blur-xl">
                 {statusOptions.map((s) => (
-                  <SelectItem key={s} value={s}>{s === "ALL" ? "All statuses" : formatLabel(s)}</SelectItem>
+                  <SelectItem key={s} value={s} className="text-xs font-bold uppercase tracking-wider">
+                    {s === "ALL" ? "All statuses" : formatLabel(s)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -553,69 +636,79 @@ export default function CalendarPage() {
           {/* Team filter — visible only to doctors / TAs when they supervise >1 team */}
           {isSupervisor && teamOptions.length > 0 && (
             <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-9 w-full bg-background text-sm sm:w-[180px]">
-                <Users className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <SelectTrigger className="h-12 w-full rounded-2xl border-white/5 bg-white/5 text-[10px] font-black uppercase tracking-[0.15em] sm:w-[200px] focus:ring-primary/20">
+                <Users className="mr-2 h-4 w-4 shrink-0 text-muted-foreground/50" />
                 <SelectValue placeholder="All teams" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All teams</SelectItem>
+              <SelectContent className="rounded-2xl border-white/10 bg-background/95 backdrop-blur-xl">
+                <SelectItem value="ALL" className="text-xs font-bold uppercase tracking-wider">All teams</SelectItem>
                 {teamOptions.map(({ id, name }) => (
-                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                  <SelectItem key={id} value={id} className="text-xs font-bold uppercase tracking-wider">{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
 
-          <div className="flex items-center justify-between gap-2 sm:contents">
-            <Button variant="ghost" size="sm" className="h-9 w-full px-3 text-sm sm:w-auto"
-              onClick={() => { setSearch(""); setSourceFilter("ALL"); setStatusFilter("ALL"); setTeamFilter("ALL") }}>
-              Clear filters
+          <div className="flex items-center justify-between gap-4 sm:ml-auto">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-10 px-4 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 hover:text-primary hover:bg-primary/5 transition-all rounded-xl"
+              onClick={() => { setSearch(""); setSourceFilter("ALL"); setStatusFilter("ALL"); setTeamFilter("ALL") }}
+            >
+              Reset
             </Button>
-            <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap sm:ml-auto">
-              {filteredEvents.length} item{filteredEvents.length !== 1 ? "s" : ""} · {connectedCount}/2
+            <div className="h-6 w-px bg-white/10" />
+            <span className="text-[10px] font-black uppercase tracking-wider text-primary/70 whitespace-nowrap bg-primary/5 px-3 py-1.5 rounded-lg border border-primary/10">
+              {filteredEvents.length} Results
             </span>
           </div>
-        </div>
+        </motion.div>
 
         {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
         {error ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 py-12 text-center">
             <AlertCircle className="h-10 w-10 text-destructive" />
             <div>
-              <h2 className="font-semibold">Calendar could not be loaded</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+              <h2 className="font-semibold text-foreground/80">Calendar could not be loaded</h2>
+              <p className="mt-1 text-sm text-muted-foreground/60">{error}</p>
             </div>
-            <Button size="sm" onClick={() => void loadPage(false)}>
-              <RefreshCcw className="h-4 w-4" />Retry
+            <Button size="sm" onClick={() => void loadPage(false)} className="rounded-xl">
+              <RefreshCcw className="h-4 w-4 mr-2" />Retry
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
             {/* ── LEFT: Views ─────────────────────────────────────── */}
-            <div className="space-y-0">
-              <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)}>
+            <div className="space-y-0 min-w-0">
+              <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)} className="w-full">
                 {/* View header + tab switcher */}
-                <div className="flex flex-col gap-3 rounded-t-xl border border-b-0 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">
+                <div className="flex flex-col gap-4 rounded-t-3xl border border-border/40 bg-background/40 px-6 py-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+                  <div className="space-y-0.5">
+                    <h2 className="text-lg font-bold tracking-tight text-foreground/80">
                       {view === "month" || view === "agenda"
                         ? format(month, "MMMM yyyy")
                         : format(selectedDay, "MMMM d, yyyy")}
                     </h2>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/30">
                       {format(visibleRange.start, "MMM d")} – {format(visibleRange.end, "MMM d, yyyy")}
                     </p>
                   </div>
-                  <TabsList className="h-8 w-full grid grid-cols-4 rounded-lg sm:w-fit">
-                    <TabsTrigger value="month" className="h-7 rounded-md px-2 text-xs sm:px-3">Month</TabsTrigger>
-                    <TabsTrigger value="week" className="h-7 rounded-md px-2 text-xs sm:px-3">Week</TabsTrigger>
-                    <TabsTrigger value="day" className="h-7 rounded-md px-2 text-xs sm:px-3">Day</TabsTrigger>
-                    <TabsTrigger value="agenda" className="h-7 rounded-md px-2 text-xs sm:px-3">Agenda</TabsTrigger>
+                  <TabsList className="h-9 w-full grid grid-cols-4 rounded-xl bg-muted/20 p-1 sm:w-fit">
+                    {Object.entries(viewLabels).map(([key, label]) => (
+                      <TabsTrigger 
+                        key={key} 
+                        value={key} 
+                        className="h-7 rounded-lg px-3 text-[10px] font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      >
+                        {label}
+                      </TabsTrigger>
+                    ))}
                   </TabsList>
                 </div>
 
-                <div className="rounded-b-xl border border-t-0 bg-card overflow-hidden">
-                  <TabsContent value="month" className="mt-0">
+                <div className="rounded-b-3xl border border-t-0 border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+                  <TabsContent value="month" className="mt-0 outline-none focus-visible:ring-0">
                     <CalendarGrid
                       month={month}
                       selectedDay={selectedDay}
@@ -627,8 +720,8 @@ export default function CalendarPage() {
                     />
                   </TabsContent>
 
-                  <TabsContent value="week" className="mt-0">
-                    <div className="p-4">
+                  <TabsContent value="week" className="mt-0 outline-none focus-visible:ring-0">
+                    <div className="p-4 sm:p-6">
                       {loading ? <CalendarSkeleton /> : (
                         <WeekView
                           days={weekDays}
@@ -641,11 +734,16 @@ export default function CalendarPage() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="day" className="mt-0">
-                    <div className="p-4">
-                      <div className="mb-3">
-                        <h3 className="font-semibold">{format(selectedDay, "EEEE, MMMM d")}</h3>
-                        <p className="text-xs text-muted-foreground">{selectedEvents.length} item{selectedEvents.length !== 1 ? "s" : ""} scheduled</p>
+                  <TabsContent value="day" className="mt-0 outline-none focus-visible:ring-0">
+                    <div className="p-6">
+                      <div className="mb-6 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold tracking-tight text-foreground/80">{format(selectedDay, "EEEE, MMMM d")}</h3>
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/30">{selectedEvents.length} Items Scheduled</p>
+                        </div>
+                        <div className="h-9 w-9 rounded-xl bg-primary/5 flex items-center justify-center text-primary/60">
+                          <CalendarClock className="h-4.5 w-4.5" />
+                        </div>
                       </div>
                       {loading ? <EventListSkeleton /> : (
                         <EventList
@@ -658,11 +756,16 @@ export default function CalendarPage() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="agenda" className="mt-0">
-                    <div className="p-4">
-                      <div className="mb-3">
-                        <h3 className="font-semibold">Agenda</h3>
-                        <p className="text-xs text-muted-foreground">Chronological list for this calendar range.</p>
+                  <TabsContent value="agenda" className="mt-0 outline-none focus-visible:ring-0">
+                    <div className="p-6">
+                      <div className="mb-6 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-bold tracking-tight text-foreground/80">Agenda View</h3>
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/30">Chronological schedule list</p>
+                        </div>
+                        <div className="h-9 w-9 rounded-xl bg-primary/5 flex items-center justify-center text-primary/60">
+                          <Search className="h-4.5 w-4.5" />
+                        </div>
                       </div>
                       {loading ? <EventListSkeleton /> : <AgendaList events={agendaEvents} onOpenEvent={setSelectedEvent} />}
                     </div>
@@ -674,34 +777,38 @@ export default function CalendarPage() {
             {/* ── RIGHT: Sidebar ──────────────────────────────────── */}
             <div className="space-y-4">
               {/* Provider connections */}
-              <div className="rounded-xl border bg-card overflow-hidden">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-semibold">Calendar providers</h3>
-                  <p className="text-xs text-muted-foreground">{connectedCount}/2 connected</p>
+              <div className="rounded-3xl border border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+                <div className="border-b border-border/40 px-5 py-4">
+                  <h3 className="text-xs font-bold tracking-tight text-foreground/70">Calendar Sync</h3>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/30">{connectedCount}/2 Active</p>
                 </div>
-                <div className="divide-y">
+                <div className="divide-y divide-border/10">
                   <ProviderCard provider="GOOGLE" integration={googleIntegration} running={runningAction} onAction={requestProviderAction} />
                   <ProviderCard provider="OUTLOOK" integration={outlookIntegration} running={runningAction} onAction={requestProviderAction} />
                 </div>
               </div>
 
               {/* Action center */}
-              <div className="rounded-xl border bg-card overflow-hidden">
-                <div className="border-b px-4 py-3">
-                  <h3 className="font-semibold">Action center</h3>
-                  <p className="text-xs text-muted-foreground">Approvals, conflicts, and sync problems</p>
+              <div className="rounded-3xl border border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+                <div className="border-b border-border/40 px-5 py-4">
+                  <h3 className="text-xs font-bold tracking-tight text-foreground/70">Action Center</h3>
+                  <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/30">Alerts & Status</p>
                 </div>
                 <div className="p-3">
                   {loading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-16 rounded-lg" />
-                      <Skeleton className="h-16 rounded-lg" />
+                    <div className="space-y-3">
+                      <Skeleton className="h-14 rounded-xl" />
+                      <Skeleton className="h-14 rounded-xl" />
                     </div>
                   ) : actionNeededEvents.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 py-8 text-center">
-                      <CheckCircle2 className="h-7 w-7 text-emerald-500/60" />
-                      <p className="text-sm font-medium">Everything looks clear</p>
-                      <p className="text-xs text-muted-foreground">No pending approvals or sync errors.</p>
+                      <div className="h-10 w-10 rounded-xl bg-emerald-500/5 flex items-center justify-center text-emerald-500/40">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[11px] font-bold text-foreground/60">Schedule Clear</p>
+                        <p className="text-[9px] font-medium text-muted-foreground/30 px-4">No pending approvals or sync errors.</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -770,17 +877,47 @@ export default function CalendarPage() {
 
 // ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
 
-function QuickStat({ label, value, tone = "default" }: { label: string; value: number; tone?: "default" | "warning" }) {
+function QuickStat({ 
+  label, 
+  value, 
+  tone = "default", 
+  icon: Icon 
+}: { 
+  label: string; 
+  value: number; 
+  tone?: "default" | "warning";
+  icon: React.ComponentType<{ className?: string }>
+}) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 sm:min-w-[120px]">
-      <span className={cn(
-        "text-xl font-bold leading-none tabular-nums",
-        tone === "warning" && value > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground"
+    <motion.div 
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-primary/20 hover:bg-white/10"
+    >
+      <div className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-500 shadow-inner",
+        tone === "warning" && value > 0 
+          ? "bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/20" 
+          : "bg-primary/10 text-primary group-hover:bg-primary/20 group-hover:rotate-3 ring-1 ring-primary/20"
       )}>
-        {value}
-      </span>
-      <span className="text-xs text-muted-foreground leading-tight">{label}</span>
-    </div>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex flex-col items-start min-w-0">
+        <motion.span 
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={cn(
+            "text-xl font-bold leading-none tabular-nums tracking-tight transition-colors duration-300",
+            tone === "warning" && value > 0 ? "text-amber-500" : "text-foreground/90"
+          )}
+        >
+          {value}
+        </motion.span>
+        <span className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-wider text-muted-foreground/60 transition-colors duration-300 group-hover:text-muted-foreground/80">
+          {label}
+        </span>
+      </div>
+    </motion.div>
   )
 }
 
@@ -801,24 +938,50 @@ function CalendarGrid({
   onSelectDay: (day: Date) => void
   onOpenEvent: (event: ApiCalendarEvent) => void
 }) {
+  const prefersReducedMotion = useReducedMotion()
+  
   if (loading) {
     return <div className="p-4"><CalendarSkeleton /></div>
+  }
+
+  // Use month string as key for animations so they only run when changing months
+  const monthKey = format(month, "yyyy-MM")
+
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.005
+      }
+    }
+  }
+
+  const item = {
+    hidden: { opacity: 0, scale: 0.98, y: 5 },
+    show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } }
   }
 
   return (
     <div className="overflow-hidden">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b bg-muted/30 text-center">
+      <div className="grid grid-cols-7 border-b border-border/40 bg-muted/10 text-center">
         {[["S","Sat"],["S","Sun"],["M","Mon"],["T","Tue"],["W","Wed"],["T","Thu"],["F","Fri"]].map(([short, full], i) => (
-          <div key={i} className="py-2.5 text-xs font-semibold tracking-wide text-muted-foreground">
+          <div key={i} className="py-2.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
             <span className="sm:hidden">{short}</span>
             <span className="hidden sm:inline">{full}</span>
           </div>
         ))}
       </div>
 
-      {/* Day cells — entire cell is clickable; event pills stop propagation */}
-      <div className="grid grid-cols-7">
+      {/* Day cells */}
+      <motion.div 
+        key={monthKey}
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-7 border-border/40"
+      >
         {days.map((day) => {
           const key = format(day, "yyyy-MM-dd")
           const dayEvents = sortEvents(eventsByDay[key] || [])
@@ -827,86 +990,88 @@ function CalendarGrid({
           const inMonth = isSameMonth(day, month)
 
           return (
-            <div
+            <motion.div
               key={key}
+              variants={item}
               onClick={() => onSelectDay(day)}
-              aria-label={`Select ${format(day, "PPP")}${dayEvents.length ? `, ${dayEvents.length} event${dayEvents.length > 1 ? "s" : ""}` : ""}`}
               className={cn(
-                "group relative cursor-pointer border-b border-r p-1 sm:p-1.5 transition-colors",
-                "min-h-[80px] sm:min-h-[110px] lg:min-h-[140px]",
-                !inMonth && "bg-muted/5",
-                today && !isSelected && "bg-primary/[0.04]",
-                isSelected ? "bg-primary/10" : "hover:bg-muted/20",
+                "group relative cursor-pointer border-b border-r border-border/40 p-1.5 transition-all duration-300",
+                "min-h-[90px] sm:min-h-[120px] lg:min-h-[140px]",
+                !inMonth && "bg-muted/[0.01] opacity-30",
+                today && !isSelected && "bg-primary/[0.02]",
+                isSelected ? "bg-primary/[0.04] z-10" : "hover:bg-primary/[0.01] hover:z-10",
               )}
             >
               {/* Date row */}
-              <div className="mb-1 flex items-start justify-between gap-0.5">
-                <span className={cn(
-                  "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold leading-none transition-colors",
-                  today && "bg-primary text-primary-foreground shadow-sm",
-                  !today && isSelected && "ring-2 ring-primary text-primary",
-                  !today && !isSelected && "group-hover:bg-muted/70 text-foreground",
-                  !inMonth && "text-muted-foreground/40",
-                )}>
-                  {format(day, "d")}
-                </span>
+              <div className="mb-2 flex items-start justify-between">
+                <div className="relative">
+                  <span className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-xl text-xs font-black transition-all duration-300",
+                    today && "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105",
+                    !today && isSelected && "bg-primary/10 text-primary ring-1 ring-primary/20",
+                    !today && !isSelected && "text-foreground group-hover:text-foreground group-hover:scale-110",
+                    !inMonth && "opacity-20",
+                  )}>
+                    {format(day, "d")}
+                  </span>
+                  {dayEvents.length > 0 && !today && (
+                    <motion.span 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className={cn(
+                        "absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-background shadow-sm transition-all duration-300 group-hover:scale-125",
+                        dayEvents.some(e => e.status === "PENDING_APPROVAL") ? "bg-amber-500" : "bg-primary"
+                      )} 
+                    />
+                  )}
+                </div>
                 {dayEvents.length > 0 && (
-                  <Badge variant="outline" className="hidden h-4 shrink-0 px-1 text-[9px] leading-none sm:inline-flex">
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "hidden h-4.5 items-center rounded-lg border-none px-1 text-[9px] font-black group-hover:scale-110 transition-all duration-300 sm:inline-flex",
+                      isSelected ? "bg-primary/10 text-primary" : "bg-muted/40 text-muted-foreground/70 group-hover:bg-primary/10 group-hover:text-primary"
+                    )}
+                  >
                     {dayEvents.length}
                   </Badge>
                 )}
               </div>
 
               {/* Events */}
-              <div className="space-y-px">
-                {/* Mobile: colored dots only */}
-                {dayEvents.length > 0 && (
-                  <div className="flex flex-wrap gap-0.5 px-0.5 sm:hidden">
-                    {dayEvents.slice(0, 6).map((event) => (
-                      <span
-                        key={`${event.sourceType}-${event.sourceId}`}
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          event.sourceType === "MEETING" ? "bg-primary" : "bg-amber-500"
-                        )}
-                      />
-                    ))}
-                    {dayEvents.length > 6 && <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
-                  </div>
-                )}
-
-                {/* sm+: clickable event pills — stop propagation so cell click isn't also triggered */}
+              <div className="space-y-1">
                 {dayEvents.slice(0, 3).map((event) => (
-                  <button
+                  <motion.button
                     key={`${event.sourceType}-${event.sourceId}`}
                     type="button"
+                    whileHover={{ x: 1, backgroundColor: "rgba(var(--primary), 0.05)" }}
                     onClick={(e) => { e.stopPropagation(); onOpenEvent(event) }}
                     className={cn(
-                      "hidden w-full rounded border-l-2 px-1 py-px text-left text-[10px] leading-snug transition-opacity hover:opacity-75 focus-visible:outline-none sm:block",
+                      "hidden w-full rounded-md border-l-2 px-1.5 py-1 text-left transition-all sm:block",
                       event.sourceType === "MEETING"
-                        ? "bg-primary/10 border-l-primary"
-                        : "bg-amber-50 border-l-amber-400 dark:bg-amber-950/20"
+                        ? "bg-primary/[0.04] border-l-primary text-primary"
+                        : "bg-amber-500/[0.04] border-l-amber-500 text-amber-600"
                     )}
                   >
-                    <div className="truncate font-medium">{event.title}</div>
+                    <div className="truncate text-[9px] font-black tracking-tight leading-tight">{event.title}</div>
                     {!event.allDay && (
-                      <div className="hidden truncate text-muted-foreground opacity-70 lg:block">
+                      <div className="mt-0.5 truncate text-[8px] font-bold text-muted-foreground/60">
                         {format(new Date(event.startAt), "p")}
                       </div>
                     )}
-                  </button>
+                  </motion.button>
                 ))}
 
                 {dayEvents.length > 3 && (
-                  <p className="hidden pl-0.5 text-[10px] text-muted-foreground sm:block">
+                  <p className="hidden pl-1 text-[8px] font-black uppercase tracking-wider text-muted-foreground/40 transition-colors group-hover:text-muted-foreground/60 sm:block">
                     +{dayEvents.length - 3} more
                   </p>
                 )}
               </div>
-            </div>
+            </motion.div>
           )
         })}
-      </div>
+      </motion.div>
     </div>
   )
 }
@@ -926,8 +1091,8 @@ function WeekView({
 }) {
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
-      <div className="min-w-[640px] px-4 sm:px-0">
-        <div className="grid grid-cols-7 gap-1.5">
+      <div className="min-w-[700px] px-4 sm:px-0">
+        <div className="grid grid-cols-7 gap-2">
           {days.map((day) => {
             const key = format(day, "yyyy-MM-dd")
             const dayEvents = sortEvents(eventsByDay[key] || [])
@@ -935,75 +1100,77 @@ function WeekView({
             const today = isToday(day)
 
             return (
-              <div
+              <motion.div
                 key={day.toISOString()}
+                whileHover={{ y: -2 }}
                 className={cn(
-                  "flex flex-col overflow-hidden rounded-xl border transition-colors",
-                  isSelected ? "border-primary/60 ring-1 ring-primary/30" : "border-border",
+                  "flex flex-col overflow-hidden rounded-2xl border transition-all duration-300 backdrop-blur-md",
+                  isSelected 
+                    ? "border-primary/40 bg-primary/[0.03] ring-1 ring-primary/10 shadow-lg" 
+                    : "border-white/5 bg-white/[0.02] shadow-sm hover:border-primary/10 hover:bg-white/[0.04]",
                 )}
               >
-                {/* Day header — click to drill into day view */}
+                {/* Day header */}
                 <button
                   type="button"
                   onClick={() => onSelectDay(day)}
                   className={cn(
-                    "flex flex-col items-center gap-0.5 px-2 py-2.5 text-center transition-colors focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-ring",
+                    "flex flex-col items-center gap-0.5 px-2 py-3 text-center transition-all",
                     isSelected
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground shadow-md"
                       : today
-                        ? "bg-primary/10 hover:bg-primary/15"
-                        : "bg-muted/40 hover:bg-muted/60"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-white/5 hover:bg-white/10"
                   )}
                 >
                   <span className={cn(
-                    "text-[10px] font-bold uppercase tracking-wider",
-                    isSelected ? "text-primary-foreground/70" : "text-muted-foreground"
+                    "text-[9px] font-semibold uppercase tracking-wider",
+                    isSelected ? "text-primary-foreground/70" : "text-muted-foreground/40"
                   )}>
                     {format(day, "EEE")}
                   </span>
                   <span className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full text-base font-bold leading-none",
-                    today && !isSelected && "bg-primary text-primary-foreground",
+                    "flex h-7 w-7 items-center justify-center rounded-lg text-base font-black transition-transform duration-300",
+                    today && !isSelected && "bg-primary text-primary-foreground scale-105",
                     isSelected && "text-primary-foreground",
-                    !today && !isSelected && "text-foreground"
+                    !today && !isSelected && "text-foreground group-hover:text-primary transition-colors"
                   )}>
                     {format(day, "d")}
                   </span>
-                  {dayEvents.length > 0 && !isSelected && (
-                    <span className="mt-0.5 h-1 w-1 rounded-full bg-primary/60" />
-                  )}
                 </button>
 
                 {/* Events area */}
-                <div className="flex-1 space-y-1 p-1.5 min-h-[100px]">
+                <div className="flex-1 space-y-1.5 p-2 min-h-[100px]">
                   {dayEvents.length === 0 ? (
-                    <div className="flex h-full min-h-[80px] items-center justify-center rounded-lg border border-dashed">
-                      <span className="text-[10px] text-muted-foreground/40">—</span>
+                    <div className="flex h-full min-h-[80px] items-center justify-center rounded-xl border border-dashed border-white/5 bg-white/[0.01]">
+                      <span className="text-[10px] text-muted-foreground/20">—</span>
                     </div>
                   ) : (
                     dayEvents.map((event) => (
-                      <button
+                      <motion.button
                         key={`${event.sourceType}-${event.sourceId}`}
                         type="button"
+                        whileHover={{ scale: 1.01 }}
+                        whileTap={{ scale: 0.99 }}
                         onClick={() => onOpenEvent(event)}
                         className={cn(
-                          "w-full rounded border-l-2 px-1.5 py-1 text-left text-[10px] leading-snug transition-opacity hover:opacity-75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          "w-full rounded-lg border-l-2 px-1.5 py-1.5 text-left text-[9px] font-medium leading-snug transition-all",
                           event.sourceType === "MEETING"
-                            ? "bg-primary/10 border-l-primary"
-                            : "bg-amber-50 border-l-amber-400 dark:bg-amber-950/20"
+                            ? "bg-primary/5 border-l-primary text-primary/90"
+                            : "bg-amber-500/5 border-l-amber-500 text-amber-700/90"
                         )}
                       >
                         <div className="truncate font-semibold">{event.title}</div>
                         {!event.allDay && (
-                          <div className="truncate text-muted-foreground opacity-70">
+                          <div className="mt-0.5 truncate text-[8px] text-muted-foreground/50">
                             {format(new Date(event.startAt), "p")}
                           </div>
                         )}
-                      </button>
+                      </motion.button>
                     ))
                   )}
                 </div>
-              </div>
+              </motion.div>
             )
           })}
         </div>
@@ -1079,52 +1246,66 @@ function EventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onOpenEven
     <motion.button
       type="button"
       onClick={() => onOpenEvent(event)}
-      whileHover={{ y: -1, transition: { duration: 0.15 } }}
+      whileHover={{ y: -2, scale: 1.005 }}
+      whileTap={{ scale: 0.995 }}
       className={cn(
-        "group w-full rounded-xl border border-l-4 bg-card p-4 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        borderCls
+        "group w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition-all backdrop-blur-md hover:border-primary/20 hover:bg-white/10 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+        borderCls,
+        "border-l-4"
       )}
     >
       <div className="flex items-start justify-between gap-4">
         {/* Left: core info */}
-        <div className="min-w-0 flex-1 space-y-2">
+        <div className="min-w-0 flex-1 space-y-3">
           {/* Badges row */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge variant="outline" className={cn("text-xs", sourceBadgeClass[event.sourceType])}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border-none shadow-sm", sourceBadgeClass[event.sourceType])}>
               {sourceLabel[event.sourceType]}
             </Badge>
-            <Badge variant="outline" className={cn("text-xs", statusClass[event.status] || undefined)}>
+            <Badge variant="outline" className={cn("text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border-none shadow-sm", statusClass[event.status] || "border-muted-foreground/20 text-muted-foreground/60 bg-muted/10")}>
               {formatLabel(event.status)}
             </Badge>
-            {event.externalProvider && (
-              <Badge variant="outline" className="text-xs">{formatLabel(event.externalProvider)}</Badge>
-            )}
           </div>
           {/* Title + time */}
           <div>
-            <h3 className="truncate font-semibold leading-snug group-hover:text-primary transition-colors">{event.title}</h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">{formatEventTime(event)}</p>
+            <h3 className="truncate text-base font-black tracking-tight text-foreground/90 transition-colors group-hover:text-primary">
+              {event.title}
+            </h3>
+            <div className="mt-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground/60">
+              <Clock3 className="h-3 w-3" />
+              {formatEventTime(event)}
+            </div>
           </div>
           {/* Meta */}
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5 shrink-0" />
+          <div className="flex flex-wrap gap-4 text-[10px] font-black uppercase tracking-wide text-muted-foreground/50">
+            <span className="inline-flex items-center gap-1.5 bg-muted/5 px-2 py-1 rounded-lg">
+              <Users className="h-3 w-3 shrink-0" />
               {event.team?.name || "No team"}
             </span>
-            <span className="inline-flex items-center gap-1.5">
-              {event.mode === "VIRTUAL" ? <Video className="h-3.5 w-3.5 shrink-0" /> : <MapPin className="h-3.5 w-3.5 shrink-0" />}
-              {event.location || formatLabel(event.mode || event.sourceType)}
+            <span className="inline-flex items-center gap-1.5 bg-muted/5 px-2 py-1 rounded-lg">
+              {event.mode === "VIRTUAL" ? <Video className="h-3 w-3 shrink-0" /> : <MapPin className="h-3 w-3 shrink-0" />}
+              <span className="truncate max-w-[120px]">{event.location || formatLabel(event.mode || event.sourceType)}</span>
             </span>
           </div>
         </div>
 
-        {/* Right: owner + sync — visible on sm+ */}
-        <div className="hidden shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground sm:flex">
-          <span className="font-medium text-foreground">
-            {event.organizer?.fullName || event.assignee?.fullName || "No owner"}
-          </span>
-          <span>{event.externalSyncStatus ? formatLabel(event.externalSyncStatus) : "Internal"}</span>
-          <ChevronRight className="mt-1 h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+        {/* Right: owner — visible on sm+ */}
+        <div className="hidden shrink-0 flex-col items-end justify-between self-stretch sm:flex">
+          <div className="flex flex-col items-end gap-1">
+            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/20">Owner</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-foreground/60">
+                {event.organizer?.fullName || event.assignee?.fullName || "—"}
+              </p>
+              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary border border-primary/10">
+                {(event.organizer?.fullName || event.assignee?.fullName || "?").charAt(0)}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-xl bg-primary/5 px-3 py-1.5 border border-primary/10 transition-all group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md">
+            <span className="text-[9px] font-bold uppercase tracking-wider">Details</span>
+            <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+          </div>
         </div>
       </div>
     </motion.button>
@@ -1135,26 +1316,54 @@ function CompactEventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onO
   const borderCls = sourceBorderColor[event.sourceType] ?? "border-l-border"
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={() => onOpenEvent(event)}
+      whileHover={{ x: 2, backgroundColor: "rgba(var(--primary), 0.03)" }}
       className={cn(
-        "w-full rounded-lg border border-l-4 bg-background p-2.5 text-left transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        borderCls
+        "group flex w-full items-center gap-3 rounded-xl border border-white/5 bg-white/[0.01] p-2.5 text-left transition-all hover:border-primary/10 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+        borderCls,
+        "border-l-4"
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-semibold">{event.title}</p>
-          <p className="text-[11px] text-muted-foreground">{format(new Date(event.startAt), "MMM d, p")}</p>
-        </div>
-        <Badge variant="outline" className={cn("shrink-0 text-[10px] px-1.5 py-0", sourceBadgeClass[event.sourceType])}>
-          {sourceLabel[event.sourceType]}
-        </Badge>
+      <div className="flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-xl bg-muted/20 text-muted-foreground/50 transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+        <span className="text-[8px] font-bold uppercase tracking-tighter opacity-50">
+          {format(new Date(event.startAt), "MMM")}
+        </span>
+        <span className="text-sm font-bold leading-none">
+          {format(new Date(event.startAt), "d")}
+        </span>
       </div>
-    </button>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-bold tracking-tight text-foreground/70 group-hover:text-primary transition-colors">
+          {event.title}
+        </p>
+        <p className="mt-0.5 truncate text-[9px] font-medium uppercase tracking-wider text-muted-foreground/30">
+          {format(new Date(event.startAt), "p")}
+        </p>
+      </div>
+      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/10 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+    </motion.button>
   )
 }
+
+const GoogleIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4">
+    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-1 .67-2.26 1.07-3.71 1.07-2.87 0-5.3-1.94-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+    <path fill="#FBBC05" d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.09H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.91l3.66-2.8z" />
+    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.09l3.66 2.84c.86-2.59 3.3-4.55 6.16-4.55z" />
+  </svg>
+)
+
+const OutlookIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-4 w-4">
+    <path fill="#0078D4" d="M1 5.5V18.5L6.5 21V3L1 5.5Z" />
+    <path fill="#28A8EA" d="M23 5.5V18.5L13.5 21V3L23 5.5Z" />
+    <path fill="#50D9FF" d="M13.5 3L6.5 5.5V18.5L13.5 21V3Z" />
+    <path fill="#005A9E" d="M1 5.5L6.5 8V16L1 18.5V5.5Z" />
+  </svg>
+)
 
 function ProviderCard({
   provider,
@@ -1171,61 +1380,86 @@ function ProviderCard({
   const isGoogle = provider === "GOOGLE"
 
   return (
-    <div className="p-4">
+    <div className="group/provider relative overflow-hidden p-4 transition-all hover:bg-white/[0.02]">
       <div className="flex items-center gap-3">
         {/* Provider icon accent */}
         <div className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white",
-          isGoogle ? "bg-[#4285f4]" : "bg-[#0078d4]"
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm transition-all duration-300 group-hover/provider:scale-110",
+          isGoogle ? "bg-white/5 border border-white/10" : "bg-white/5 border border-white/10"
         )}>
-          {isGoogle ? "G" : "O"}
+          {isGoogle ? <GoogleIcon /> : <OutlookIcon />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-medium text-sm">{providerLabel(provider)}</p>
-            <Badge variant={connected ? "default" : "outline"} className="text-[10px] px-1.5 py-0">
-              {connected ? "Connected" : "Off"}
+            <p className="font-bold text-[13px] text-foreground/70">{providerLabel(provider)}</p>
+            <Badge 
+              variant={connected ? "default" : "outline"} 
+              className={cn(
+                "text-[8px] font-bold uppercase tracking-wider px-1.5 py-0 rounded-full border-none",
+                connected ? "bg-emerald-500/20 text-emerald-500" : "bg-muted/30 text-muted-foreground/40"
+              )}
+            >
+              {connected ? "Active" : "Off"}
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground truncate">{integration?.email || "Not connected"}</p>
+          <p className="text-[10px] font-medium text-muted-foreground/30 truncate">{integration?.email || "Not connected"}</p>
         </div>
       </div>
 
-      <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
-        <div className="flex justify-between gap-3">
-          <span>Last sync</span>
-          <span className="font-medium text-foreground">
-            {integration?.lastSyncedAt ? format(new Date(integration.lastSyncedAt), "MMM d, p") : "Never"}
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground/20">Last sync</span>
+          <span className="text-[10px] font-medium text-muted-foreground/50">
+            {integration?.lastSyncedAt ? format(new Date(integration.lastSyncedAt), "MMM d, p") : "—"}
           </span>
         </div>
-        <div className="flex justify-between gap-3">
-          <span>Status</span>
-          <span className="font-medium text-foreground">{formatLabel(integration?.lastSyncStatus || "NOT_CONNECTED")}</span>
+        
+        <div className="flex gap-2">
+          {!connected ? (
+            <Button 
+              size="sm" 
+              className="h-8 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-[9px] font-bold uppercase tracking-wider px-3 transition-all active:scale-95" 
+              onClick={() => onAction(provider, "connect")} 
+              disabled={running}
+            >
+              Connect
+            </Button>
+          ) : (
+            <>
+              <Button 
+                size="sm" 
+                variant="ghost"
+                className="h-8 w-8 p-0 rounded-lg text-muted-foreground/30 hover:text-primary hover:bg-primary/5" 
+                onClick={() => onAction(provider, "sync")} 
+                disabled={running}
+                title="Sync now"
+              >
+                <RefreshCcw className={cn("h-3.5 w-3.5", running && "animate-spin")} />
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="h-8 w-8 p-0 rounded-lg text-muted-foreground/20 hover:text-destructive hover:bg-destructive/5" 
+                onClick={() => onAction(provider, "disconnect")} 
+                disabled={running}
+                title="Disconnect"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {integration?.lastSyncError && (
-        <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        <motion.div 
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="mt-3 rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-2 text-[9px] font-medium text-amber-600/60"
+        >
           {integration.lastSyncError}
-        </p>
+        </motion.div>
       )}
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {!connected ? (
-          <Button size="sm" className="h-7 px-3 text-xs" onClick={() => onAction(provider, "connect")} disabled={running}>
-            <ExternalLink className="h-3.5 w-3.5" />Connect
-          </Button>
-        ) : (
-          <>
-            <Button size="sm" variant="outline" className="h-7 px-3 text-xs" onClick={() => onAction(provider, "sync")} disabled={running}>
-              <RefreshCcw className="h-3.5 w-3.5" />Sync
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 px-3 text-xs text-muted-foreground" onClick={() => onAction(provider, "disconnect")} disabled={running}>
-              Disconnect
-            </Button>
-          </>
-        )}
-      </div>
     </div>
   )
 }
@@ -1247,149 +1481,208 @@ function EventDetails({
   const borderCls = sourceBorderColor[event.sourceType] ?? "border-l-border"
 
   return (
-    <>
-      <SheetHeader className="space-y-3 pb-4">
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="outline" className={cn("text-xs", sourceBadgeClass[event.sourceType])}>
+    <div className="space-y-10 pb-12">
+      {/* ── HEADER ────────────────────────────────────────────── */}
+      <SheetHeader className="space-y-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant="outline" className={cn("h-6 rounded-full border-none px-3 text-[10px] font-bold uppercase tracking-wider shadow-sm", sourceBadgeClass[event.sourceType])}>
             {sourceLabel[event.sourceType]}
           </Badge>
-          <Badge variant="outline" className={cn("text-xs", statusClass[event.status] || undefined)}>
+          <div className="h-1.5 w-1.5 rounded-full bg-primary/20" />
+          <Badge variant="outline" className={cn("h-6 rounded-full border-none px-3 text-[10px] font-bold uppercase tracking-wider shadow-sm", statusClass[event.status] || "bg-muted/40 text-muted-foreground/60")}>
             {formatLabel(event.status)}
           </Badge>
-          {event.externalProvider && (
-            <Badge variant="outline" className="text-xs">{formatLabel(event.externalProvider)}</Badge>
-          )}
         </div>
-        <div className={cn("rounded-xl border-l-4 pl-4", borderCls)}>
-          <SheetTitle className="text-xl leading-snug">{event.title}</SheetTitle>
-          <SheetDescription className="text-xs">
-            {format(new Date(event.startAt), "EEEE, MMMM d, yyyy")} · {formatEventTime(event)}
-          </SheetDescription>
+        
+        <div className={cn("border-l-4 pl-5 transition-all duration-500", borderCls)}>
+          <SheetTitle className="text-xl font-black tracking-tight text-foreground/90">
+            {event.title}
+          </SheetTitle>
+          <div className="mt-2 flex items-center gap-2.5 text-[13px] font-bold text-muted-foreground/60">
+            <Calendar className="h-3.5 w-3.5" />
+            {format(new Date(event.startAt), "EEEE, MMMM d, yyyy")}
+          </div>
         </div>
       </SheetHeader>
 
-      <div className="mt-2 space-y-4">
-        {event.description && (
-          <p className="rounded-xl border bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
-            {event.description}
-          </p>
-        )}
-
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          <InfoTile icon={CalendarClock} label="Date and time" value={`${format(new Date(event.startAt), "PPP p")} – ${format(new Date(event.endAt), "p")}`} />
-          <InfoTile icon={Users} label="Team" value={event.team?.name || "No team"} />
-          <InfoTile icon={event.mode === "VIRTUAL" ? Video : MapPin} label="Mode / location" value={event.location || formatLabel(event.mode || event.sourceType)} />
-          <InfoTile icon={CheckCircle2} label="Owner" value={event.organizer?.fullName || event.assignee?.fullName || "Not assigned"} />
+      <div className="space-y-10">
+        {/* ── CORE INFO GRID ──────────────────────────────────── */}
+        <div className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
+          <DetailCard icon={CalendarClock} label="Schedule" value={`${format(new Date(event.startAt), "p")} – ${format(new Date(event.endAt), "p")}`} />
+          <DetailCard icon={MapPin} label="Location" value={event.location || formatLabel(event.mode || "Physical")} />
+          <DetailCard icon={Users} label="Team" value={event.team?.name || "Independent"} />
+          <DetailCard icon={CheckCircle2} label="Lead" value={event.organizer?.fullName || event.assignee?.fullName || "Unassigned"} />
         </div>
 
-        {isMeeting && (
-          <div className="rounded-xl border p-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold">Participants</h3>
-              <span className="text-xs text-muted-foreground">{event.participants?.length || 0} invited</span>
+        {/* ── DESCRIPTION ─────────────────────────────────────── */}
+        {event.description && (
+          <div className="space-y-3">
+            <SectionHeader label="Overview" />
+            <div className="rounded-2xl border border-white/5 bg-white/[0.01] p-5 backdrop-blur-sm">
+              <p className="text-[14px] font-medium leading-relaxed text-foreground/70">
+                {event.description}
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">{compactParticipants(event)}</p>
           </div>
         )}
 
+        {/* ── PARTICIPANTS ────────────────────────────────────── */}
+        {isMeeting && event.participants && event.participants.length > 0 && (
+          <div className="space-y-3">
+            <SectionHeader label="Stakeholders" />
+            <div className="rounded-2xl border border-white/5 bg-white/[0.01] p-5 backdrop-blur-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">Invited stakeholders</span>
+                <span className="text-[9px] font-black text-primary/60">{event.participants.length} TOTAL</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {event.participants.map((p, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-full bg-muted/20 px-3 py-1 border border-white/5 transition-colors hover:bg-muted/30">
+                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/20 text-[8px] font-bold text-primary">
+                      {(p.displayName || p.email || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[11px] font-semibold text-foreground/70">{p.displayName || p.email}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── APPROVALS ───────────────────────────────────────── */}
         {event.approvals && event.approvals.length > 0 && (
-          <div className="rounded-xl border p-4 space-y-2.5">
-            <h3 className="text-sm font-semibold">Approval trail</h3>
-            <div className="space-y-2">
+          <div className="space-y-3">
+            <SectionHeader label="Approval Pipeline" />
+            <div className="space-y-2.5">
               {event.approvals.map((approval) => (
-                <div key={approval.id} className="rounded-lg border p-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-medium">{approval.approverName || formatLabel(approval.approverRole)}</span>
-                    <Badge variant="outline" className={cn("text-xs", statusClass[approval.status] || undefined)}>
+                <div key={approval.id} className="group relative rounded-2xl border border-white/5 bg-white/[0.01] p-4 transition-all hover:bg-white/[0.02]">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-xl shadow-inner",
+                        approval.status === "APPROVED" ? "bg-emerald-500/10 text-emerald-500" : "bg-muted/30 text-muted-foreground/50"
+                      )}>
+                        {approval.status === "APPROVED" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-[13px] font-black text-foreground/80 tracking-tight">{approval.approverName || formatLabel(approval.approverRole)}</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/50">{formatLabel(approval.approverRole)}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={cn("rounded-lg border-none px-2 py-0.5 text-[9px] font-black uppercase tracking-wider shadow-sm", statusClass[approval.status] || "bg-muted/20 text-muted-foreground/60")}>
                       {formatLabel(approval.status)}
                     </Badge>
                   </div>
-                  {approval.note && <p className="mt-1.5 text-xs text-muted-foreground">{approval.note}</p>}
+                  {approval.note && (
+                    <div className="mt-3 rounded-xl bg-white/[0.02] p-3 text-[11px] font-semibold leading-relaxed text-foreground/60 border border-white/5 italic">
+                      "{approval.note}"
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <div className="rounded-xl border p-4">
-          <h3 className="mb-2.5 text-sm font-semibold">Sync status</h3>
-          <div className="space-y-1.5 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Provider</span>
-              <span className="font-medium">{event.externalProvider ? formatLabel(event.externalProvider) : "Internal only"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Status</span>
-              <span className="font-medium">{formatLabel(event.externalSyncStatus || "NOT_CONNECTED")}</span>
+        {/* ── INTEGRATION ─────────────────────────────────────── */}
+        <div className="space-y-4">
+          <SectionHeader label="Connectivity" />
+          <div className="rounded-[24px] border border-white/5 bg-white/[0.02] p-6 backdrop-blur-md">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Source Platform</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 border border-white/5 shadow-sm">
+                    {event.externalProvider === "GOOGLE" ? <GoogleIcon /> : event.externalProvider === "OUTLOOK" ? <OutlookIcon /> : <div className="h-4 w-4 rounded-full bg-primary/20" />}
+                  </div>
+                  <span className="text-sm font-black text-foreground/80">{event.externalProvider ? formatLabel(event.externalProvider) : "Native Dashboard"}</span>
+                </div>
+              </div>
+              <div className="text-right space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground/40">Sync Status</p>
+                <div className="flex items-center justify-end gap-3">
+                  <span className="text-sm font-black text-foreground/80">{formatLabel(event.externalSyncStatus || "NOT_CONNECTED")}</span>
+                  <div className={cn("h-2.5 w-2.5 rounded-full shadow-lg", event.externalSyncStatus === "SYNCED" ? "bg-emerald-500 shadow-emerald-500/20" : "bg-muted/40")} />
+                </div>
+              </div>
             </div>
           </div>
-          {event.externalSyncError && (
-            <p className="mt-2.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-              {event.externalSyncError}
-            </p>
-          )}
         </div>
       </div>
 
-      <SheetFooter className="mt-5 flex-col gap-2 sm:flex-col sm:space-x-0">
+      {/* ── ACTIONS ─────────────────────────────────────────── */}
+      <SheetFooter className="mt-12 flex flex-col gap-4 sm:flex-col sm:space-x-0">
         {event.joinUrl && (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Button asChild>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Button asChild className="h-14 rounded-2xl bg-primary text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
               <a href={event.joinUrl} target="_blank" rel="noreferrer">
-                <Link2 className="h-4 w-4" />Join meeting
+                <Link2 className="mr-3 h-5 w-5" />Join Session
               </a>
             </Button>
-            <Button variant="outline" onClick={() => void onCopyLink(event)}>
-              <ClipboardCopy className="h-4 w-4" />Copy link
+            <Button variant="outline" className="h-14 rounded-2xl border-white/10 bg-white/5 text-[11px] font-black uppercase tracking-[0.2em] hover:bg-white/10 transition-all" onClick={() => void onCopyLink(event)}>
+              <ClipboardCopy className="mr-3 h-5 w-5" />Copy Link
             </Button>
           </div>
         )}
+        
         {canManage && (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             {canSync && (
-              <Button variant="outline" onClick={() => onMeetingAction(event, "sync")}>
-                <RefreshCcw className="h-4 w-4" />Sync
+              <Button variant="outline" className="h-12 rounded-2xl border-white/5 bg-white/[0.02] text-[10px] font-black uppercase tracking-wider hover:bg-white/[0.05]" onClick={() => onMeetingAction(event, "sync")}>
+                <RefreshCcw className="mr-2 h-4 w-4" />Refresh Sync
               </Button>
             )}
             {canComplete && (
-              <Button variant="outline" onClick={() => onMeetingAction(event, "complete")}>
-                <CheckCircle2 className="h-4 w-4" />Mark completed
+              <Button variant="outline" className="h-12 rounded-2xl border-white/5 bg-white/[0.02] text-[10px] font-black uppercase tracking-wider hover:bg-emerald-500/10 hover:text-emerald-500" onClick={() => onMeetingAction(event, "complete")}>
+                <CheckCircle2 className="mr-2 h-4 w-4" />Mark Done
               </Button>
             )}
             {canCancel && (
-              <Button variant="outline" onClick={() => onMeetingAction(event, "cancel")}>
-                <AlertCircle className="h-4 w-4" />Cancel
+              <Button variant="outline" className="h-12 rounded-2xl border-white/5 bg-white/[0.02] text-[10px] font-black uppercase tracking-wider hover:bg-amber-500/10 hover:text-amber-500" onClick={() => onMeetingAction(event, "cancel")}>
+                <AlertCircle className="mr-2 h-4 w-4" />Cancel Event
               </Button>
             )}
-            <Button variant="destructive" onClick={() => onMeetingAction(event, "delete")}>
-              <Trash2 className="h-4 w-4" />Delete
+            <Button variant="destructive" className="h-12 rounded-2xl text-[10px] font-black uppercase tracking-wider shadow-lg shadow-destructive/10" onClick={() => onMeetingAction(event, "delete")}>
+              <Trash2 className="mr-2 h-4 w-4" />Delete Event
             </Button>
           </div>
         )}
       </SheetFooter>
-    </>
+    </div>
   )
 }
 
-function InfoTile({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function DetailCard({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
   return (
-    <div className="rounded-xl border bg-muted/20 p-3.5">
-      <div className="mb-2 inline-flex rounded-lg bg-primary/10 p-1.5 text-primary">
-        <Icon className="h-3.5 w-3.5" />
+    <div className="group rounded-[24px] border border-white/5 bg-white/[0.02] p-6 transition-all hover:border-primary/10 hover:bg-white/[0.04] hover:shadow-lg">
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary shadow-inner transition-transform group-hover:scale-110 group-hover:rotate-3">
+        <Icon className="h-5 w-5" />
       </div>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-sm font-medium">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 transition-colors group-hover:text-primary/70">{label}</p>
+      <p className="mt-1.5 truncate text-[15px] font-black text-foreground/90 tracking-tight">{value}</p>
+    </div>
+  )
+}
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-4">
+      <div className="h-px flex-1 bg-white/10" />
+      <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/50">{label}</h4>
+      <div className="h-px flex-1 bg-white/10" />
     </div>
   )
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed bg-muted/10 px-4 py-10 text-center">
-      <CalendarDays className="h-8 w-8 text-muted-foreground/30" />
-      <div>
-        <h3 className="font-semibold">{title}</h3>
-        {description && <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>}
+    <div className="flex flex-col items-center gap-4 rounded-[32px] border border-dashed border-white/10 bg-white/[0.01] px-6 py-16 text-center backdrop-blur-sm">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/10 text-muted-foreground/20">
+        <CalendarDays className="h-7 w-7" />
+      </div>
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold tracking-tight text-foreground/60">{title}</h3>
+        {description && <p className="max-w-xs text-sm font-medium text-muted-foreground/30">{description}</p>}
       </div>
     </div>
   )
@@ -1397,12 +1690,12 @@ function EmptyState({ title, description }: { title: string; description: string
 
 function CalendarSkeleton() {
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-7 rounded-lg" />)}
+    <div className="space-y-4">
+      <div className="grid grid-cols-7 gap-2">
+        {Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-xl bg-white/5" />)}
       </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {Array.from({ length: 35 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl sm:h-28" />)}
+      <div className="grid grid-cols-7 gap-2">
+        {Array.from({ length: 35 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl bg-white/5" />)}
       </div>
     </div>
   )
@@ -1410,8 +1703,8 @@ function CalendarSkeleton() {
 
 function EventListSkeleton() {
   return (
-    <div className="space-y-2.5">
-      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+    <div className="space-y-4">
+      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-3xl bg-white/5" />)}
     </div>
   )
 }
