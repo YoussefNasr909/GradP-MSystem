@@ -5,6 +5,7 @@ type DiscussionFilters = {
   search?: string
   category?: "all" | ApiDiscussionCategory
   page?: number
+  limit?: number
 }
 
 export async function listDiscussions(filters: DiscussionFilters = {}, signal?: AbortSignal) {
@@ -13,6 +14,7 @@ export async function listDiscussions(filters: DiscussionFilters = {}, signal?: 
   if (filters.search) params.append("search", filters.search)
   if (filters.category && filters.category !== "all") params.append("category", filters.category)
   if (filters.page && filters.page > 1) params.append("page", String(filters.page))
+  if (filters.limit) params.append("limit", String(filters.limit))
 
   const query = params.toString()
 

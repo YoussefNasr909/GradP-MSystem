@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { DashboardPageHeader, DashboardStateCard } from "@/components/dashboard/page-shell"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -68,9 +69,8 @@ function MetricCard({
       transition={{ delay, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       className="min-w-0"
     >
-      <div className="relative overflow-hidden rounded-xl p-4 group">
-        <div className={cn("absolute -right-8 -top-8 w-24 h-24 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity", accent)} />
-        <div className="relative flex items-start gap-3">
+      <div className="rounded-[18px] border border-border/60 bg-card p-4 shadow-sm">
+        <div className="flex items-start gap-3">
           <div className={cn("p-2.5 rounded-xl", accent)}>
             <Icon className="h-5 w-5 text-white" />
           </div>
@@ -145,12 +145,6 @@ function Sparkline({ data, accent }: { data: number[]; accent: string }) {
   const max = Math.max(1, ...data)
   return (
     <svg viewBox="0 0 100 32" className="w-full h-12">
-      <defs>
-        <linearGradient id={`grad-${accent}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
       <polyline
         fill="none"
         stroke="currentColor"
@@ -161,7 +155,8 @@ function Sparkline({ data, accent }: { data: number[]; accent: string }) {
           .join(" ")}
       />
       <polygon
-        fill={`url(#grad-${accent})`}
+        fill="currentColor"
+        opacity={0.12}
         className={accent}
         points={
           `0,32 ` +
@@ -206,43 +201,28 @@ export default function AnalyticsPage() {
   if (!canView) {
     return (
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-        className="min-h-[60vh] flex items-center justify-center">
-        <Card className="p-12 text-center max-w-md border-border/50">
-          <Lock className="h-16 w-16 mx-auto mb-6 text-destructive" />
-          <h2 className="text-2xl font-bold mb-3">Access Denied</h2>
-          <p className="text-muted-foreground">Analytics are only available to admins and doctors.</p>
-        </Card>
+        className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center">
+        <DashboardStateCard
+          icon={Lock}
+          title="Access denied"
+          description="Analytics are only available to admins and doctors."
+          tone="rose"
+        />
       </motion.div>
     )
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6">
-      {/* Hero + Metrics */}
-      <Card className="relative overflow-hidden border-border/50 bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 via-transparent to-purple-500/5" />
-        <motion.div
-          className="absolute -right-20 -top-20 w-72 h-72 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"
-          animate={{ scale: [1, 1.15, 1], rotate: [0, 120, 0] }}
-          transition={{ duration: 20, repeat: Infinity }}
-        />
-        <div className="relative z-10 p-6">
-          <div>
-            <motion.h1 className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-              <TrendingUp className="h-7 w-7 text-rose-500" />
-              Analytics
-            </motion.h1>
-            <motion.p className="text-muted-foreground"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-              {isDoctor
-                ? "Performance metrics for teams under your supervision"
-                : "System-wide performance metrics, live from your database"}
-            </motion.p>
-          </div>
-        </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+      <DashboardPageHeader
+        title="Analytics"
+        description={isDoctor ? "Performance metrics for teams under your supervision." : "System-wide performance metrics, live from your database."}
+        icon={TrendingUp}
+        tone="rose"
+        badge={<Badge variant="outline" className="rounded-md border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300">{isDoctor ? "Doctor view" : "Admin view"}</Badge>}
+      />
 
-        <div className="relative z-10 border-t border-border/50 p-4">
+      <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm">
           {loading ? (
             <div className="grid gap-3 md:grid-cols-4">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -267,7 +247,6 @@ export default function AnalyticsPage() {
               <MetricCard label="On-time Rate"     value={data.overview.onTimeRate}   suffix="%"    icon={Activity} accent="bg-green-500"  delay={0.15} />
             </div>
           ) : null}
-        </div>
       </Card>
 
       {!loading && !error && data ? (

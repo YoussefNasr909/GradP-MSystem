@@ -35,6 +35,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { DashboardMetricCard, DashboardStateCard } from "@/components/dashboard/page-shell"
 import {
   Dialog,
   DialogContent,
@@ -105,10 +106,11 @@ const createContentMinLength = 10
 const createContentMaxLength = 4000
 const createTagMaxLength = 40
 const createTagMaxCount = 12
+const discussionsPerPage = 5
 
 const defaultDiscussionPagination = {
   page: 1,
-  limit: 5,
+  limit: discussionsPerPage,
   total: 0,
   totalPages: 1,
   hasNextPage: false,
@@ -359,6 +361,7 @@ export default function DiscussionsPage() {
             search: debouncedSearch,
             category: categoryFilter,
             page: currentPage,
+            limit: discussionsPerPage,
           },
           controller.signal,
         )
@@ -750,12 +753,12 @@ export default function DiscussionsPage() {
     return (
       <div
         className={cn(
-          "rounded-lg border border-primary/25 bg-primary/[0.035] p-3 sm:p-4",
+          "rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.055] via-background to-background p-3 shadow-sm ring-1 ring-primary/5 sm:p-4",
           isNestedReply && "ml-12 sm:ml-[52px]",
         )}
       >
         {targetComment ? (
-          <div className="mb-3 flex items-start gap-2 rounded-md border border-primary/20 bg-background/80 px-3 py-2 text-sm">
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-primary/15 bg-background/85 px-3 py-2.5 text-sm shadow-xs">
             <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div className="min-w-0">
               <p className="font-medium text-foreground">Replying to {targetComment.author.fullName}</p>
@@ -779,7 +782,7 @@ export default function DiscussionsPage() {
               rows={3}
               value={commentContent}
               placeholder={targetComment ? `Reply to ${targetComment.author.fullName}...` : "Write a reply..."}
-              className="min-h-[96px] resize-y rounded-lg border-border/80 bg-background text-[15px] leading-7 shadow-none"
+              className="min-h-[104px] resize-y rounded-xl border-border/80 bg-background/95 text-[15px] leading-7 shadow-inner shadow-muted/30"
               onChange={(event) => setCommentContent(event.target.value)}
               onKeyDown={handleCommentComposerKeyDown}
             />
@@ -820,11 +823,11 @@ export default function DiscussionsPage() {
     const areRepliesExpanded = expandedReplyIds.includes(comment.id)
 
     return (
-      <div key={comment.id} className={cn("space-y-2.5", depth > 0 && "ml-6 border-l border-border/70 pl-4 sm:ml-10 sm:pl-6")}>
+      <div key={comment.id} className={cn("space-y-2.5", depth > 0 && "ml-5 border-l border-border/70 pl-4 sm:ml-10 sm:pl-6")}>
         <article
           className={cn(
-            "group relative py-1 transition-colors",
-            isReplyTarget && "rounded-xl bg-primary/[0.035] px-2",
+            "group relative rounded-2xl py-1 transition-colors",
+            isReplyTarget && "bg-primary/[0.04] px-2 ring-1 ring-primary/15",
           )}
         >
           <div className="flex gap-3">
@@ -836,9 +839,9 @@ export default function DiscussionsPage() {
             <div className="min-w-0 flex-1 space-y-2">
               <div
                 className={cn(
-                  "max-w-3xl rounded-2xl border px-4 py-3 shadow-xs",
-                  isOwnComment ? "border-primary/20 bg-primary/[0.04]" : "border-border/70 bg-muted/35",
-                  isReplyTarget && "border-primary/45 bg-background",
+                  "max-w-3xl rounded-2xl border px-4 py-3.5 shadow-sm transition-colors",
+                  isOwnComment ? "border-primary/20 bg-primary/[0.045]" : "border-border/70 bg-background",
+                  isReplyTarget && "border-primary/45 bg-background shadow-md shadow-primary/5",
                 )}
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
@@ -870,9 +873,9 @@ export default function DiscussionsPage() {
                 </Button>
                 {isOwnComment ? (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    className="h-8 gap-2 px-2.5 text-xs text-destructive hover:text-destructive"
+                    className="h-8 gap-2 rounded-lg border-destructive/30 bg-background px-2.5 text-xs text-destructive shadow-xs transition-colors hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => requestDeleteComment(comment)}
                     disabled={isDeletingComment}
                   >
@@ -929,7 +932,7 @@ export default function DiscussionsPage() {
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <Spinner className="size-4" />
           <span>Loading discussions...</span>
@@ -940,45 +943,52 @@ export default function DiscussionsPage() {
 
   if (!accessToken) {
     return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Sign in required</AlertTitle>
-          <AlertDescription>You need to sign in before you can view discussions.</AlertDescription>
-        </Alert>
+      <div className="mx-auto max-w-3xl">
+        <DashboardStateCard
+          icon={AlertTriangle}
+          title="Sign in required"
+          description="You need to sign in before you can view discussions."
+          tone="rose"
+        />
       </div>
     )
   }
 
   if (currentUser?.role === "admin") {
     return (
-      <div className="p-6">
-        <Alert>
-          <ShieldAlert className="h-4 w-4" />
-          <AlertTitle>Discussions are not available for admins</AlertTitle>
-          <AlertDescription>
-            This page is only for student members, student leaders, doctors, and TAs.
-          </AlertDescription>
-        </Alert>
+      <div className="mx-auto max-w-3xl">
+        <DashboardStateCard
+          icon={ShieldAlert}
+          title="Discussions are not available for admins"
+          description="This shared discussion space is scoped to students, team leaders, doctors, and teaching assistants."
+          tone="slate"
+        />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-5">
+      <div className="space-y-5">
         <motion.div
           initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-5 rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.03] p-5 shadow-sm sm:p-6 lg:flex-row lg:items-end lg:justify-between"
         >
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3">
-              <MessageSquare className="h-6 w-6 text-primary" />
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-sm">
+                <MessageSquare className="h-5 w-5" />
+              </span>
+              <Badge variant="outline" className="rounded-md border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-300">
+                Shared academic forum
+              </Badge>
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">Discussions</h1>
-              <p className="text-sm text-muted-foreground">Connect with peers and supervisors in one shared space.</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Discussions</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+                Ask questions, share blockers, and keep supervisor guidance visible to the people who need it.
+              </p>
             </div>
           </div>
 
@@ -1114,32 +1124,12 @@ export default function DiscussionsPage() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="grid grid-cols-2 gap-3 md:grid-cols-4"
+          className="grid grid-cols-2 gap-4 xl:grid-cols-4"
         >
-          <Card>
-            <CardContent className="space-y-1 pt-6">
-              <p className="text-sm text-muted-foreground">Total Discussions</p>
-              <p className="text-3xl font-semibold">{feed?.stats.totalDiscussions ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="space-y-1 pt-6">
-              <p className="text-sm text-muted-foreground">Active Today</p>
-              <p className="text-3xl font-semibold text-primary">{feed?.stats.activeToday ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="space-y-1 pt-6">
-              <p className="text-sm text-muted-foreground">Your Posts</p>
-              <p className="text-3xl font-semibold">{feed?.stats.yourPosts ?? 0}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="space-y-1 pt-6">
-              <p className="text-sm text-muted-foreground">Replies</p>
-              <p className="text-3xl font-semibold">{feed?.stats.replies ?? 0}</p>
-            </CardContent>
-          </Card>
+          <DashboardMetricCard label="Total discussions" value={feed?.stats.totalDiscussions ?? 0} icon={MessageSquare} tone="violet" loading={isLoading && !feed} />
+          <DashboardMetricCard label="Active today" value={feed?.stats.activeToday ?? 0} icon={RefreshCw} tone="emerald" loading={isLoading && !feed} />
+          <DashboardMetricCard label="Your posts" value={feed?.stats.yourPosts ?? 0} icon={Pin} tone="blue" loading={isLoading && !feed} />
+          <DashboardMetricCard label="Replies" value={feed?.stats.replies ?? 0} icon={Reply} tone="amber" loading={isLoading && !feed} />
         </motion.div>
 
         <motion.div
@@ -1148,7 +1138,8 @@ export default function DiscussionsPage() {
           transition={{ delay: 0.08 }}
           className="flex flex-col gap-4"
         >
-          <div className="flex flex-col gap-4 lg:flex-row">
+          <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -1182,6 +1173,7 @@ export default function DiscussionsPage() {
               </Button>
             </div>
           </div>
+          </Card>
 
           {errorMessage ? (
             <Alert variant="destructive">
@@ -1215,43 +1207,49 @@ export default function DiscussionsPage() {
                 return (
                   <Card
                     key={discussion.id}
-                    className="group overflow-hidden border-border/70 bg-gradient-to-br from-card via-card to-primary/[0.04] shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+                    className="group overflow-hidden rounded-[22px] border-border/70 bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg"
                   >
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col gap-4 sm:flex-row">
-                        <Avatar className="h-11 w-11 shrink-0">
+                    <CardContent className="p-4 sm:p-5">
+                      <div className="grid min-w-0 gap-4 md:grid-cols-[auto_minmax(0,1fr)]">
+                        <Avatar className="h-11 w-11 shrink-0 border border-border/70 bg-muted">
                           <AvatarImage src={discussion.author.avatarUrl ?? undefined} alt={discussion.author.fullName} />
                           <AvatarFallback>{getInitials(discussion.author.fullName)}</AvatarFallback>
                         </Avatar>
 
                         <div className="min-w-0 flex-1 space-y-3">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 {discussion.isPinned ? <Pin className="h-4 w-4 text-amber-500" /> : null}
-                                <h2 className="text-lg font-semibold leading-tight transition-colors group-hover:text-primary">
+                                <h2 className="min-w-0 break-words text-lg font-semibold leading-tight transition-colors [overflow-wrap:anywhere] group-hover:text-primary">
                                   {discussion.title}
                                 </h2>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                <Badge variant="outline">{formatCategory(discussion.category)}</Badge>
+                                <Badge variant="outline" className="rounded-full bg-background">
+                                  {formatCategory(discussion.category)}
+                                </Badge>
                                 <span>{discussion.author.fullName}</span>
-                                <span>|</span>
+                                <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                                 <span>{discussion.author.roleLabel}</span>
-                                <span>|</span>
+                                <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
                                 <span>{formatDistanceToNow(new Date(discussion.createdAt), { addSuffix: true })}</span>
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Button variant="outline" onClick={() => openDiscussion(discussion.id)}>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                              <Button
+                                variant="outline"
+                                className="rounded-xl bg-background px-4 shadow-xs"
+                                onClick={() => openDiscussion(discussion.id)}
+                              >
                                 Open Discussion
                               </Button>
                               {canDeleteDiscussion ? (
                                 <Button
-                                  variant="ghost"
-                                  className="text-destructive hover:text-destructive"
+                                  variant="outline"
+                                  className="gap-2 rounded-xl border-destructive/30 bg-background px-4 text-destructive shadow-xs transition-colors hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
                                   onClick={() => requestDeleteDiscussion(discussion)}
                                   disabled={isDeletingDiscussion}
                                 >
@@ -1267,11 +1265,16 @@ export default function DiscussionsPage() {
                           </p>
 
                           <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                            <Button variant="ghost" size="sm" className="gap-2 px-0" onClick={() => openDiscussion(discussion.id)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-2 rounded-full px-2.5"
+                              onClick={() => openDiscussion(discussion.id)}
+                            >
                               <MessageCircle className="h-4 w-4" />
                               {discussion.commentCount}
                             </Button>
-                            <span className="inline-flex items-center gap-2">
+                            <span className="inline-flex h-8 items-center gap-2 rounded-full px-2.5">
                               <Eye className="h-4 w-4" />
                               {discussion.viewCount}
                             </span>
@@ -1279,7 +1282,7 @@ export default function DiscussionsPage() {
                               variant="outline"
                               size="sm"
                               className={cn(
-                                "h-8 gap-2 rounded-md px-2.5 text-xs font-medium",
+                                "h-8 gap-2 rounded-full px-2.5 text-xs font-medium",
                                 discussion.viewerHasLiked &&
                                   "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                               )}
@@ -1294,7 +1297,6 @@ export default function DiscussionsPage() {
                             >
                               {isLikePending ? <Spinner className="size-4" /> : <ThumbsUp className="h-4 w-4" />}
                               <span className="tabular-nums">{discussion.likeCount}</span>
-                              <span className="text-muted-foreground">|</span>
                               <span>{discussion.viewerHasLiked ? "Liked" : "Like"}</span>
                             </Button>
                           </div>
@@ -1302,7 +1304,7 @@ export default function DiscussionsPage() {
                           {discussion.tags.length ? (
                             <div className="flex flex-wrap gap-2">
                               {discussion.tags.map((tag) => (
-                                <Badge key={`${discussion.id}-${tag}`} variant="secondary">
+                                <Badge key={`${discussion.id}-${tag}`} variant="secondary" className="rounded-full">
                                   {tag}
                                 </Badge>
                               ))}
@@ -1376,17 +1378,22 @@ export default function DiscussionsPage() {
             ) : null}
           </div>
         ) : (
-          <Card>
-            <CardContent className="flex min-h-[240px] flex-col items-center justify-center gap-3 pt-6 text-center">
-              <MessageSquare className="h-10 w-10 text-muted-foreground" />
-              <div className="space-y-1">
-                <h2 className="text-lg font-semibold">No discussions found</h2>
-                <p className="text-sm text-muted-foreground">
-                  Try changing the search or filters, or start a new discussion.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <DashboardStateCard
+            icon={MessageSquare}
+            title="No discussions found"
+            description={
+              searchQuery || categoryFilter !== "all"
+                ? "No posts match the current search or category."
+                : "Start the first thread so your team and supervisors have a clear place to respond."
+            }
+            action={
+              <Button onClick={() => setIsCreateOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Discussion
+              </Button>
+            }
+            tone="violet"
+          />
         )}
       </div>
 
@@ -1403,12 +1410,12 @@ export default function DiscussionsPage() {
           }
         }}
       >
-        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border border-border/80 bg-background p-0 shadow-2xl ring-1 ring-primary/10 sm:max-w-[min(1280px,96vw)]">
-          <DialogHeader className="relative border-b border-border/80 bg-gradient-to-r from-primary/[0.055] via-background to-background px-5 py-4 pr-14 shadow-sm sm:px-7">
-            <div className="absolute inset-x-0 top-0 h-1 bg-primary/70" aria-hidden="true" />
+        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-3xl border border-border/70 bg-background/95 p-0 shadow-2xl ring-1 ring-primary/10 sm:max-w-[min(1280px,96vw)] [&_[data-slot=dialog-close]]:right-4 [&_[data-slot=dialog-close]]:top-4 [&_[data-slot=dialog-close]]:z-20 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:border [&_[data-slot=dialog-close]]:border-border/70 [&_[data-slot=dialog-close]]:bg-background/95 [&_[data-slot=dialog-close]]:p-2 [&_[data-slot=dialog-close]]:opacity-100 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-muted">
+          <DialogHeader className="relative border-b border-border/70 bg-gradient-to-br from-primary/[0.075] via-background to-background px-5 py-5 pr-20 shadow-sm sm:px-7 sm:py-6 sm:pr-24">
+            <div className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-primary/70 sm:inset-x-8" aria-hidden="true" />
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <MessageSquare className="h-4 w-4 text-primary" />
                   <span>{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
                   {selectedDiscussion ? (
@@ -1418,7 +1425,7 @@ export default function DiscussionsPage() {
                     </>
                   ) : null}
                 </div>
-                <DialogTitle className="max-w-4xl break-words pr-2 text-2xl font-semibold leading-tight [overflow-wrap:anywhere]">
+                <DialogTitle className="max-w-4xl break-words pr-2 text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl">
                   {selectedDiscussion?.title ?? selectedDiscussionSummary?.title ?? "Discussion details"}
                 </DialogTitle>
                 {selectedDiscussion ? (
@@ -1433,20 +1440,22 @@ export default function DiscussionsPage() {
               </div>
 
               {selectedDiscussion ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-2 lg:pr-1">
-                  <Badge variant="secondary" className="h-9 gap-1.5 rounded-md px-3">
+                <div className="flex shrink-0 flex-wrap items-center gap-2 pr-2 lg:max-w-[48%] lg:justify-end lg:pr-8 xl:pr-10">
+                  <Badge variant="secondary" className="h-9 gap-1.5 rounded-full px-3">
                     <MessageCircle className="h-3.5 w-3.5" />
-                    {selectedDiscussion.commentCount}
+                    <span className="tabular-nums">{selectedDiscussion.commentCount}</span>
+                    <span className="hidden sm:inline">replies</span>
                   </Badge>
-                  <Badge variant="outline" className="h-9 gap-1.5 rounded-md px-3">
+                  <Badge variant="outline" className="h-9 gap-1.5 rounded-full border-border/70 bg-background/80 px-3">
                     <Eye className="h-3.5 w-3.5" />
-                    {selectedDiscussion.viewCount}
+                    <span className="tabular-nums">{selectedDiscussion.viewCount}</span>
+                    <span className="hidden sm:inline">views</span>
                   </Badge>
                   <Button
                     variant="outline"
                     size="sm"
                     className={cn(
-                      "h-9 gap-2 rounded-md px-3 font-medium",
+                      "h-9 gap-2 rounded-full border-border/70 bg-background/80 px-3 font-medium shadow-xs",
                       selectedDiscussion.viewerHasLiked &&
                         "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
                     )}
@@ -1465,14 +1474,13 @@ export default function DiscussionsPage() {
                       <ThumbsUp className="h-4 w-4" />
                     )}
                     <span className="tabular-nums">{selectedDiscussion.likeCount}</span>
-                    <span className="text-muted-foreground">|</span>
-                    <span>{selectedDiscussion.viewerHasLiked ? "Liked" : "Like"}</span>
+                    <span className="hidden sm:inline">{selectedDiscussion.viewerHasLiked ? "Liked" : "Like"}</span>
                   </Button>
                   {selectedDiscussion.author.id === currentUser?.id ? (
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-9 gap-2 rounded-md text-destructive hover:text-destructive"
+                      className="h-9 gap-2 rounded-full border-destructive/30 bg-background px-3 text-destructive shadow-xs transition-colors hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
                       onClick={() => requestDeleteDiscussion(selectedDiscussion)}
                       disabled={deleteDiscussionPendingIds.includes(selectedDiscussion.id)}
                     >
@@ -1505,13 +1513,13 @@ export default function DiscussionsPage() {
               </Alert>
             </div>
           ) : selectedDiscussion ? (
-            <div className="h-full min-h-0 bg-background">
-              <ScrollArea className="h-full min-h-0 bg-background">
-                <main className="mx-auto max-w-5xl space-y-7 px-5 py-6 sm:px-7 lg:py-8">
-                  <article className="overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] via-background to-background shadow-sm ring-1 ring-primary/10">
-                    <div className="border-b border-primary/15 bg-primary/[0.055] px-4 py-3 sm:px-5">
+            <div className="h-full min-h-0 bg-gradient-to-b from-muted/20 to-background">
+              <ScrollArea className="h-full min-h-0">
+                <main className="mx-auto max-w-5xl space-y-7 px-4 py-5 sm:px-7 lg:py-8">
+                  <article className="overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.07] via-background to-background shadow-lg shadow-primary/5 ring-1 ring-primary/10">
+                    <div className="border-b border-primary/15 bg-background/65 px-4 py-3 backdrop-blur sm:px-5">
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <Badge variant="outline" className="h-7 gap-1.5 rounded-md border-primary/25 bg-background/80 px-2.5 text-primary">
+                        <Badge variant="outline" className="h-7 gap-1.5 rounded-full border-primary/25 bg-background/80 px-2.5 text-primary">
                           <MessageSquare className="h-3.5 w-3.5" />
                           Original post
                         </Badge>
@@ -1521,7 +1529,7 @@ export default function DiscussionsPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 sm:p-5">
+                    <div className="p-4 sm:p-6">
                       <div className="flex gap-4">
                         <Avatar className="h-12 w-12 shrink-0 border border-primary/20 bg-background shadow-sm">
                           <AvatarImage
@@ -1537,7 +1545,7 @@ export default function DiscussionsPage() {
                             <span>{selectedDiscussion.author.roleLabel}</span>
                           </div>
 
-                          <div className="rounded-lg border border-border/70 bg-background px-4 py-3 shadow-xs">
+                          <div className="rounded-2xl border border-border/70 bg-background/95 px-4 py-4 shadow-sm">
                             <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-base leading-8 text-foreground">
                               {selectedDiscussion.content}
                             </p>
@@ -1546,7 +1554,7 @@ export default function DiscussionsPage() {
                           {selectedDiscussion.tags.length ? (
                             <div className="flex flex-wrap gap-2">
                               {selectedDiscussion.tags.map((tag) => (
-                                <Badge key={`${selectedDiscussion.id}-detail-${tag}`} variant="secondary" className="rounded-md">
+                                <Badge key={`${selectedDiscussion.id}-detail-${tag}`} variant="secondary" className="rounded-full">
                                   {tag}
                                 </Badge>
                               ))}
@@ -1557,7 +1565,7 @@ export default function DiscussionsPage() {
                     </div>
                   </article>
 
-                  <section className="space-y-4 border-t border-border/70 pt-5">
+                  <section className="space-y-4 rounded-3xl border border-border/70 bg-background/80 p-4 shadow-sm sm:p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <h3 className="text-base font-semibold">Replies</h3>
@@ -1570,7 +1578,7 @@ export default function DiscussionsPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-2"
+                        className="gap-2 rounded-full bg-background"
                         onClick={openRootReplyComposer}
                       >
                         <Reply className="h-4 w-4" />
@@ -1584,8 +1592,10 @@ export default function DiscussionsPage() {
                       {selectedDiscussion.comments.length ? (
                         selectedDiscussion.comments.map((comment) => renderCommentThread(comment))
                       ) : (
-                        <div className="rounded-lg border border-dashed border-border/80 bg-muted/30 p-8 text-center">
-                          <MessageCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+                        <div className="rounded-2xl border border-dashed border-border/80 bg-muted/30 p-8 text-center">
+                          <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-background shadow-sm">
+                            <MessageCircle className="h-6 w-6 text-muted-foreground" />
+                          </span>
                           <h4 className="mt-3 text-base font-semibold">No replies yet</h4>
                           <p className="mt-1 text-sm text-muted-foreground">
                             Be the first to respond to this discussion.

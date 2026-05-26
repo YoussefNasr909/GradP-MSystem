@@ -9,14 +9,12 @@ import {
   Code,
   Download,
   ExternalLink,
-  Eye,
   FileText,
   Github,
   Link2,
   Loader2,
   Search,
   ShieldCheck,
-  Star,
   Trash2,
   Upload,
   Video,
@@ -27,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { DashboardMetricCard, DashboardStateCard } from "@/components/dashboard/page-shell"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -55,6 +54,8 @@ const categories = [
   { value: "documentation", label: "Documentation", icon: FileText },
   { value: "tutorial", label: "Tutorials", icon: Video },
   { value: "code", label: "Code Samples", icon: Code },
+  { value: "template", label: "Templates", icon: FileText },
+  { value: "other", label: "Other", icon: BookOpen },
 ] satisfies Array<{ value: "all" | ApiResourceCategory; label: string; icon: typeof BookOpen }>
 
 const resourceTypeOptions: Array<{ value: ApiResourceType; label: string }> = [
@@ -295,23 +296,48 @@ export default function ResourcesPage() {
     }
   }
 
+  const resourceStats = useMemo(
+    () => ({
+      total: resources.length,
+      files: resources.filter((resource) => resource.type === "file").length,
+      links: resources.filter((resource) => resource.type !== "file").length,
+      templates: resources.filter((resource) => resource.category === "template").length,
+    }),
+    [resources],
+  )
+
+  const displayCount = (value: number) => (loading || shouldShowRestrictedState ? "..." : value)
+
+  const formatResourceCategory = (category: ApiResourceCategory) =>
+    categories.find((item) => item.value === category)?.label ?? category
+
+  const formatResourceType = (type: ApiResourceType) =>
+    resourceTypeOptions.find((option) => option.value === type)?.label ?? type
+
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl space-y-5">
+      <div className="space-y-5">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+          className="flex flex-col gap-5 rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.03] p-5 shadow-sm sm:p-6 lg:flex-row lg:items-end lg:justify-between"
         >
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-purple-600 to-purple-800 border border-purple-500/20">
-              <BookOpen className="h-6 w-6 text-white" />
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500 text-white shadow-sm">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <Badge variant="outline" className="rounded-md border-blue-500/25 bg-blue-500/10 text-blue-700 dark:text-blue-300">
+                {canUpload ? "Supervisor library" : "Team library"}
+              </Badge>
             </div>
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 dark:from-purple-400 dark:to-purple-600 bg-clip-text text-transparent">
-                Learning Resources
-              </h1>
-              <p className="text-muted-foreground">Access tutorials, documentation, and code samples.</p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Learning Resources</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
+                {canUpload
+                  ? "Publish curated links, files, templates, and tutorials for the teams you supervise."
+                  : "Find supervisor-approved tutorials, documentation, templates, and code references for your project work."}
+              </p>
             </div>
           </div>
 
@@ -502,9 +528,8 @@ export default function ResourcesPage() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-          <Card className="border-2">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-4">
+          <Card className="rounded-[20px] border-border/60 bg-card p-4 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input
@@ -516,17 +541,16 @@ export default function ResourcesPage() {
                 </div>
 
                 <Tabs value={selectedCategory} onValueChange={(value) => setSelectedCategory(value as "all" | ApiResourceCategory)} className="w-full md:w-auto">
-                  <TabsList className="grid grid-cols-4 w-full md:w-auto">
+                  <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1 sm:grid-cols-6 lg:w-auto">
                     {categories.map((category) => (
-                      <TabsTrigger key={category.value} value={category.value} className="gap-2">
+                      <TabsTrigger key={category.value} value={category.value} className="gap-2 rounded-lg px-3">
                         <category.icon className="h-4 w-4" />
-                        <span className="hidden md:inline">{category.label.split(" ")[0]}</span>
+                        <span className="text-xs sm:text-sm">{category.label.split(" ")[0]}</span>
                       </TabsTrigger>
                     ))}
                   </TabsList>
                 </Tabs>
               </div>
-            </CardContent>
           </Card>
         </motion.div>
 
@@ -534,45 +558,19 @@ export default function ResourcesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          className="grid grid-cols-2 gap-4 xl:grid-cols-4"
         >
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Total Resources</p>
-              <p className="text-3xl font-bold mt-2">{loading || shouldShowRestrictedState ? "—" : resources.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Documentation</p>
-              <p className="text-3xl font-bold mt-2">
-                {loading || shouldShowRestrictedState ? "—" : resources.filter((resource) => resource.category === "documentation").length}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Tutorials</p>
-              <p className="text-3xl font-bold mt-2">
-                {loading || shouldShowRestrictedState ? "—" : resources.filter((resource) => resource.category === "tutorial").length}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground">Code Samples</p>
-              <p className="text-3xl font-bold mt-2">
-                {loading || shouldShowRestrictedState ? "—" : resources.filter((resource) => resource.category === "code").length}
-              </p>
-            </CardContent>
-          </Card>
+          <DashboardMetricCard label="Total resources" value={displayCount(resourceStats.total)} icon={BookOpen} tone="blue" loading={loading} />
+          <DashboardMetricCard label="Uploaded files" value={displayCount(resourceStats.files)} icon={FileText} tone="rose" loading={loading} />
+          <DashboardMetricCard label="Links and videos" value={displayCount(resourceStats.links)} icon={ExternalLink} tone="emerald" loading={loading} />
+          <DashboardMetricCard label="Templates" value={displayCount(resourceStats.templates)} icon={Code} tone="amber" loading={loading} />
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+          className="grid gap-4 md:grid-cols-2 xl:grid-cols-3"
         >
           {loading ? (
             Array.from({ length: 6 }).map((_, index) => (
@@ -593,39 +591,28 @@ export default function ResourcesPage() {
             ))
           ) : shouldShowRestrictedState ? (
             <div className="col-span-full">
-              <Card className="border-2 border-dashed bg-amber-500/5 border-amber-500/20">
-                <CardContent className="p-12 flex flex-col items-center text-center">
-                  <div className="p-4 rounded-full bg-amber-500/10 mb-6">
-                    <ShieldCheck className="h-12 w-12 text-amber-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-foreground mb-2">Restricted Learning Materials</h3>
-                  <p className="text-muted-foreground max-w-md mx-auto mb-4">
-                    Only Doctors and TAs can publish these resources. To access them, your team must first be assigned a supervisor.
-                  </p>
-                  {myTeamState?.team ? (
-                    <div className="space-y-4">
-                      <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                        Your team <span className="font-bold">&quot;{myTeamState.team.name}&quot;</span> is currently waiting for a supervisor.
-                      </p>
-                      <div className="flex flex-wrap gap-4 justify-center">
-                        <Button variant="outline" className="border-amber-500/50 hover:bg-amber-500/10" asChild>
-                          <Link href="/dashboard/proposals">Invite a Supervisor</Link>
-                        </Button>
-                        <Button variant="ghost" asChild>
-                          <a href="/dashboard/my-team">View Team Details</a>
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <p className="text-sm text-muted-foreground">You need to be part of a supervised team to see these materials.</p>
+              <DashboardStateCard
+                icon={ShieldCheck}
+                tone="amber"
+                title="Resources unlock after supervisor assignment"
+                description={
+                  myTeamState?.team
+                    ? `Your team "${myTeamState.team.name}" is waiting for a doctor or TA. Once assigned, their shared materials will appear here.`
+                    : "Join or create a team first, then your supervisor-approved learning materials will appear here."
+                }
+                action={
+                  <div className="flex flex-wrap justify-center gap-3">
+                    {myTeamState?.team ? (
                       <Button variant="outline" asChild>
-                        <a href="/dashboard/my-team">Join or Create a Team</a>
+                        <Link href="/dashboard/proposals">Invite a Supervisor</Link>
                       </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                    ) : null}
+                    <Button variant={myTeamState?.team ? "ghost" : "outline"} asChild>
+                      <Link href="/dashboard/my-team">{myTeamState?.team ? "View Team Details" : "Join or Create a Team"}</Link>
+                    </Button>
+                  </div>
+                }
+              />
             </div>
           ) : (
             resources.map((resource, index) => (
@@ -635,13 +622,13 @@ export default function ResourcesPage() {
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.05 * index }}
               >
-                <Card className="h-full hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-2 group">
+                <Card className="group h-full rounded-[20px] border-border/60 bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
                   <CardContent className="p-6 flex flex-col h-full">
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-xl border-2 ${getTypeColor(resource.type)}`}>{getTypeIcon(resource.type)}</div>
+                      <div className={`p-3 rounded-2xl border ${getTypeColor(resource.type)}`}>{getTypeIcon(resource.type)}</div>
                       <div className="flex gap-2">
                         <Badge variant="outline" className="capitalize">
-                          {resource.type}
+                          {formatResourceType(resource.type)}
                         </Badge>
                         {canUpload && currentUser?.id === resource.createdByUserId && (
                           <Button
@@ -661,7 +648,10 @@ export default function ResourcesPage() {
                     </h3>
                     <p className="text-sm text-muted-foreground mb-4 line-clamp-3 flex-1">{resource.description}</p>
 
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      <Badge variant="outline" className="capitalize">
+                        {formatResourceCategory(resource.category)}
+                      </Badge>
                       {resource.tags.length > 0 ? (
                         resource.tags.slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="secondary" className="text-xs">
@@ -673,29 +663,25 @@ export default function ResourcesPage() {
                           No tags
                         </Badge>
                       )}
+                      {resource.tags.length > 3 ? (
+                        <Badge variant="secondary" className="text-xs">
+                          +{resource.tags.length - 3}
+                        </Badge>
+                      ) : null}
                     </div>
 
-                    <div className="flex items-center justify-between text-sm text-muted-foreground mb-4 pb-4 border-b">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                          <Eye className="h-4 w-4" />
-                          <span>—</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Download className="h-4 w-4" />
-                          <span>—</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                        <span className="font-semibold">4.5</span>
+                    <div className="mb-4 border-b pb-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                        <span>Shared by {resource.authorName}</span>
+                        <span className="hidden h-1 w-1 rounded-full bg-muted-foreground/40 sm:inline-block" />
+                        <span>{new Date(resource.uploadedAt).toLocaleDateString()}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs text-muted-foreground">by {resource.authorName}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(resource.uploadedAt).toLocaleDateString()}</p>
+                        <p className="text-xs font-medium uppercase text-muted-foreground">Resource action</p>
+                        <p className="text-xs text-muted-foreground">{resource.type === "file" ? "Download file" : "Open in a new tab"}</p>
                       </div>
                       <Button size="sm" className="gap-2" asChild>
                         <a href={resource.url} target="_blank" rel="noopener noreferrer">
@@ -721,10 +707,26 @@ export default function ResourcesPage() {
         </motion.div>
 
         {!loading && !shouldShowRestrictedState && resources.length === 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12 border-2 border-dashed rounded-xl">
-            <BookOpen className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No Resources Found</h3>
-            <p className="text-muted-foreground">Try adjusting your search or filter criteria.</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <DashboardStateCard
+              icon={BookOpen}
+              title="No resources found"
+              description={
+                searchQuery || selectedCategory !== "all"
+                  ? "No shared materials match the current search or category."
+                  : canUpload
+                    ? "Start by uploading a file, link, video, repository, or template for your teams."
+                    : "Your supervisors have not shared learning materials yet."
+              }
+              action={
+                canUpload ? (
+                  <Button onClick={() => setIsUploadOpen(true)}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Resource
+                  </Button>
+                ) : null
+              }
+            />
           </motion.div>
         )}
 
