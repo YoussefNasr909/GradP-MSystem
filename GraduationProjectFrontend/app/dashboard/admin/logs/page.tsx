@@ -120,7 +120,7 @@ function SummaryTile({
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         </div>
         <div className={cn("rounded-full flex items-center justify-center h-12 w-12 ring-1", tone)}>
-          <Icon className="h-6 w-6" />
+          <Icon className="h-6 w-6 text-foreground" />
         </div>
       </div>
     </Card>
