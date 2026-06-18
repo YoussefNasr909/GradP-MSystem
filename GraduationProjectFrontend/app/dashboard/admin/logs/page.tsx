@@ -119,8 +119,8 @@ function SummaryTile({
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         </div>
-        <div className={cn("rounded-2xl border p-2.5", tone)}>
-          <Icon className="h-4 w-4" />
+        <div className={cn("rounded-full flex items-center justify-center h-10 w-10", tone)}>
+          <Icon className="h-5 w-5" />
         </div>
       </div>
     </Card>
