@@ -977,13 +977,19 @@ export default function TimeTrackerPage() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.04 }}
-                        className={cn(
-                          "rounded-[24px] border p-5 transition-all",
-                          isSelectedTask
-                            ? "border-primary/35 bg-primary/[0.05] shadow-sm"
-                            : "border-border/60 bg-background/70 hover:border-primary/20 hover:bg-background",
-                        )}
-                      >
+                                              role="button"
+                                              onClick={(e) => {
+                                                const target = e.target as HTMLElement
+                                                if (target.closest("button, a")) return
+                                                selectFocusTask(task.id)
+                                              }}
+                                              className={cn(
+                                                "rounded-[24px] border p-5 transition-all cursor-pointer",
+                                                isSelectedTask
+                                                  ? "border-primary/35 bg-primary/[0.05] shadow-sm"
+                                                  : "border-border/60 bg-background/70 hover:border-primary/20 hover:bg-background",
+                                              )}
+                                            >
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
@@ -1025,13 +1031,6 @@ export default function TimeTrackerPage() {
                           </div>
 
                           <div className="flex flex-wrap gap-2 lg:max-w-[240px] lg:justify-end">
-                            <Button
-                              variant={isSelectedTask ? "default" : "outline"}
-                              className={cn("rounded-xl", !isSelectedTask && "bg-transparent")}
-                              onClick={() => selectFocusTask(task.id)}
-                            >
-                              Focus on This
-                            </Button>
 
                             {task.permissions.canAccept ? (
                               <Button
@@ -1175,22 +1174,14 @@ export default function TimeTrackerPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Focus Task
                   </p>
-                  <Select
-                    value={selectedTask?.id ?? ""}
-                    onValueChange={selectFocusTask}
-                    disabled={!activeTasks.length}
-                  >
-                    <SelectTrigger className="h-11 rounded-2xl border-border/60 bg-background/80">
-                      <SelectValue placeholder="Select a task to focus on" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeTasks.map((task) => (
-                        <SelectItem key={task.id} value={task.id}>
-                          {task.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="mt-2">
+                    <p className="text-sm font-semibold">{selectedTask?.title ?? "No task selected"}</p>
+                    <div className="mt-2">
+                      <Link href="/dashboard/tasks">
+                        <Button variant="ghost" className="rounded-xl">Open Queue</Button>
+                      </Link>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="rounded-[24px] border border-primary/15 bg-gradient-to-br from-primary/12 via-background to-primary/[0.03] p-5 text-center shadow-[inset_0_1px_0_hsl(var(--background)/0.7)]">

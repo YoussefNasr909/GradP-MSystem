@@ -370,15 +370,16 @@ export default function AdminLogsPage() {
               Refresh current view
             </Button>
           </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
+            <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
+            <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
+            <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
+          </div>
         </div>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
-        <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
-        <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
-        <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
-      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid h-auto w-full max-w-md grid-cols-2 rounded-2xl border border-border/60 bg-muted/40 p-1">
