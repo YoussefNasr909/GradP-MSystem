@@ -354,9 +354,6 @@ export default function AdminLogsPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                {activeTab === "system" ? "Showing latest 24 logs" : "Showing latest 24 actions"}
-              </Badge>
               <span>
                 Last updated{" "}
                 {lastUpdatedAt ? format(lastUpdatedAt, "MMM d, yyyy HH:mm:ss") : "when the first request completes"}
@@ -371,12 +368,6 @@ export default function AdminLogsPage() {
             <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
           </div>
 
-          <div className="mt-3 w-full flex justify-end">
-            <Button variant="outline" size="sm" className="rounded-lg px-3" onClick={() => void handleRefresh()} disabled={isRefreshing}>
-              <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
         </div>
       </Card>
 
