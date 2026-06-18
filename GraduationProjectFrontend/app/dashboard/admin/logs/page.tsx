@@ -364,18 +364,18 @@ export default function AdminLogsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="outline" className="rounded-xl px-4" onClick={() => void handleRefresh()} disabled={isRefreshing}>
-              <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
-              Refresh current view
-            </Button>
-          </div>
-
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
             <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
             <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
             <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
+          </div>
+
+          <div className="mt-3 w-full flex justify-end">
+            <Button variant="outline" size="sm" className="rounded-lg px-3" onClick={() => void handleRefresh()} disabled={isRefreshing}>
+              <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+              Refresh
+            </Button>
           </div>
         </div>
       </Card>
