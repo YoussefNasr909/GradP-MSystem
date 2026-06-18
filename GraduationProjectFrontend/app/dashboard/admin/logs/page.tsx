@@ -114,7 +114,7 @@ function SummaryTile({
 }) {
   return (
     <Card className="border-border/60 bg-card/80 p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
