@@ -176,6 +176,90 @@ function sortTasks(tasks: ApiTask[], sortBy: ReviewSort) {
   })
 }
 
+function ReviewForm({
+  selectedTask,
+  submittingReview,
+  onApprove,
+  onReject,
+}: {
+  selectedTask: ApiTask
+  submittingReview: null | "approve" | "reject"
+  onApprove: (task: ApiTask, comment?: string) => void
+  onReject: (task: ApiTask, comment: string) => void
+}) {
+  const [reviewComment, setReviewComment] = useState("")
+
+  return (
+    <div className="shrink-0 h-auto max-h-[50vh] lg:max-h-none lg:h-full lg:flex lg:flex-col border-t lg:border-t-0 lg:border-l border-border/40 bg-background lg:bg-muted/[0.02] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.05)] lg:shadow-none z-20 flex flex-col transition-all">
+      <div className="flex-1 overflow-y-auto p-5 lg:p-8 scrollbar-thin">
+        <div className="space-y-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
+                <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Review Feedback</h4>
+              </div>
+              <span className={cn(
+                "text-[9px] font-semibold tabular-nums tracking-widest uppercase",
+                reviewComment.trim().length >= RESUBMISSION_MIN_LENGTH ? "text-emerald-600/70" : "text-amber-600/70"
+              )}>
+                {reviewComment.trim().length} / {RESUBMISSION_MIN_LENGTH} MIN
+              </span>
+            </div>
+            <div className="group relative">
+              <Textarea
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="Provide detailed feedback for the team..."
+                className="min-h-[120px] sm:min-h-[220px] w-full resize-none rounded-2xl sm:rounded-3xl border-border/40 bg-background p-4 sm:p-5 text-sm font-medium leading-relaxed shadow-sm transition-all focus:ring-primary/20 group-hover:border-primary/20"
+              />
+              <div className="absolute bottom-5 right-5 flex h-7 w-7 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground/30">
+                <FileText className="h-3.5 w-3.5" />
+              </div>
+            </div>
+          </div>
+
+          {reviewComment.trim().length > 0 && reviewComment.trim().length < RESUBMISSION_MIN_LENGTH && (
+            <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-amber-500/[0.03] p-4 border border-amber-500/10">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-4 w-4 text-amber-600/70 shrink-0" />
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700/70 leading-tight">
+                  More detail required for resubmission
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      <div className="shrink-0 border-t border-border/40 bg-background/50 p-5 lg:p-8 backdrop-blur-md">
+        <div className="space-y-3">
+          <Button
+            onClick={() => void onApprove(selectedTask, reviewComment)}
+            disabled={submittingReview !== null}
+            className="h-12 w-full rounded-xl bg-emerald-600 text-sm font-bold tracking-tight shadow-lg shadow-emerald-600/10 transition-all hover:bg-emerald-700 hover:scale-[1.01] active:scale-[0.99]"
+          >
+            {submittingReview === "approve" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
+            Approve Work
+          </Button>
+          <Button
+            onClick={() => void onReject(selectedTask, reviewComment)}
+            disabled={submittingReview !== null || reviewComment.trim().length < RESUBMISSION_MIN_LENGTH}
+            variant="outline"
+            className="h-12 w-full rounded-xl border-destructive/20 text-destructive text-sm font-bold tracking-tight transition-all hover:bg-destructive hover:text-white hover:scale-[1.01] active:scale-[0.99]"
+          >
+            {submittingReview === "reject" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsDown className="mr-2 h-4 w-4" />}
+            Request Changes
+          </Button>
+          <p className="text-center text-[9px] font-medium uppercase tracking-widest text-muted-foreground/20">
+            Changes are final after submission
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ReviewTasksPage() {
   const { currentUser } = useAuthStore()
   const role = currentUser?.role?.toLowerCase() ?? ""
@@ -197,7 +281,7 @@ export default function ReviewTasksPage() {
   const [page, setPage] = useState(1)
 
   const [selectedTask, setSelectedTask] = useState<ApiTask | null>(null)
-  const [reviewComment, setReviewComment] = useState("")
+  
   const [submittingReview, setSubmittingReview] = useState<null | "approve" | "reject">(null)
   const [taskEvidence, setTaskEvidence] = useState<ApiTaskSubmissionEvidence[]>([])
   const [loadingEvidence, setLoadingEvidence] = useState(false)
@@ -323,15 +407,15 @@ export default function ReviewTasksPage() {
     setPageSize(10)
   }
 
-  async function handleApprove(task: ApiTask) {
+  async function handleApprove(task: ApiTask, comment?: string) {
     setSubmittingReview("approve")
     try {
       const updated = await tasksApi.approve(task.id, {
-        reviewComment: reviewComment.trim() || undefined,
+        reviewComment: comment?.trim() || undefined,
       })
       setTasks((current) => current.filter((item) => item.id !== updated.id))
       setSelectedTask(null)
-      setReviewComment("")
+      
       toast.success(task.github?.pullRequest.number ? "Task approved. The pull request was not merged." : "Task approved")
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to approve")
@@ -340,8 +424,8 @@ export default function ReviewTasksPage() {
     }
   }
 
-  async function handleReject(task: ApiTask) {
-    const trimmedComment = reviewComment.trim()
+  async function handleReject(task: ApiTask, comment: string) {
+    const trimmedComment = comment.trim()
     if (trimmedComment.length < RESUBMISSION_MIN_LENGTH) {
       toast.error(
         `Add at least ${RESUBMISSION_MIN_LENGTH} characters explaining what needs to change before requesting resubmission.`,
@@ -354,7 +438,7 @@ export default function ReviewTasksPage() {
       const updated = await tasksApi.reject(task.id, { reviewComment: trimmedComment })
       setTasks((current) => current.filter((item) => item.id !== updated.id))
       setSelectedTask(null)
-      setReviewComment("")
+      
       toast.success("Resubmission requested")
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Failed to request resubmission")
@@ -389,15 +473,7 @@ export default function ReviewTasksPage() {
         <div className="relative px-8 py-8 sm:px-12">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Badge variant="outline" className="rounded-full border-cyan-500/20 bg-cyan-500/5 px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                  {reviewerRoleLabel} Queue
-                </Badge>
-                <div className="h-1 w-1 rounded-full bg-muted-foreground/30" />
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-                  {filteredTasks.length} Active Submissions
-                </span>
-              </div>
+
               <div className="space-y-2">
                 <h1 className="flex items-center gap-5 text-4xl font-bold tracking-tight sm:text-5xl text-foreground/90">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-600 shadow-sm ring-1 ring-cyan-500/20">
@@ -411,19 +487,19 @@ export default function ReviewTasksPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:w-[640px]">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[500px]">
               {stats.map((stat) => (
                 <motion.div 
                   key={stat.label}
-                  whileHover={{ y: -4, backgroundColor: "rgba(var(--primary), 0.05)" }}
-                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  className="group flex flex-col items-center justify-center rounded-3xl border border-border/40 bg-muted/[0.02] p-4 transition-all hover:border-primary/20"
+                  whileHover={{ y: -2 }}
+                  transition={{ duration: 0.2 }}
+                  className="group flex flex-col items-center justify-center rounded-2xl bg-muted/30 p-4 transition-all hover:bg-muted/50"
                 >
-                  <div className="mb-3 flex items-center justify-center transition-transform group-hover:scale-110">
+                  <div className="mb-2 flex items-center justify-center transition-transform group-hover:scale-105">
                     <stat.icon className={cn("h-7 w-7", stat.tone)} />
                   </div>
                   
-                  <div className="mb-3 h-px w-8 bg-border/60" />
+                  
 
                   <div className="text-center space-y-1">
                     <p className="text-2xl font-bold tracking-tight text-foreground/90 tabular-nums leading-none">{stat.value}</p>
@@ -451,29 +527,31 @@ export default function ReviewTasksPage() {
               </Badge>
             ) : null}
           </div>
-          <div className="grid gap-4 lg:grid-cols-[minmax(280px,2fr)_repeat(5,minmax(160px,1fr))_auto]">
-            <div className="relative group">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:flex lg:flex-wrap lg:items-center">
+            <div className="relative group col-span-2 sm:col-span-3 lg:flex-1 lg:min-w-[240px]">
               <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40 transition-colors group-focus-within:text-primary" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search tasks, teams, assignees..."
-                className="h-12 rounded-2xl border-border/40 bg-background/50 pl-11 focus:bg-background transition-all font-medium text-sm"
+                className="h-11 rounded-xl border-border/40 bg-background/50 pl-10 focus:bg-background transition-all font-medium text-sm w-full"
               />
             </div>
 
-            <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/50 font-semibold text-sm transition-all hover:bg-muted/50"><SelectValue placeholder="Team" /></SelectTrigger>
-              <SelectContent className="rounded-2xl shadow-xl">
-                <SelectItem value="all" className="font-medium">All teams</SelectItem>
-                {teamOptions.map((team) => (
-                  <SelectItem key={team.id} value={team.id} className="font-medium">{team.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {role !== "leader" && (
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/50 font-semibold text-sm lg:w-[130px] transition-all hover:bg-muted/50"><SelectValue placeholder="Team" /></SelectTrigger>
+                <SelectContent className="rounded-2xl shadow-xl">
+                  <SelectItem value="all" className="font-medium">All teams</SelectItem>
+                  {teamOptions.map((team) => (
+                    <SelectItem key={team.id} value={team.id} className="font-medium">{team.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             <Select value={priorityFilter} onValueChange={(value) => setPriorityFilter(value as "all" | ApiTaskPriority)}>
-              <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/50 font-semibold text-sm transition-all hover:bg-muted/50"><SelectValue placeholder="Priority" /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/50 font-semibold text-sm lg:w-[130px] transition-all hover:bg-muted/50"><SelectValue placeholder="Priority" /></SelectTrigger>
               <SelectContent className="rounded-2xl shadow-xl">
                 <SelectItem value="all" className="font-medium">All priorities</SelectItem>
                 <SelectItem value="CRITICAL" className="font-semibold text-red-600">Critical</SelectItem>
@@ -484,7 +562,7 @@ export default function ReviewTasksPage() {
             </Select>
 
             <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as "all" | ApiTaskIntegrationMode)}>
-              <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/50 font-semibold text-sm transition-all hover:bg-muted/50"><SelectValue placeholder="Mode" /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/50 font-semibold text-sm lg:w-[130px] transition-all hover:bg-muted/50"><SelectValue placeholder="Mode" /></SelectTrigger>
               <SelectContent className="rounded-2xl shadow-xl">
                 <SelectItem value="all" className="font-medium">All modes</SelectItem>
                 <SelectItem value="GITHUB" className="font-medium">GitHub</SelectItem>
@@ -493,7 +571,7 @@ export default function ReviewTasksPage() {
             </Select>
 
             <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as "all" | ApiTaskType)}>
-              <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/50 font-semibold text-sm transition-all hover:bg-muted/50"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/50 font-semibold text-sm lg:w-[130px] transition-all hover:bg-muted/50"><SelectValue placeholder="Type" /></SelectTrigger>
               <SelectContent className="rounded-2xl shadow-xl">
                 <SelectItem value="all" className="font-medium">All types</SelectItem>
                 {TASK_TYPE_OPTIONS.map((option) => (
@@ -503,7 +581,7 @@ export default function ReviewTasksPage() {
             </Select>
 
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as ReviewSort)}>
-              <SelectTrigger className="h-12 rounded-2xl border-border/40 bg-background/50 font-semibold text-sm transition-all hover:bg-muted/50"><SelectValue placeholder="Sort" /></SelectTrigger>
+              <SelectTrigger className="h-11 rounded-xl border-border/40 bg-background/50 font-semibold text-sm lg:w-[130px] transition-all hover:bg-muted/50"><SelectValue placeholder="Sort" /></SelectTrigger>
               <SelectContent className="rounded-2xl shadow-xl">
                 <SelectItem value="submitted-desc" className="font-medium">Newest first</SelectItem>
                 <SelectItem value="submitted-asc" className="font-medium">Oldest first</SelectItem>
@@ -514,7 +592,7 @@ export default function ReviewTasksPage() {
 
             <Button 
               variant="ghost" 
-              className="h-12 rounded-2xl px-6 font-semibold text-xs uppercase tracking-widest text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-all" 
+              className="h-11 rounded-xl px-4 font-semibold text-xs uppercase tracking-widest text-muted-foreground hover:text-destructive hover:bg-destructive/5 col-span-2 sm:col-span-3 lg:col-span-1 lg:w-auto transition-all" 
               onClick={clearFilters} 
               disabled={!hasActiveFilters}
             >
@@ -563,7 +641,7 @@ export default function ReviewTasksPage() {
               <p className="text-sm font-medium text-muted-foreground/60">All team submissions have been processed.</p>
             </div>
           ) : (
-            <div className="divide-y divide-border/10">
+            <div className="divide-y divide-blue-500/30">
               <AnimatePresence mode="popLayout">
                 {pageTasks.map((task, index) => {
                   const assigneeName = fullName(task.assignee) || "Unassigned"
@@ -582,24 +660,24 @@ export default function ReviewTasksPage() {
                     >
                       <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:px-10 sm:py-8">
                         {/* Left side: Task Primary Info */}
-                        <div className="flex min-w-0 items-center gap-6">
+                        <div className="flex min-w-0 items-start sm:items-center gap-4 sm:gap-6">
                           <div className={cn(
-                            "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-sm ring-1 transition-all duration-300 group-hover:scale-105",
+                            "flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-2xl shadow-sm ring-1 transition-all duration-300 group-hover:scale-105",
                             task.integrationMode === "GITHUB" ? "bg-violet-500/5 text-violet-500 ring-violet-500/20" : "bg-cyan-500/5 text-cyan-500 ring-cyan-500/20",
                           )}>
-                            {task.integrationMode === "GITHUB" ? <Github className="h-7 w-7" /> : <FileCode className="h-7 w-7" />}
+                            {task.integrationMode === "GITHUB" ? <Github className="h-6 w-6 sm:h-7 sm:w-7" /> : <FileCode className="h-6 w-6 sm:h-7 sm:w-7" />}
                           </div>
 
-                          <div className="min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center gap-3">
-                              <h3 className="truncate text-xl font-bold tracking-tight text-foreground/90 group-hover:text-primary transition-colors duration-300">
+                          <div className="min-w-0 space-y-2 sm:space-y-2.5">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3">
+                              <h3 className="text-base sm:text-xl font-bold tracking-tight text-foreground/90 group-hover:text-primary transition-colors duration-300 line-clamp-2 sm:line-clamp-none sm:truncate">
                                 {task.title}
                               </h3>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className={cn("rounded-lg border-none px-3 py-1 text-[10px] font-bold uppercase tracking-wider", PRIORITY_COLOR[task.priority])}>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant="outline" className={cn("rounded-md border-none px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", PRIORITY_COLOR[task.priority])}>
                                   {task.priority}
                                 </Badge>
-                                <Badge variant="secondary" className="rounded-lg bg-muted/40 px-3 py-1 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider">
+                                <Badge variant="secondary" className="rounded-md bg-muted/40 px-2.5 py-0.5 text-[10px] font-bold text-muted-foreground/60 uppercase tracking-wider truncate max-w-[140px] sm:max-w-[200px]">
                                   {task.team.name}
                                 </Badge>
                               </div>
@@ -632,10 +710,10 @@ export default function ReviewTasksPage() {
                           
                           <Button
                             size="default"
-                            className="h-10 rounded-xl bg-primary px-6 text-sm font-bold tracking-tight shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98] group/btn"
+                            className="h-10 w-full sm:w-auto rounded-xl bg-primary px-6 text-sm font-bold tracking-tight shadow-lg shadow-primary/10 transition-all hover:scale-[1.02] active:scale-[0.98] group/btn"
                             onClick={() => {
                               setSelectedTask(task)
-                              setReviewComment("")
+                              
                             }}
                           >
                             Review Submission
@@ -691,7 +769,7 @@ export default function ReviewTasksPage() {
       </Card>
 
       <Dialog open={!!selectedTask} onOpenChange={(open) => { if (!open) setSelectedTask(null) }}>
-        <DialogContent className="h-[92vh] w-[96vw] overflow-hidden rounded-[40px] border-none p-0 shadow-2xl sm:mx-auto sm:max-w-4xl flex flex-col">
+        <DialogContent className="h-[92vh] w-[96vw] overflow-hidden rounded-[32px] border border-border/40 bg-white dark:bg-zinc-950 p-0 shadow-2xl sm:mx-auto sm:max-w-5xl flex flex-col">
           {selectedTask ? (
             <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-zinc-950">
               {/* Top Banner / Status */}
@@ -703,7 +781,7 @@ export default function ReviewTasksPage() {
               )} />
 
               {/* Header Area */}
-              <div className="shrink-0 border-b border-border/40 px-10 py-8">
+              <div className="shrink-0 border-b border-border/40 px-5 py-5 sm:px-10 sm:py-8">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-5">
                     <div className={cn(
@@ -713,19 +791,19 @@ export default function ReviewTasksPage() {
                       {selectedTask.integrationMode === "GITHUB" ? <Github className="h-8 w-8" /> : <FileCode className="h-8 w-8" />}
                     </div>
                     <div className="space-y-1">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="secondary" className="rounded-full bg-muted/50 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-widest opacity-60">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <Badge variant="secondary" className="rounded-full bg-muted/50 px-3 py-0.5 text-[9px] font-semibold uppercase tracking-widest opacity-60 truncate max-w-[180px] sm:max-w-[300px]">
                           {selectedTask.team?.name}
                         </Badge>
                         <Badge variant="outline" className={cn("rounded-full border-none px-3 py-0.5 text-[9px] font-semibold uppercase tracking-widest", PRIORITY_COLOR[selectedTask.priority])}>
                           {selectedTask.priority}
                         </Badge>
                       </div>
-                      <DialogTitle className="text-2xl font-bold tracking-tight text-foreground/90">{selectedTask.title}</DialogTitle>
+                      <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground/90 leading-tight">{selectedTask.title}</DialogTitle>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 self-end sm:self-center">
-                    <div className="text-right">
+                  <div className="flex flex-row-reverse sm:flex-row items-center gap-3 self-start sm:self-center">
+                    <div className="text-left sm:text-right">
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40">Assignee</p>
                       <p className="text-sm font-bold text-foreground/80">{fullName(selectedTask.assignee)}</p>
                     </div>
@@ -738,9 +816,9 @@ export default function ReviewTasksPage() {
               </div>
 
               {/* Main Content Area */}
-              <div className="flex-1 grid min-h-0 overflow-hidden lg:grid-cols-[1fr_360px]">
+              <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[1fr_360px] min-h-0 overflow-hidden relative">
                 {/* Left side: Evidence & Info (Scrollable) */}
-                <div className="overflow-y-auto px-10 py-10 space-y-12 scrollbar-thin">
+                <div className="flex-1 overflow-y-auto px-5 py-6 lg:px-10 lg:py-10 space-y-8 scrollbar-thin">
                   {/* Task Overview */}
                   <section className="space-y-4">
                     <div className="flex items-center gap-3">
@@ -888,75 +966,13 @@ export default function ReviewTasksPage() {
                 </div>
 
                 {/* Right side: Review Form (Sticky Actions) */}
-                <div className="flex flex-col min-h-0 border-l border-border/40 bg-muted/[0.02]">
-                  {/* Scrollable Form Area */}
-                  <div className="flex-1 overflow-y-auto p-8 scrollbar-thin">
-                    <div className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full bg-primary/40" />
-                            <h4 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">Review Feedback</h4>
-                          </div>
-                          <span className={cn(
-                            "text-[9px] font-semibold tabular-nums tracking-widest uppercase",
-                            reviewComment.trim().length >= RESUBMISSION_MIN_LENGTH ? "text-emerald-600/70" : "text-amber-600/70"
-                          )}>
-                            {reviewComment.trim().length} / {RESUBMISSION_MIN_LENGTH} MIN
-                          </span>
-                        </div>
-                        <div className="group relative">
-                          <Textarea
-                            value={reviewComment}
-                            onChange={(event) => setReviewComment(event.target.value)}
-                            placeholder="Provide detailed feedback for the team..."
-                            className="min-h-[220px] w-full resize-none rounded-3xl border-border/40 bg-background p-5 text-sm font-medium leading-relaxed shadow-sm transition-all focus:ring-primary/20 group-hover:border-primary/20"
-                          />
-                          <div className="absolute bottom-5 right-5 flex h-7 w-7 items-center justify-center rounded-lg bg-muted/50 text-muted-foreground/30">
-                            <FileText className="h-3.5 w-3.5" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {reviewComment.trim().length > 0 && reviewComment.trim().length < RESUBMISSION_MIN_LENGTH && (
-                        <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-amber-500/[0.03] p-4 border border-amber-500/10">
-                          <div className="flex items-center gap-3">
-                            <AlertCircle className="h-4 w-4 text-amber-600/70 shrink-0" />
-                            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-700/70 leading-tight">
-                              More detail required for resubmission
-                            </p>
-                          </div>
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Fixed Actions Area at Bottom */}
-                  <div className="shrink-0 border-t border-border/40 bg-background/50 p-8 backdrop-blur-md">
-                    <div className="space-y-3">
-                      <Button
-                        onClick={() => void handleApprove(selectedTask)}
-                        disabled={submittingReview !== null}
-                        className="h-12 w-full rounded-xl bg-emerald-600 text-sm font-bold tracking-tight shadow-lg shadow-emerald-600/10 transition-all hover:bg-emerald-700 hover:scale-[1.01] active:scale-[0.99]"
-                      >
-                        {submittingReview === "approve" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />}
-                        Approve Work
-                      </Button>
-                      <Button
-                        onClick={() => void handleReject(selectedTask)}
-                        disabled={submittingReview !== null || reviewComment.trim().length < RESUBMISSION_MIN_LENGTH}
-                        variant="outline"
-                        className="h-12 w-full rounded-xl border-destructive/20 text-destructive text-sm font-bold tracking-tight transition-all hover:bg-destructive hover:text-white hover:scale-[1.01] active:scale-[0.99]"
-                      >
-                        {submittingReview === "reject" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsDown className="mr-2 h-4 w-4" />}
-                        Request Changes
-                      </Button>
-                      <p className="text-center text-[9px] font-medium uppercase tracking-widest text-muted-foreground/20">
-                        Changes are final after submission
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <ReviewForm
+                  key={selectedTask.id}
+                  selectedTask={selectedTask}
+                  submittingReview={submittingReview}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                />
               </div>
             </div>
           ) : null}

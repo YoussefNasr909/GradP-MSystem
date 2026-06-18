@@ -523,7 +523,12 @@ function SupportDashboard() {
   ]
 
   return (
-    <div className="space-y-6 pb-8">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="flex flex-col gap-6 rounded-[32px] border border-border/40 bg-background/50 p-4 sm:p-8 backdrop-blur-md shadow-2xl overflow-hidden mb-8"
+    >
       <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Support workspace</p>
@@ -558,34 +563,32 @@ function SupportDashboard() {
         </div>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {metrics.map((metric) => {
           const MetricIcon = metric.icon
           return (
             <NextLink
               key={metric.label}
               href={metric.href}
-              className="group rounded-xl border border-border/70 bg-card p-4 shadow-sm shadow-black/[0.02] transition hover:border-primary/30 hover:bg-accent/20"
+              className="group flex flex-col justify-between rounded-xl border border-border/40 bg-card p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-primary/20"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
-                  <p className={cn("mt-2 text-2xl font-semibold tracking-tight", metric.danger && !isLoading && metric.value > 0 && "text-red-600 dark:text-red-300")}>
-                    {isLoading ? "..." : metric.value}
-                  </p>
-                </div>
-                <span className="rounded-lg bg-muted p-2 text-muted-foreground transition group-hover:text-foreground">
-                  <MetricIcon className="h-4 w-4" />
-                </span>
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors group-hover:text-foreground">{metric.label}</p>
+                <MetricIcon className={cn("h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary", metric.danger && !isLoading && metric.value > 0 ? "text-red-500 group-hover:text-red-600" : "")} />
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">{metric.helper}</p>
+              <div>
+                <p className={cn("text-3xl sm:text-4xl font-semibold tracking-tight transition-transform duration-300 origin-left group-hover:scale-105", metric.danger && !isLoading && metric.value > 0 ? "text-red-500" : "text-foreground")}>
+                  {isLoading ? "..." : metric.value}
+                </p>
+                <p className="mt-1.5 text-[10px] sm:text-[11px] font-medium text-muted-foreground line-clamp-1">{metric.helper}</p>
+              </div>
             </NextLink>
           )
         })}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+        <div className="flex flex-col gap-4 min-w-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold">Assigned to you</h2>
@@ -609,7 +612,7 @@ function SupportDashboard() {
                 <NextLink
                   key={ticket.id}
                   href={`/dashboard/support?ticket=${ticket.id}`}
-                  className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card/50 p-3 transition hover:border-primary/30 hover:bg-accent/20 sm:flex-row sm:items-center sm:justify-between"
+                  className="group flex flex-col gap-3 rounded-xl border border-border/40 bg-card p-4 transition-all duration-300 hover:bg-muted/30 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -638,9 +641,9 @@ function SupportDashboard() {
               </div>
             )}
           </div>
-        </Card>
+        </div>
 
-        <Card className="rounded-xl border-border/70 p-5 shadow-none">
+        <div className="flex flex-col gap-4 bg-card rounded-xl p-5 border border-border/40 shadow-sm">
           <h2 className="text-lg font-semibold">Queue health</h2>
           <p className="mt-1 text-sm text-muted-foreground">SLA and closure signals for today.</p>
 
@@ -673,9 +676,9 @@ function SupportDashboard() {
               </NextLink>
             </Button>
           </div>
-        </Card>
+        </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
 
@@ -1885,7 +1888,7 @@ function DoctorDashboard() {
   const atRiskTeams = supervisedTeams.filter((t) => t.isFull && t.stage === "REQUIREMENTS").length
   const criticalTeams = 0
 
-  const pendingProposals = (myTeamState?.supervisorRequestsReceived || []).filter(
+  const pendingSupervisorRequests = (myTeamState?.supervisorRequestsReceived || []).filter(
     (r) => r.status === "PENDING"
   )
   
@@ -1907,10 +1910,10 @@ function DoctorDashboard() {
       title: "Proposals",
       icon: FileText,
       href: "/dashboard/proposals",
-      count: pendingProposals.length,
+      count: pendingSupervisorRequests.length,
       color: "from-orange-500 to-amber-500",
       description: "Review submissions",
-      urgent: pendingProposals.length > 0,
+      urgent: pendingSupervisorRequests.length > 0,
     },
     {
       title: "Submissions",
@@ -2010,7 +2013,7 @@ function DoctorDashboard() {
           </div>
 
           {/* Alert Banner */}
-          {(pendingProposals.length > 0 || atRiskTeams > 0 || criticalTeams > 0) && (
+          {(pendingSupervisorRequests.length > 0 || atRiskTeams > 0 || criticalTeams > 0) && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -2022,13 +2025,13 @@ function DoctorDashboard() {
                 <div>
                   <h4 className="font-medium">Action Required</h4>
                   <p className="text-sm text-muted-foreground">
-                    {pendingProposals.length > 0 && `${pendingProposals.length} proposals pending review. `}
+                    {pendingSupervisorRequests.length > 0 && `${pendingSupervisorRequests.length} team supervisor requests pending. `}
                     {(atRiskTeams > 0 || criticalTeams > 0) && `${atRiskTeams + criticalTeams} teams need attention.`}
                   </p>
                 </div>
               </div>
               <Button size="sm" asChild>
-                <NextLink href="/dashboard/proposals">Review Now</NextLink>
+                <NextLink href={pendingSupervisorRequests.length > 0 ? "/dashboard/my-team" : "/dashboard/proposals"}>Review Now</NextLink>
               </Button>
             </motion.div>
           )}

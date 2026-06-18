@@ -516,7 +516,7 @@ export function AppTopbar() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} className="hidden sm:block">
+              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
                 <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
                   {resolvedTheme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
                 </Button>
@@ -568,14 +568,6 @@ export function AppTopbar() {
               <DropdownMenuItem className="rounded-lg py-2.5 text-sm" onClick={() => router.push("/dashboard/settings")}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="sm:hidden" />
-              <DropdownMenuItem
-                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-                className="rounded-lg py-2.5 text-sm sm:hidden"
-              >
-                {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

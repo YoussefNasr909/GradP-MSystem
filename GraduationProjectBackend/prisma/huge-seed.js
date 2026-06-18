@@ -255,7 +255,13 @@ async function seedUsers(passwordHash) {
   });
 
   const doctors = [];
-  for (let i = 0; i < 10; i++) {
+  doctors.push(await prisma.user.create({
+    data: { firstName: "Ahmed", lastName: "Hassan", email: "ahmed.hassan@university.edu", role: "DOCTOR", academicId: "STAFF-0002", phone: "01000000002", passwordHash, isEmailVerified: true, accountStatus: "ACTIVE", department: "COMPUTER_SCIENCE", academicYear: "YEAR_5", preferredTrack: "CLOUD_ENGINEERING", bio: "Graduation project supervisor focused on scalable systems." }
+  }));
+  doctors.push(await prisma.user.create({
+    data: { firstName: "Mona", lastName: "Zaki", email: "mona.zaki@university.edu", role: "DOCTOR", academicId: "STAFF-0004", phone: "01000000004", passwordHash, isEmailVerified: true, accountStatus: "ACTIVE", department: "SOFTWARE_ENGINEERING", academicYear: "YEAR_5", preferredTrack: "SOFTWARE_ARCHITECTURE", bio: "Professor specializing in software engineering methodologies." }
+  }));
+  for (let i = 0; i < 8; i++) {
     const doctor = await prisma.user.create({
       data: {
         firstName: faker.person.firstName(),
@@ -277,7 +283,13 @@ async function seedUsers(passwordHash) {
   }
 
   const tas = [];
-  for (let i = 0; i < 10; i++) {
+  tas.push(await prisma.user.create({
+    data: { firstName: "Layla", lastName: "Ibrahim", email: "layla.ibrahim@university.edu", role: "TA", academicId: "STAFF-0003", phone: "01000000003", passwordHash, isEmailVerified: true, accountStatus: "ACTIVE", department: "SOFTWARE_ENGINEERING", academicYear: "YEAR_5", preferredTrack: "QUALITY_ASSURANCE", bio: "TA supporting teams with testing strategy." }
+  }));
+  tas.push(await prisma.user.create({
+    data: { firstName: "Omar", lastName: "Kamal", email: "omar.kamal@university.edu", role: "TA", academicId: "STAFF-0005", phone: "01000000005", passwordHash, isEmailVerified: true, accountStatus: "ACTIVE", department: "COMPUTER_SCIENCE", academicYear: "YEAR_5", preferredTrack: "BACKEND_DEVELOPMENT", bio: "Graduate assistant focusing on backend." }
+  }));
+  for (let i = 0; i < 8; i++) {
     const ta = await prisma.user.create({
       data: {
         firstName: faker.person.firstName(),

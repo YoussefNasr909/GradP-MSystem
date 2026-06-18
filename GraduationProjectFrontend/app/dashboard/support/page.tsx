@@ -4,11 +4,15 @@ import type React from "react"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { motion } from "framer-motion"
 import {
+  Activity,
   AlertTriangle,
   CheckCircle2,
   CheckSquare,
+  ChevronLeft,
   CircleDot,
+  Clock,
   Clock3,
   FileText,
   History,
@@ -16,6 +20,7 @@ import {
   Loader2,
   MessageCircle,
   MessageSquare,
+  Plus,
   Paperclip,
   PanelRightClose,
   PanelRightOpen,
@@ -29,6 +34,10 @@ import {
   Tags,
   TimerReset,
   X,
+  UserPlus,
+  Users,
+  UserCheck,
+  AlertCircle,
 } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -39,8 +48,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
@@ -324,19 +335,14 @@ function TicketListItem({
   return (
     <div
       className={cn(
-        "group flex w-full gap-2 rounded-xl border border-border/60 bg-card/50 p-3 text-left transition hover:border-primary/30 hover:bg-accent/20",
+        "group flex w-full gap-2 rounded-xl border p-3 text-left transition-all duration-300",
+        "hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30",
         isArchiveView && "opacity-75 hover:opacity-100",
-        active && "border-primary/45 bg-primary/[0.04]",
+        active 
+          ? "bg-primary/5 shadow-md border-primary/40 ring-1 ring-primary/20" 
+          : "bg-card border-border/40 hover:bg-muted/30",
       )}
     >
-      {selectable ? (
-        <Checkbox
-          checked={checked}
-          onCheckedChange={(value) => onCheckedChange?.(value === true)}
-          className="mt-1"
-          aria-label={`Select ${ticket.ticketNumber}`}
-        />
-      ) : null}
       <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -406,7 +412,7 @@ function AttachmentChips({ files, onRemove }: { files: File[]; onRemove: (index:
 function MessageBubble({ message, isStaff }: { message: ApiSupportTicketMessage; isStaff: boolean }) {
   const isInternal = message.visibility === "INTERNAL"
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-border/60 p-3", isInternal ? "border-amber-200/70 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "bg-background")}>
+    <div className={cn("overflow-hidden rounded-xl border border-white/5 p-3", isInternal ? "border-amber-200/70 bg-amber-50/70 dark:border-amber-900 dark:bg-amber-950/20" : "bg-background/40")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <UserPill user={message.author} fallback="Deleted user" />
         <div className="flex items-center gap-2">
@@ -438,7 +444,7 @@ function MessageBubble({ message, isStaff }: { message: ApiSupportTicketMessage;
 
 function ActivityRow({ activity }: { activity: ApiSupportTicketActivity }) {
   return (
-    <div className="flex gap-3 rounded-lg border bg-card p-3">
+    <div className="flex gap-3 rounded-lg bg-background/20 p-3">
       <div className="mt-0.5 rounded-full bg-muted p-2">
         <History className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
@@ -470,17 +476,9 @@ export default function SupportPage() {
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null)
   const [selectedTicket, setSelectedTicket] = useState<ApiSupportTicketDetail | null>(null)
   const [agents, setAgents] = useState<ApiSupportUser[]>([])
-  const [savedReplies, setSavedReplies] = useState<ApiSupportSavedReply[]>([])
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
   const [queueView, setQueueView] = useState<QueueView>("active")
-  const [bulkMode, setBulkMode] = useState(false)
-  const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([])
-  const [bulkStatus, setBulkStatus] = useState<TicketFilterValue<ApiSupportTicketStatus>>("ALL")
-  const [bulkPriority, setBulkPriority] = useState<TicketFilterValue<ApiSupportTicketPriority>>("ALL")
-  const [bulkAssignee, setBulkAssignee] = useState<AssignedFilter>("ALL")
-  const [bulkTags, setBulkTags] = useState("")
-  const [bulkUpdating, setBulkUpdating] = useState(false)
   const [ticketTagsDraft, setTicketTagsDraft] = useState("")
   const [filters, setFilters] = useState<TicketFilters>({
     search: "",
@@ -517,8 +515,6 @@ export default function SupportPage() {
   const [replyFileInputKey, setReplyFileInputKey] = useState(0)
   const [replying, setReplying] = useState(false)
   const [updatingTicket, setUpdatingTicket] = useState(false)
-  const [selectedSavedReplyId, setSelectedSavedReplyId] = useState("NONE")
-
   const ticketItems = useMemo(() => ticketsPage?.items ?? [], [ticketsPage?.items])
   const ticketMeta = ticketsPage?.meta
 
@@ -613,20 +609,16 @@ export default function SupportPage() {
     setTicketTagsDraft(selectedTicket?.tags?.join(", ") ?? "")
   }, [selectedTicket?.id, selectedTicket?.tags])
 
-  useEffect(() => {
-    const visibleIds = new Set(ticketItems.map((ticket) => ticket.id))
-    setSelectedBulkIds((ids) => ids.filter((id) => visibleIds.has(id)))
-  }, [ticketItems])
+
 
   useEffect(() => {
     if (!isStaff) return
     let cancelled = false
     setLoadingAgents(true)
-    Promise.all([supportApi.agents(), supportApi.listSavedReplies()])
-      .then(([agentsData, savedReplyData]) => {
+    Promise.all([supportApi.agents()])
+      .then(([agentsData]) => {
         if (cancelled) return
         setAgents(agentsData)
-        setSavedReplies(savedReplyData)
       })
       .catch((err) => {
         if (!cancelled) {
@@ -762,13 +754,11 @@ export default function SupportPage() {
         {
           body: replyBody,
           visibility: isStaff ? replyVisibility : "PUBLIC",
-          savedReplyId: isStaff && replyVisibility === "PUBLIC" && selectedSavedReplyId !== "NONE" ? selectedSavedReplyId : undefined,
         },
         replyFiles,
       )
       setReplyBody("")
       setReplyVisibility("PUBLIC")
-      setSelectedSavedReplyId("NONE")
       setReplyFiles([])
       setReplyFileInputKey((key) => key + 1)
       setSelectedTicket(ticket)
@@ -810,59 +800,11 @@ export default function SupportPage() {
     }
   }
 
-  const parsedBulkTags = () =>
-    bulkTags
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-
   const parsedTicketTags = () =>
     ticketTagsDraft
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean)
-
-  const applyBulkUpdate = async () => {
-    if (!selectedBulkIds.length) return
-    const payload: Parameters<typeof supportApi.bulkUpdateTickets>[0] = { ticketIds: selectedBulkIds }
-    if (bulkStatus !== "ALL") payload.status = bulkStatus
-    if (bulkPriority !== "ALL") payload.priority = bulkPriority
-    if (bulkAssignee !== "ALL") payload.assignedSupportUserId = bulkAssignee === "unassigned" ? null : bulkAssignee
-    if (bulkTags.trim()) payload.tags = parsedBulkTags()
-
-    if (Object.keys(payload).length === 1) {
-      toast({
-        title: "Choose a bulk change",
-        description: "Pick a status, priority, owner, or tags before applying.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setBulkUpdating(true)
-    try {
-      const result = await supportApi.bulkUpdateTickets(payload)
-      setSelectedBulkIds([])
-      setBulkStatus("ALL")
-      setBulkPriority("ALL")
-      setBulkAssignee("ALL")
-      setBulkTags("")
-      toast({
-        title: "Queue updated",
-        description: `${result.updatedCount} tickets were updated.`,
-      })
-      await refreshAll()
-      if (selectedTicketId) await loadTicket(selectedTicketId, { quiet: true })
-    } catch (err) {
-      toast({
-        title: "Bulk update failed",
-        description: errorMessage(err),
-        variant: "destructive",
-      })
-    } finally {
-      setBulkUpdating(false)
-    }
-  }
 
   const saveSelectedTicketTags = async () => {
     if (!selectedTicket) return
@@ -925,44 +867,164 @@ export default function SupportPage() {
   ].filter(Boolean).length
   const currentQueueView = queueView
 
+  const renderActionsPanel = () => {
+    if (!selectedTicket) return null
+    return (
+      <div className="space-y-6 pb-8">
+        {/* Quick Actions */}
+        <div className="rounded-xl border border-border/40 bg-card p-4 shadow-sm space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+          {selectedTicket.assignedSupport?.id !== currentUser.id ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => patchSelectedTicket({ assignedSupportUserId: currentUser.id })}
+              disabled={updatingTicket}
+              className="w-full justify-start font-medium transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-md hover:-translate-y-[1px]"
+            >
+              <UserPlus className="mr-2 h-4 w-4" /> Take ownership
+            </Button>
+          ) : null}
+          {selectedTicket.status === "RESOLVED" || selectedTicket.status === "CLOSED" ? (
+            <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "OPEN" })} disabled={updatingTicket} className="w-full justify-start text-primary">
+              <RotateCcw className="mr-2 h-4 w-4" /> Reopen ticket
+            </Button>
+          ) : (
+            <div className="grid gap-2.5">
+              <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "IN_PROGRESS" })} disabled={updatingTicket} className="justify-start bg-background hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all duration-300 hover:shadow-sm">
+                <Activity className="mr-2 h-4 w-4" /> Start working
+              </Button>
+              <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "WAITING_ON_USER" })} disabled={updatingTicket} className="justify-start bg-background hover:bg-orange-500/10 hover:text-orange-600 hover:border-orange-500/30 transition-all duration-300 hover:shadow-sm">
+                <Clock className="mr-2 h-4 w-4" /> Wait for user
+              </Button>
+              <Button type="button" variant="default" onClick={() => patchSelectedTicket({ status: "RESOLVED" })} disabled={updatingTicket} className="justify-start bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm border-transparent transition-all duration-300 hover:shadow-emerald-500/25 hover:shadow-md hover:-translate-y-[1px]">
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Resolve ticket
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Properties */}
+        <div className="rounded-xl border border-border/40 bg-card p-4 shadow-sm space-y-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Properties</p>
+          
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Assignee</Label>
+            <Select
+              value={selectedTicket.assignedSupport?.id ?? "UNASSIGNED"}
+              onValueChange={(value) => patchSelectedTicket({ assignedSupportUserId: value === "UNASSIGNED" ? null : value })}
+              disabled={updatingTicket || loadingAgents}
+            >
+              <SelectTrigger className="w-full bg-background shadow-none border-border/60">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    {agent.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select
+                value={selectedTicket.status}
+                onValueChange={(value) => patchSelectedTicket({ status: value as ApiSupportTicketStatus })}
+                disabled={updatingTicket}
+              >
+                <SelectTrigger className="w-full bg-background shadow-none border-border/60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Priority</Label>
+              <Select
+                value={selectedTicket.priority}
+                onValueChange={(value) => patchSelectedTicket({ priority: value as ApiSupportTicketPriority })}
+                disabled={updatingTicket}
+              >
+                <SelectTrigger className="w-full bg-background shadow-none border-border/60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Labels</Label>
+            <div className="flex gap-2">
+              <Input value={ticketTagsDraft} onChange={(event) => setTicketTagsDraft(event.target.value)} placeholder="login, access" className="bg-background shadow-none border-border/60" />
+              <Button type="button" variant="secondary" onClick={saveSelectedTicketTags} disabled={updatingTicket}>
+                Save
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Comma-separated internal tags.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 pb-8">
-      <section className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-2xl">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{isStaff ? "Support workspace" : "Support"}</p>
-          <h1 className="text-2xl font-semibold tracking-tight">{isStaff ? "Support queue" : "Contact support"}</h1>
-          <p className="mt-1 text-sm leading-6 text-muted-foreground">
-            {isStaff
-              ? "Triage active requests, reply from one place, and keep urgent work visible."
-              : "Start a quick chat or create a tracked ticket when you need help."}
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={refreshAll} disabled={loadingTickets} className="w-full gap-2 bg-transparent sm:w-auto">
-          <RefreshCw className={cn("h-4 w-4", loadingTickets && "animate-spin")} />
-          Refresh
-        </Button>
-      </section>
-
-      {isStaff ? (
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            { label: "Active tickets", value: activeTicketCount, helper: "Open, working, or waiting" },
-            { label: "Assigned to me", value: summary?.assignedToMe ?? 0, helper: "Your current queue" },
-            { label: "Unassigned", value: summary?.unassigned ?? 0, helper: "Needs an owner" },
-            { label: "Overdue", value: summary?.overdue ?? 0, helper: "Past SLA", danger: true },
-          ].map((metric) => (
-            <div key={metric.label} className="rounded-xl border border-border/70 bg-card p-4 shadow-sm shadow-black/[0.02]">
-              <p className="text-xs font-medium text-muted-foreground">{metric.label}</p>
-              <div className="mt-2 flex items-end justify-between gap-3">
-                <p className={cn("text-2xl font-semibold tracking-tight", metric.danger && metric.value > 0 && "text-red-600 dark:text-red-300")}>
-                  {metric.value}
-                </p>
-                <p className="text-right text-xs text-muted-foreground">{metric.helper}</p>
-              </div>
+      {/* ── WORKSPACE CARD ───────────────────────────────────────── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="flex flex-col gap-6 rounded-[32px] border border-border/40 bg-background/50 p-4 sm:p-8 backdrop-blur-md shadow-2xl overflow-hidden"
+      >
+        <section className={cn("flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between", isStaff && "border-b border-border/40 pb-6")}>
+          <div className="max-w-2xl">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{isStaff ? "Support workspace" : "Support"}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{isStaff ? "Support queue" : "Contact support"}</h1>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {isStaff
+                ? "Triage active requests, reply from one place, and keep urgent work visible."
+                : "Start a quick chat or create a tracked ticket when you need help."}
+            </p>
+          </div>
+          {isStaff ? (
+            <div className="grid grid-cols-2 gap-4 sm:flex sm:flex-wrap sm:gap-4 lg:border-l lg:border-border/40 lg:pl-8">
+              {[
+                { label: "Active tickets", value: activeTicketCount, icon: Activity },
+                { label: "Assigned to me", value: summary?.assignedToMe ?? 0, icon: UserCheck },
+                { label: "Unassigned", value: summary?.unassigned ?? 0, icon: Users },
+                { label: "Overdue", value: summary?.overdue ?? 0, danger: true, icon: AlertCircle },
+              ].map((metric) => {
+                const Icon = metric.icon;
+                return (
+                <div key={metric.label} className="group flex flex-col justify-between rounded-xl border border-border/40 bg-card p-4 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-primary/20 sm:min-w-[140px]">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors group-hover:text-foreground">{metric.label}</p>
+                    <Icon className={cn("h-4 w-4 text-muted-foreground transition-colors group-hover:text-primary", metric.danger && metric.value > 0 ? "text-red-500 group-hover:text-red-600" : "")} />
+                  </div>
+                  <p className={cn("text-3xl font-semibold tracking-tight transition-transform duration-300 group-hover:scale-105 origin-left", metric.danger && metric.value > 0 ? "text-red-500" : "text-foreground")}>{metric.value}</p>
+                </div>
+              )})}
             </div>
-          ))}
+          ) : null}
         </section>
-      ) : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
@@ -976,70 +1038,46 @@ export default function SupportPage() {
 
       {isStaff ? (
         <>
-          <div className="rounded-xl border border-border/70 bg-card p-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="grid w-full grid-cols-2 rounded-lg bg-muted/60 p-1 text-sm sm:w-auto sm:grid-cols-5">
-                <Button type="button" variant={currentQueueView === "active" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("active")} className="h-8">
-                  Active
-                </Button>
-                <Button type="button" variant={currentQueueView === "mine" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("mine")} className="h-8">
-                  Mine
-                </Button>
-                <Button type="button" variant={currentQueueView === "unassigned" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("unassigned")} className="h-8">
-                  Unassigned
-                </Button>
-                <Button type="button" variant={currentQueueView === "overdue" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("overdue")} className="h-8">
-                  Overdue
-                </Button>
-                <Button type="button" variant={currentQueueView === "archive" ? "secondary" : "ghost"} size="sm" onClick={() => applyQueueView("archive")} className="h-8">
-                  Archive
-                </Button>
-              </div>
+          <div className="p-1 sm:px-2 border-b border-border/40 pb-4 mb-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <Tabs value={currentQueueView} onValueChange={(v) => applyQueueView(v as QueueView)} className="w-full lg:w-auto">
+                <TabsList className="bg-muted/50 p-1 rounded-lg h-auto gap-1 flex flex-nowrap justify-start overflow-x-auto w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <TabsTrigger value="active" className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted/50 transition-colors whitespace-nowrap">Active</TabsTrigger>
+                  <TabsTrigger value="mine" className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted/50 transition-colors whitespace-nowrap">Mine</TabsTrigger>
+                  <TabsTrigger value="unassigned" className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted/50 transition-colors whitespace-nowrap">Unassigned</TabsTrigger>
+                  <TabsTrigger value="overdue" className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted/50 transition-colors whitespace-nowrap">Overdue</TabsTrigger>
+                  <TabsTrigger value="archive" className="rounded-md px-4 py-2 text-sm font-medium data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none hover:bg-muted/50 transition-colors whitespace-nowrap">Archive</TabsTrigger>
+                </TabsList>
+              </Tabs>
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setAdvancedFiltersOpen((open) => !open)} className="gap-2">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Filters{activeAdvancedFilterCount ? ` (${activeAdvancedFilterCount})` : ""}
-                </Button>
                 <Button
                   type="button"
-                  variant={bulkMode ? "secondary" : "outline"}
+                  variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setBulkMode((enabled) => !enabled)
-                    setSelectedBulkIds([])
-                  }}
+                  onClick={() => setAdvancedFiltersOpen((open) => !open)}
+                  className={cn("gap-2 text-muted-foreground", advancedFiltersOpen && "bg-muted text-foreground")}
                 >
-                  Bulk edit
-                </Button>
-                <Button type="button" variant={detailsOpen ? "secondary" : "outline"} size="sm" onClick={() => setDetailsOpen((open) => !open)} className="gap-2">
-                  {detailsOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-                  Actions
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filters{activeAdvancedFilterCount ? ` (${activeAdvancedFilterCount})` : ""}
                 </Button>
               </div>
             </div>
           </div>
 
-          <div className={cn("grid gap-4", detailsOpen ? "xl:grid-cols-[22rem_minmax(0,1fr)_22rem]" : "xl:grid-cols-[22rem_minmax(0,1fr)]")}>
-            <Card className="gap-4 rounded-xl border-border/70 py-4 shadow-none">
-              <CardHeader className="px-4">
+          <div className={cn("grid gap-4 lg:gap-8 min-h-[60vh]", selectedTicketId ? "lg:grid-cols-[22rem_minmax(0,1fr)_18rem] xl:grid-cols-[22rem_minmax(0,1fr)_18rem]" : "lg:grid-cols-[22rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)]")}>
+            <div className={cn("flex flex-col gap-4 min-w-0", selectedTicketId ? "hidden lg:flex lg:border-r lg:border-border/40 lg:pr-8" : "flex lg:border-r lg:border-border/40 lg:pr-8")}>
+              <div className="px-2">
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                     <Inbox className="h-4 w-4" />
                     Tickets
-                  </CardTitle>
-                  {bulkMode && ticketItems.length ? (
-                    <Checkbox
-                      checked={selectedBulkIds.length === ticketItems.length}
-                      onCheckedChange={(value) => setSelectedBulkIds(value === true ? ticketItems.map((ticket) => ticket.id) : [])}
-                      aria-label="Select all tickets"
-                    />
-                  ) : null}
+                  </h2>
                 </div>
-                <CardDescription>
+                <p className="text-sm text-muted-foreground mt-1">
                   {currentQueueView === "archive" ? `${archiveTicketCount} resolved or closed` : `${ticketMeta?.total ?? 0} active tickets`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 px-4">
+                </p>
+              </div>
+              <div className="space-y-3 px-2">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -1139,68 +1177,6 @@ export default function SupportPage() {
                     </div>
                   </div>
                 ) : null}
-
-                {selectedBulkIds.length ? (
-                  <div className="space-y-3 rounded-xl border border-border/70 bg-muted/25 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <CheckSquare className="h-4 w-4" />
-                        {selectedBulkIds.length} selected
-                      </div>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedBulkIds([])}>
-                        Clear
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Select value={bulkStatus} onValueChange={(value) => setBulkStatus(value as typeof bulkStatus)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">Keep status</SelectItem>
-                          {STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={bulkPriority} onValueChange={(value) => setBulkPriority(value as typeof bulkPriority)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Priority" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">Keep priority</SelectItem>
-                          {PRIORITY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={bulkAssignee} onValueChange={(value) => setBulkAssignee(value)}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Owner" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">Keep owner</SelectItem>
-                          <SelectItem value="unassigned">Unassigned</SelectItem>
-                          {agents.map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {agent.fullName}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input value={bulkTags} onChange={(event) => setBulkTags(event.target.value)} placeholder="Replace tags" />
-                    </div>
-                    <Button type="button" size="sm" onClick={applyBulkUpdate} disabled={bulkUpdating} className="w-full">
-                      {bulkUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
-                      Apply changes
-                    </Button>
-                  </div>
-                ) : null}
-
                 <ScrollArea className="h-[62vh] min-h-[420px] pr-3">
                   <div className="space-y-2">
                     {loadingTickets ? (
@@ -1211,13 +1187,8 @@ export default function SupportPage() {
                           key={ticket.id}
                           ticket={ticket}
                           active={ticket.id === selectedTicketId}
-                          selectable={bulkMode}
-                          checked={selectedBulkIds.includes(ticket.id)}
                           currentUserId={currentUser.id}
                           isArchiveView={currentQueueView === "archive"}
-                          onCheckedChange={(checked) =>
-                            setSelectedBulkIds((ids) => (checked ? Array.from(new Set([...ids, ticket.id])) : ids.filter((id) => id !== ticket.id)))
-                          }
                           onSelect={() => setSelectedTicketId(ticket.id)}
                         />
                       ))
@@ -1239,124 +1210,149 @@ export default function SupportPage() {
                     </Button>
                   </div>
                 ) : null}
-              </CardContent>
-            </Card>
-
-            <div className="min-w-0">
-              <TicketThreadPanel
-                isStaff={Boolean(isStaff)}
-                loading={loadingTicket}
-                selectedTicket={selectedTicket}
-                replyBody={replyBody}
-                setReplyBody={setReplyBody}
-                replyVisibility={replyVisibility}
-                setReplyVisibility={setReplyVisibility}
-                savedReplies={savedReplies}
-                selectedSavedReplyId={selectedSavedReplyId}
-                setSelectedSavedReplyId={setSelectedSavedReplyId}
-                replyFiles={replyFiles}
-                replyFileInputKey={replyFileInputKey}
-                setReplyFiles={setReplyFiles}
-                removeReplyFile={removeReplyFile}
-                replying={replying}
-                onReply={handleReply}
-                onReopen={reopenSelectedTicket}
-                updatingTicket={updatingTicket}
-                canReopen={false}
-              />
+              </div>
             </div>
 
-            {detailsOpen ? (
-              <Card className="gap-4 rounded-xl border-border/70 py-4 shadow-none">
-                <CardHeader className="px-4">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Settings2 className="h-4 w-4" />
-                    Actions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-5 px-4">
-                  {!selectedTicket ? (
-                    <EmptyState title="Select a ticket" description="Actions appear here." />
-                  ) : (
-                    <>
-                      <div className="space-y-3 rounded-xl bg-muted/25 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium">Next step</p>
-                            <p className="text-xs text-muted-foreground">Move the ticket only when the conversation changes.</p>
-                          </div>
-                          <QueueStatusBadge status={selectedTicket.status} />
-                        </div>
-                        <div className="grid gap-2">
-                          {selectedTicket.assignedSupport?.id !== currentUser.id ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => patchSelectedTicket({ assignedSupportUserId: currentUser.id })}
-                              disabled={updatingTicket}
-                              className="justify-start"
-                            >
-                              Take ticket
-                            </Button>
-                          ) : (
-                            <Button type="button" variant="secondary" disabled className="justify-start">
-                              Assigned to you
-                            </Button>
-                          )}
-                          {selectedClosed ? (
-                            <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "OPEN" })} disabled={updatingTicket} className="justify-start">
-                              Reopen ticket
-                            </Button>
-                          ) : (
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "IN_PROGRESS" })} disabled={updatingTicket}>
-                                Work
-                              </Button>
-                              <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "WAITING_ON_USER" })} disabled={updatingTicket}>
-                                Wait
-                              </Button>
-                              <Button type="button" variant="outline" onClick={() => patchSelectedTicket({ status: "RESOLVED" })} disabled={updatingTicket} className="col-span-2">
-                                Resolve
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+            {selectedTicketId ? (
+              <div className="flex flex-col gap-4 min-w-0 h-full">
+                <div className="flex items-center justify-between xl:hidden mb-[-1rem]">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="gap-1.5 rounded-full px-4 text-muted-foreground hover:text-foreground shadow-sm bg-background/50 hover:bg-muted/50 backdrop-blur-sm" 
+                    onClick={() => setSelectedTicketId(null)}
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Back to tickets
+                  </Button>
+                  {isStaff && selectedTicket ? (
+                    <Sheet>
+                      <SheetTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-2 rounded-full shadow-sm bg-background/50 hover:bg-muted/50 backdrop-blur-sm">
+                          <Settings2 className="w-4 h-4" />
+                          <span className="hidden sm:inline">Actions</span>
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="right" className="w-full sm:w-[400px] overflow-y-auto">
+                        <SheetHeader className="mb-6">
+                          <SheetTitle className="flex items-center gap-2">
+                            <Settings2 className="h-5 w-5 text-muted-foreground" />
+                            Ticket Actions
+                          </SheetTitle>
+                        </SheetHeader>
+                        {renderActionsPanel()}
+                      </SheetContent>
+                    </Sheet>
+                  ) : null}
+                </div>
+                <div className="min-w-0">
+                  <TicketThreadPanel
+                    isStaff={Boolean(isStaff)}
+                    loading={loadingTicket}
+                    selectedTicket={selectedTicket}
+                    replyBody={replyBody}
+                    setReplyBody={setReplyBody}
+                    replyVisibility={replyVisibility}
+                    setReplyVisibility={setReplyVisibility}
+                    replyFiles={replyFiles}
+                    replyFileInputKey={replyFileInputKey}
+                    setReplyFiles={setReplyFiles}
+                    removeReplyFile={removeReplyFile}
+                    replying={replying}
+                    onReply={handleReply}
+                    onReopen={reopenSelectedTicket}
+                    updatingTicket={updatingTicket}
+                    canReopen={false}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="hidden lg:flex flex-col items-center justify-center h-full text-center">
+                <EmptyState title="No ticket selected" description="Choose a ticket from the queue..." />
+              </div>
+            )}
 
-                      <div className="space-y-3">
+            {selectedTicketId && selectedTicket ? (
+              <div className="hidden xl:flex flex-col gap-6 min-w-0 xl:border-l xl:border-border/40 xl:pl-8">
+                <div className="px-2 flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                    Ticket Actions
+                  </h2>
+                  <QueueStatusBadge status={selectedTicket.status} />
+                </div>
+                <div className="px-2">
+                  {renderActionsPanel()}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div className="grid gap-4 lg:gap-8 min-h-[60vh] lg:grid-cols-[22rem_minmax(0,1fr)]">
+          <div className={cn("flex flex-col gap-4 min-w-0", selectedTicketId ? "hidden lg:flex lg:border-r lg:border-border/40 lg:pr-8" : "flex lg:border-r lg:border-border/40 lg:pr-8")}>
+            <div className="flex items-center justify-between px-2">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+                  <FileText className="h-4 w-4" />
+                  Your tickets
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">{ticketMeta?.total ?? 0} requests in your support history</p>
+              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-2 rounded-full px-4">
+                    <Plus className="h-4 w-4" />
+                    New Request
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[450px] overflow-y-auto max-h-[90vh]">
+                  <DialogHeader>
+                    <DialogTitle>Contact support</DialogTitle>
+                    <DialogDescription>
+                      Use chat for quick questions or a ticket when you want the issue tracked.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <Tabs defaultValue="quick" className="gap-4 mt-2">
+                    <TabsList className="grid w-full grid-cols-2 bg-muted/60">
+                      <TabsTrigger value="quick">Quick chat</TabsTrigger>
+                      <TabsTrigger value="ticket">New ticket</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="quick" className="space-y-3">
+                      <Label htmlFor="support-quick-message">Message</Label>
+                      <Textarea
+                        id="support-quick-message"
+                        value={quickMessage}
+                        onChange={(event) => setQuickMessage(event.target.value)}
+                        placeholder="Write the question or issue you need help with."
+                        rows={5}
+                        className="resize-none"
+                      />
+                      <Button type="button" onClick={handleQuickChat} disabled={quickChatLoading} className="w-full">
+                        {quickChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="mr-2 h-4 w-4" />}
+                        Open quick chat
+                      </Button>
+                    </TabsContent>
+                    <TabsContent value="ticket">
+                      <form className="space-y-4" onSubmit={handleCreateTicket}>
                         <div className="space-y-2">
-                          <Label>Assign to</Label>
-                          <Select
-                            value={selectedTicket.assignedSupport?.id ?? "UNASSIGNED"}
-                            onValueChange={(value) => patchSelectedTicket({ assignedSupportUserId: value === "UNASSIGNED" ? null : value })}
-                            disabled={updatingTicket || loadingAgents}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
-                              {agents.map((agent) => (
-                                <SelectItem key={agent.id} value={agent.id}>
-                                  {agent.fullName}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Label htmlFor="support-subject">Subject</Label>
+                          <Input
+                            id="support-subject"
+                            value={createForm.subject}
+                            onChange={(event) => setCreateForm((form) => ({ ...form, subject: event.target.value }))}
+                            placeholder="Short summary"
+                            required
+                          />
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-2">
-                            <Label>Status</Label>
-                            <Select
-                              value={selectedTicket.status}
-                              onValueChange={(value) => patchSelectedTicket({ status: value as ApiSupportTicketStatus })}
-                              disabled={updatingTicket}
-                            >
+                            <Label>Category</Label>
+                            <Select value={createForm.category} onValueChange={(value) => setCreateForm((form) => ({ ...form, category: value as ApiSupportTicketCategory }))}>
                               <SelectTrigger className="w-full">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {STATUS_OPTIONS.map((option) => (
+                                {CATEGORY_OPTIONS.map((option) => (
                                   <SelectItem key={option.value} value={option.value}>
                                     {option.label}
                                   </SelectItem>
@@ -1366,11 +1362,7 @@ export default function SupportPage() {
                           </div>
                           <div className="space-y-2">
                             <Label>Priority</Label>
-                            <Select
-                              value={selectedTicket.priority}
-                              onValueChange={(value) => patchSelectedTicket({ priority: value as ApiSupportTicketPriority })}
-                              disabled={updatingTicket}
-                            >
+                            <Select value={createForm.priority} onValueChange={(value) => setCreateForm((form) => ({ ...form, priority: value as ApiSupportTicketPriority }))}>
                               <SelectTrigger className="w-full">
                                 <SelectValue />
                               </SelectTrigger>
@@ -1385,228 +1377,83 @@ export default function SupportPage() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Labels</Label>
-                          <div className="flex gap-2">
-                            <Input value={ticketTagsDraft} onChange={(event) => setTicketTagsDraft(event.target.value)} placeholder="login, access" />
-                            <Button type="button" variant="outline" onClick={saveSelectedTicketTags} disabled={updatingTicket}>
-                              Save
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground">Labels are internal and help filter the queue.</p>
+                          <Label htmlFor="support-description">Details</Label>
+                          <Textarea
+                            id="support-description"
+                            value={createForm.description}
+                            onChange={(event) => setCreateForm((form) => ({ ...form, description: event.target.value }))}
+                            placeholder="Add details, steps, links, or screenshots."
+                            rows={5}
+                            required
+                            className="resize-none"
+                          />
                         </div>
-                      </div>
-
-                      <Separator />
-
-                      <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <SlaBadge ticket={selectedTicket} />
-                          <span className="text-xs text-muted-foreground">
-                            Due {formatDateTime(selectedTicket.sla.dueAt)}
-                          </span>
+                        <div className="space-y-2">
+                          <Label htmlFor="support-files">Attachments</Label>
+                          <Input
+                            key={createFileInputKey}
+                            id="support-files"
+                            type="file"
+                            multiple
+                            onChange={(event) => setCreateFiles(Array.from(event.target.files ?? []))}
+                          />
+                          <p className="text-xs text-muted-foreground">{SUPPORT_UPLOAD_LIMIT}</p>
+                          <AttachmentChips files={createFiles} onRemove={removeCreateFile} />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">Requester</p>
-                          <div className="mt-2">
-                            <UserPill user={selectedTicket.requester} fallback="Unknown requester" />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="rounded-lg bg-muted/30 p-3">
-                            <p className="text-xs text-muted-foreground">Created</p>
-                            <p className="mt-1 font-medium">{formatDateTime(selectedTicket.createdAt)}</p>
-                          </div>
-                          <div className="rounded-lg bg-muted/30 p-3">
-                            <p className="text-xs text-muted-foreground">Last activity</p>
-                            <p className="mt-1 font-medium">{formatDateTime(selectedTicket.lastActivityAt)}</p>
-                          </div>
-                          <div className="rounded-lg bg-muted/30 p-3">
-                            <p className="text-xs text-muted-foreground">Replies</p>
-                            <p className="mt-1 font-medium">{selectedTicket.counts.publicMessages}</p>
-                          </div>
-                          <div className="rounded-lg bg-muted/30 p-3">
-                            <p className="text-xs text-muted-foreground">Notes</p>
-                            <p className="mt-1 font-medium">{selectedTicket.counts.internalNotes}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Separator />
-
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                          <History className="h-4 w-4 text-muted-foreground" />
-                          <p className="text-sm font-medium">Activity</p>
-                        </div>
-                        <ScrollArea className="h-64 pr-3">
-                          <div className="space-y-2">
-                            {selectedTicket.activities.length ? (
-                              selectedTicket.activities.map((activity) => <ActivityRow key={activity.id} activity={activity} />)
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No activity yet.</p>
-                            )}
-                          </div>
-                        </ScrollArea>
-                      </div>
-                    </>
+                        <Button type="submit" disabled={creatingTicket} className="w-full">
+                          {creatingTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                          Submit ticket
+                        </Button>
+                      </form>
+                    </TabsContent>
+                  </Tabs>
+                </DialogContent>
+              </Dialog>
+            </div>
+            
+            <div className="space-y-3 px-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={filters.search}
+                  onChange={(event) => updateFilters({ search: event.target.value })}
+                  placeholder="Search my tickets"
+                  className="pl-9"
+                />
+              </div>
+              <ScrollArea className="h-[55vh] min-h-[380px] pr-3">
+                <div className="space-y-2">
+                  {loadingTickets ? (
+                    Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-32" />)
+                  ) : ticketItems.length ? (
+                    ticketItems.map((ticket) => (
+                      <TicketListItem
+                        key={ticket.id}
+                        ticket={ticket}
+                        active={ticket.id === selectedTicketId}
+                        variant="requester"
+                        currentUserId={currentUser.id}
+                        onSelect={() => setSelectedTicketId(ticket.id)}
+                      />
+                    ))
+                  ) : (
+                    <EmptyState title="No tickets yet" description="Create a ticket or open quick chat to reach support." />
                   )}
-                </CardContent>
-              </Card>
-            ) : null}
-          </div>
-        </>
-      ) : (
-        <div className="grid gap-4 xl:grid-cols-[24rem_minmax(0,1fr)]">
-          <Card className="gap-4 rounded-xl border-border/70 py-5 shadow-none">
-            <CardHeader className="px-5 pb-0">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <MessageSquare className="h-4 w-4" />
-                Ask for help
-              </CardTitle>
-              <CardDescription>Use chat for quick questions or a ticket when you want the issue tracked.</CardDescription>
-            </CardHeader>
-            <CardContent className="px-5">
-              <Tabs defaultValue="quick" className="gap-4">
-                <TabsList className="grid w-full grid-cols-2 bg-muted/60">
-                  <TabsTrigger value="quick">Quick chat</TabsTrigger>
-                  <TabsTrigger value="ticket">New ticket</TabsTrigger>
-                </TabsList>
-                <TabsContent value="quick" className="space-y-3">
-                  <Label htmlFor="support-quick-message">Message</Label>
-                  <Textarea
-                    id="support-quick-message"
-                    value={quickMessage}
-                    onChange={(event) => setQuickMessage(event.target.value)}
-                    placeholder="Write the question or issue you need help with."
-                    rows={5}
-                    className="resize-none"
-                  />
-                  <Button type="button" onClick={handleQuickChat} disabled={quickChatLoading} className="w-full">
-                    {quickChatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
-                    Open quick chat
-                  </Button>
-                </TabsContent>
-                <TabsContent value="ticket">
-                  <form className="space-y-4" onSubmit={handleCreateTicket}>
-                    <div className="space-y-2">
-                      <Label htmlFor="support-subject">Subject</Label>
-                      <Input
-                        id="support-subject"
-                        value={createForm.subject}
-                        onChange={(event) => setCreateForm((form) => ({ ...form, subject: event.target.value }))}
-                        placeholder="Short summary"
-                        required
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Category</Label>
-                        <Select value={createForm.category} onValueChange={(value) => setCreateForm((form) => ({ ...form, category: value as ApiSupportTicketCategory }))}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CATEGORY_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Priority</Label>
-                        <Select value={createForm.priority} onValueChange={(value) => setCreateForm((form) => ({ ...form, priority: value as ApiSupportTicketPriority }))}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {PRIORITY_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="support-description">Details</Label>
-                      <Textarea
-                        id="support-description"
-                        value={createForm.description}
-                        onChange={(event) => setCreateForm((form) => ({ ...form, description: event.target.value }))}
-                        placeholder="Add details, steps, links, or screenshots."
-                        rows={5}
-                        required
-                        className="resize-none"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="support-files">Attachments</Label>
-                      <Input
-                        key={createFileInputKey}
-                        id="support-files"
-                        type="file"
-                        multiple
-                        onChange={(event) => setCreateFiles(Array.from(event.target.files ?? []))}
-                      />
-                      <p className="text-xs text-muted-foreground">{SUPPORT_UPLOAD_LIMIT}</p>
-                      <AttachmentChips files={createFiles} onRemove={removeCreateFile} />
-                    </div>
-                    <Button type="submit" disabled={creatingTicket} className="w-full">
-                      {creatingTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Submit ticket
-                    </Button>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          <div className={cn("grid gap-4", selectedTicketId && "lg:grid-cols-[20rem_minmax(0,1fr)]")}>
-            <Card className="gap-4 rounded-xl border-border/70 py-5 shadow-none">
-              <CardHeader className="px-5 pb-0">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <FileText className="h-4 w-4" />
-                  Your tickets
-                </CardTitle>
-                <CardDescription>{ticketMeta?.total ?? 0} requests in your support history</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 px-5">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    value={filters.search}
-                    onChange={(event) => updateFilters({ search: event.target.value })}
-                    placeholder="Search my tickets"
-                    className="pl-9"
-                  />
                 </div>
-                <ScrollArea className="h-[55vh] min-h-[380px] pr-3">
-                  <div className="space-y-2">
-                    {loadingTickets ? (
-                      Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-32" />)
-                    ) : ticketItems.length ? (
-                      ticketItems.map((ticket) => (
-                        <TicketListItem
-                          key={ticket.id}
-                          ticket={ticket}
-                          active={ticket.id === selectedTicketId}
-                          variant="requester"
-                          currentUserId={currentUser.id}
-                          onSelect={() => setSelectedTicketId(ticket.id)}
-                        />
-                      ))
-                    ) : (
-                      <EmptyState title="No tickets yet" description="Create a ticket or open quick chat to reach support." />
-                    )}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+              </ScrollArea>
+            </div>
+          </div>
 
-            {selectedTicketId ? (
+          {selectedTicketId ? (
+            <div className="flex flex-col gap-4 min-w-0 h-full">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="lg:hidden self-start mb-[-0.5rem] gap-1.5 rounded-full px-4 text-muted-foreground hover:text-foreground shadow-sm bg-background/50 hover:bg-muted/50 backdrop-blur-sm" 
+                onClick={() => setSelectedTicketId(null)}
+              >
+                <ChevronLeft className="h-4 w-4" /> Back to tickets
+              </Button>
               <TicketThreadPanel
                 isStaff={false}
                 loading={loadingTicket}
@@ -1625,10 +1472,18 @@ export default function SupportPage() {
                 updatingTicket={updatingTicket}
                 canReopen={Boolean(selectedClosed)}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="hidden lg:flex flex-col items-center justify-center h-full text-center">
+              <EmptyState 
+                title="No request selected" 
+                description="Select a ticket from the left to view the conversation, or create a new request." 
+              />
+            </div>
+          )}
         </div>
       )}
+      </motion.div>
     </div>
   )
 }
@@ -1641,9 +1496,6 @@ function TicketThreadPanel({
   setReplyBody,
   replyVisibility,
   setReplyVisibility,
-  savedReplies = [],
-  selectedSavedReplyId = "NONE",
-  setSelectedSavedReplyId,
   replyFiles,
   replyFileInputKey,
   setReplyFiles,
@@ -1661,9 +1513,6 @@ function TicketThreadPanel({
   setReplyBody: (value: string) => void
   replyVisibility: ApiSupportTicketMessageVisibility
   setReplyVisibility: (value: ApiSupportTicketMessageVisibility) => void
-  savedReplies?: ApiSupportSavedReply[]
-  selectedSavedReplyId?: string
-  setSelectedSavedReplyId?: (value: string) => void
   replyFiles: File[]
   replyFileInputKey: number
   setReplyFiles: (files: File[]) => void
@@ -1677,12 +1526,12 @@ function TicketThreadPanel({
   const isClosed = selectedTicket?.status === "RESOLVED" || selectedTicket?.status === "CLOSED"
 
   return (
-    <Card className="min-w-0 gap-4 overflow-hidden rounded-xl border-border/70 py-4 shadow-none">
-      <CardHeader className="px-4">
+    <div className="flex flex-col min-w-0 gap-4 overflow-hidden rounded-xl py-4">
+      <div className="px-2">
         {!selectedTicket ? (
           <>
-            <CardTitle className="text-base">Conversation</CardTitle>
-            <CardDescription>Select a ticket to read the thread</CardDescription>
+            <h2 className="text-base font-semibold tracking-tight">Conversation</h2>
+            <p className="text-sm text-muted-foreground mt-1">Select a ticket to read the thread</p>
           </>
         ) : (
           <div className="space-y-3">
@@ -1692,12 +1541,21 @@ function TicketThreadPanel({
                   <span className="font-mono text-xs text-muted-foreground">{selectedTicket.ticketNumber}</span>
                   <StatusBadge status={selectedTicket.status} />
                   <PriorityBadge priority={selectedTicket.priority} />
+                  <SlaBadge ticket={selectedTicket} />
                 </div>
-                <CardTitle className="mt-2 text-lg leading-6">{selectedTicket.subject}</CardTitle>
-                <CardDescription>
+                <h3 className="mt-2 text-xl font-semibold leading-6 tracking-tight">{selectedTicket.subject}</h3>
+                
+                <div className="mt-3 flex items-center gap-3">
+                  <UserPill user={selectedTicket.requester} fallback="Unknown requester" />
+                  <span className="text-xs text-muted-foreground">
+                    opened this on {formatDateTime(selectedTicket.createdAt)}
+                  </span>
+                </div>
+                
+                <p className="text-xs text-muted-foreground mt-2 border-l-2 border-muted pl-2">
                   Last activity {formatFullDateTime(selectedTicket.lastActivityAt)}
                   {selectedTicket.assignedSupport ? ` - Assigned to ${selectedTicket.assignedSupport.fullName}` : " - Unassigned"}
-                </CardDescription>
+                </p>
               </div>
               {canReopen ? (
                 <Button type="button" variant="outline" onClick={onReopen} disabled={updatingTicket}>
@@ -1708,8 +1566,8 @@ function TicketThreadPanel({
             </div>
           </div>
         )}
-      </CardHeader>
-      <CardContent className="min-w-0 px-4">
+      </div>
+      <div className="min-w-0 px-2 mt-4">
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-24" />
@@ -1761,30 +1619,9 @@ function TicketThreadPanel({
                         Private note
                       </Button>
                     </div>
-                    {replyVisibility === "PUBLIC" ? (
-                      <Select
-                        value={selectedSavedReplyId}
-                        onValueChange={(value) => {
-                          setSelectedSavedReplyId?.(value)
-                          const reply = savedReplies.find((item) => item.id === value)
-                          if (reply) setReplyBody(reply.body)
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Use saved reply" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NONE">No saved reply</SelectItem>
-                          {savedReplies.map((reply) => (
-                            <SelectItem key={reply.id} value={reply.id}>
-                              {reply.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
+                    {replyVisibility === "INTERNAL" ? (
                       <p className="rounded-lg bg-muted/30 px-3 py-2 text-xs text-muted-foreground">Private notes are visible only to support agents.</p>
-                    )}
+                    ) : null}
                   </div>
                 ) : null}
                 <Textarea
@@ -1814,7 +1651,7 @@ function TicketThreadPanel({
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

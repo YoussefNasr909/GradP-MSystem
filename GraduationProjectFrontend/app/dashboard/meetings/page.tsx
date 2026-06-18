@@ -897,14 +897,14 @@ export default function MeetingsPage() {
 
     if (meeting.joinUrl) {
       actions.push(
-        <Button key="join" asChild size="sm" className="h-9 rounded-xl bg-primary px-5 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20 hover:scale-[1.05] active:scale-[0.95] transition-all">
+        <Button key="join" asChild size="sm" className="h-9 rounded-xl bg-primary px-5 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/20 hover:scale-[1.05] active:scale-[0.95] transition-all">
           <a href={meeting.joinUrl} target="_blank" rel="noreferrer">
             <Video className="mr-2 h-3.5 w-3.5" />Join Session
           </a>
         </Button>
       )
       actions.push(
-        <Button key="copy" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-muted transition-all" onClick={() => void copyMeetingLink(meeting)}>
+        <Button key="copy" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-foreground/80 hover:bg-muted hover:text-foreground transition-all" onClick={(e) => { e.stopPropagation(); void copyMeetingLink(meeting) }}>
           <ClipboardCopy className="mr-2 h-3.5 w-3.5" />Copy Link
         </Button>
       )
@@ -912,18 +912,19 @@ export default function MeetingsPage() {
 
     if (meeting.permissions.canApprove) {
       actions.push(
-        <Button key="approve" size="sm" className="h-9 rounded-xl bg-emerald-500 px-5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 hover:scale-[1.05] active:scale-[0.95] transition-all" onClick={() => createAction({
+        <Button key="approve" size="sm" className="h-9 rounded-xl bg-emerald-500 px-5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 hover:scale-[1.05] active:scale-[0.95] transition-all" onClick={(e) => { e.stopPropagation(); createAction({
           title: "Approve this meeting?",
           description: "Approving confirms that this time works for you.",
           confirmLabel: "Approve meeting",
           details: actionDetails(meeting),
           action: async () => { const u = await meetingsApi.approve(meeting.id); toast.success("Meeting approved"); return u },
-        })}>
+        }) }}>
           <Check className="mr-2 h-3.5 w-3.5" />Approve
         </Button>
       )
       actions.push(
-        <Button key="reschedule" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-muted transition-all" onClick={() => {
+        <Button key="reschedule" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-foreground/80 hover:bg-muted hover:text-foreground transition-all" onClick={(e) => {
+          e.stopPropagation()
           const start = safeDate(meeting.startAt)
           const end = safeDate(meeting.endAt)
           setDeclinePayload({ proposedDate: toLocalDateValue(start), proposedStartTime: toLocalTimeValue(start), proposedEndTime: toLocalTimeValue(end), note: "" })
@@ -942,13 +943,13 @@ export default function MeetingsPage() {
       ]
       responses.forEach((r) => {
         actions.push(
-          <Button key={`respond-${r.status}`} size="sm" variant="outline" onClick={() => createAction({
+          <Button key={`respond-${r.status}`} size="sm" variant="outline" className="text-foreground/80 hover:text-foreground hover:bg-muted" onClick={(e) => { e.stopPropagation(); createAction({
             title: `${r.label} this meeting?`,
             description: "Your response updates the attendance summary.",
             confirmLabel: r.label,
             details: actionDetails(meeting),
             action: async () => { const u = await meetingsApi.respond(meeting.id, r.status); toast.success("Response updated"); return u },
-          })}>
+          }) }}>
             {r.label}
           </Button>
         )
@@ -957,13 +958,13 @@ export default function MeetingsPage() {
 
     if (meeting.permissions.canManage && meeting.status === "CONFIRMED") {
       actions.push(
-        <Button key="complete" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-500 transition-all" onClick={() => createAction({
+        <Button key="complete" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-foreground/80 hover:bg-emerald-500/10 hover:text-emerald-600 transition-all" onClick={(e) => { e.stopPropagation(); createAction({
           title: "Mark this meeting as completed?",
           description: "Completed meetings stay visible in history.",
           confirmLabel: "Mark completed",
           details: actionDetails(meeting),
           action: async () => { const u = await meetingsApi.complete(meeting.id); toast.success("Meeting marked completed"); return u },
-        })}>
+        }) }}>
           <CheckCircle2 className="mr-2 h-3.5 w-3.5" />Complete
         </Button>
       )
@@ -971,19 +972,19 @@ export default function MeetingsPage() {
 
     if (meeting.permissions.canManage && isActiveMeeting(meeting)) {
       actions.push(
-        <Button key="edit" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-muted transition-all" onClick={() => openEditDialog(meeting)}>
+        <Button key="edit" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-foreground/80 hover:bg-muted hover:text-foreground transition-all" onClick={(e) => { e.stopPropagation(); openEditDialog(meeting) }}>
           <Edit3 className="mr-2 h-3.5 w-3.5" />Edit
         </Button>
       )
       actions.push(
-        <Button key="cancel" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-600 transition-all" onClick={() => createAction({
+        <Button key="cancel" size="sm" variant="outline" className="h-9 rounded-xl border-border/40 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-foreground/80 hover:bg-amber-500/10 hover:text-amber-600 transition-all" onClick={(e) => { e.stopPropagation(); createAction({
           title: "Cancel this meeting?",
           description: "The meeting remains in history as cancelled.",
           confirmLabel: "Cancel meeting",
           confirmVariant: "destructive",
           details: actionDetails(meeting),
           action: async () => { const u = await meetingsApi.cancel(meeting.id); toast.success("Meeting cancelled"); return u },
-        })}>
+        }) }}>
           <XCircle className="mr-2 h-3.5 w-3.5" />Cancel
         </Button>
       )
@@ -993,14 +994,14 @@ export default function MeetingsPage() {
       actions.push(
         <Button key="delete" size="sm" variant="outline"
           className="h-9 rounded-xl border-destructive/20 bg-background/50 px-4 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive hover:text-white transition-all shadow-sm"
-          onClick={() => createAction({
+          onClick={(e) => { e.stopPropagation(); createAction({
             title: "Delete this meeting permanently?",
             description: "This removes the meeting and all records. Cannot be undone.",
             confirmLabel: "Delete meeting",
             confirmVariant: "destructive",
             details: actionDetails(meeting),
             action: async () => { const d = await meetingsApi.delete(meeting.id); toast.success("Meeting deleted"); return d },
-          })}>
+          }) }}>
           <Trash2 className="mr-2 h-3.5 w-3.5" />Delete
         </Button>
       )
@@ -1081,15 +1082,7 @@ export default function MeetingsPage() {
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center gap-3">
-              <Button 
-                variant="outline" 
-                className="h-10 rounded-xl border-border/40 bg-background/50 px-5 text-[11px] font-bold uppercase tracking-widest transition-all hover:bg-muted hover:text-foreground hover:scale-[1.02] active:scale-[0.98]"
-                onClick={() => void loadPage()} 
-                disabled={loading}
-              >
-                <RefreshCcw className={cn("mr-2 h-3.5 w-3.5", loading && "animate-spin")} />
-                Refresh
-              </Button>
+
               {canCreate && (
                 <Button 
                   className="h-10 rounded-xl bg-primary px-6 text-[11px] font-bold uppercase tracking-widest text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:scale-[1.05] hover:shadow-primary/30 active:scale-[0.95]"
@@ -1223,8 +1216,9 @@ export default function MeetingsPage() {
           </div>
         </motion.div>
 
-        {/* ── FILTER BAR ──────────────────────────────────────────── */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-border/40 bg-background/50 p-4 backdrop-blur-sm">
+        <div className="rounded-[32px] border border-border/40 bg-background/50 p-6 md:p-8 backdrop-blur-xl shadow-sm space-y-8">
+          {/* ── FILTER BAR ──────────────────────────────────────────── */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
@@ -1284,14 +1278,14 @@ export default function MeetingsPage() {
         {/* ── VIEWS ───────────────────────────────────────────────── */}
         <Tabs value={view} onValueChange={(v) => setView(v as MeetingView)} className="space-y-6">
           <div className="flex items-center justify-between gap-4">
-            <TabsList className="h-11 p-1 bg-muted/10 rounded-2xl border border-border/40 sm:w-fit">
-              <TabsTrigger value="agenda" className="h-9 px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
+            <TabsList className="h-11 p-1 bg-muted/10 rounded-2xl border border-border/40 sm:w-fit overflow-x-auto custom-scrollbar">
+              <TabsTrigger value="agenda" className="h-9 px-3 sm:px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
                 Agenda
               </TabsTrigger>
-              <TabsTrigger value="calendar" className="h-9 px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
+              <TabsTrigger value="calendar" className="h-9 px-3 sm:px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
                 Calendar
               </TabsTrigger>
-              <TabsTrigger value="archive" className="h-9 px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
+              <TabsTrigger value="archive" className="h-9 px-3 sm:px-6 rounded-xl text-xs font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary">
                 Archive
               </TabsTrigger>
             </TabsList>
@@ -1426,12 +1420,6 @@ export default function MeetingsPage() {
                         onToday={jumpToday}
                         onSelectDay={setSelectedDay}
                       />
-                      <SelectedDayPanel
-                        selectedDate={selectedDate}
-                        meetings={selectedDayMeetings}
-                        onSelect={setSelectedMeeting}
-                        onCreate={canCreate ? openCreateDialog : undefined}
-                      />
                     </aside>
                   </div>
                 </TabsContent>
@@ -1549,12 +1537,13 @@ export default function MeetingsPage() {
             </AnimatePresence>
           )}
         </Tabs>
+        </div>
 
         {/* ── CREATE / EDIT DIALOG ─────────────────────────────────── */}
         <Dialog open={formOpen} onOpenChange={(open) => { if (!submitting) setFormOpen(open) }}>
           <DialogContent className="flex max-h-[92vh] max-w-2xl flex-col overflow-hidden p-0 rounded-[32px] border-border/50 bg-background/95 backdrop-blur-xl shadow-2xl">
             {/* Header */}
-            <div className="relative overflow-hidden border-b border-border/40 bg-muted/5 px-8 py-6">
+            <div className="relative overflow-hidden border-b border-border/40 bg-muted/5 px-5 py-6 sm:px-8 sm:py-6">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] via-transparent to-transparent" />
               <DialogHeader className="relative">
                 <div className="flex items-center gap-4">
@@ -1562,10 +1551,10 @@ export default function MeetingsPage() {
                     <CalendarClock className="h-6 w-6" />
                   </div>
                   <div>
-                    <DialogTitle className="text-2xl font-bold tracking-tight">
+                    <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight">
                       {editingMeeting ? "Edit Meeting" : "Schedule Meeting"}
                     </DialogTitle>
-                    <DialogDescription className="text-xs font-medium text-muted-foreground/60">
+                    <DialogDescription className="text-[11px] sm:text-xs font-medium text-muted-foreground/60">
                       {editingMeeting
                         ? "Refine the details and coordinate with your team."
                         : "Plan a new sync with your teams and supervisors."}
@@ -1576,7 +1565,7 @@ export default function MeetingsPage() {
             </div>
 
             {/* Scrollable body — divided into sections */}
-            <div className="flex-1 overflow-y-auto px-8 py-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-2 custom-scrollbar">
               <div className="space-y-8 py-6">
 
                 {/* ── Notices (conflict + past date) ── */}
@@ -2016,7 +2005,7 @@ export default function MeetingsPage() {
             </div>
 
             {/* Footer */}
-            <div className="border-t border-border/40 bg-muted/5 px-8 py-5">
+            <div className="border-t border-border/40 bg-muted/5 px-5 sm:px-8 py-5">
               <div className="flex gap-4">
                 <Button 
                   variant="outline" 
@@ -2029,7 +2018,7 @@ export default function MeetingsPage() {
                 <Button 
                   onClick={() => void handleSaveMeeting()} 
                   disabled={submitting}
-                  className="h-12 flex-[2] rounded-2xl bg-primary font-bold text-xs uppercase tracking-widest text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98]"
+                  className="h-12 flex-[2] rounded-2xl bg-primary font-bold text-[10px] sm:text-xs uppercase tracking-widest text-primary-foreground shadow-xl shadow-primary/25 transition-all hover:bg-primary/90 hover:scale-[1.02] active:scale-[0.98]"
                 >
                   {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarClock className="mr-2 h-4 w-4" />}
                   {editingMeeting ? "Update Schedule" : "Confirm & Schedule"}
@@ -2049,7 +2038,7 @@ export default function MeetingsPage() {
                 className="flex flex-col h-full overflow-hidden"
               >
                 {/* Header Section */}
-                <div className="relative overflow-hidden border-b border-border/40 bg-muted/5 px-8 py-8">
+                <div className="relative overflow-hidden border-b border-border/40 bg-muted/5 px-5 py-6 sm:px-8 sm:py-8">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] via-transparent to-transparent" />
                   <div className="relative space-y-4">
                     <div className="flex flex-wrap items-center gap-3">
@@ -2063,10 +2052,10 @@ export default function MeetingsPage() {
                     </div>
                     
                     <div className="space-y-1.5">
-                      <SheetTitle className="text-2xl font-bold tracking-tight text-foreground/90">
+                      <SheetTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground/90">
                         {selectedMeeting.title}
                       </SheetTitle>
-                      <SheetDescription className="flex items-center gap-2 text-sm font-medium text-muted-foreground/60">
+                      <SheetDescription className="flex items-center gap-2 text-xs sm:text-sm font-medium text-muted-foreground/60">
                         <Calendar className="h-4 w-4" />
                         {formatMeetingRange(selectedMeeting)}
                       </SheetDescription>
@@ -2075,10 +2064,10 @@ export default function MeetingsPage() {
                 </div>
 
                 {/* Body - Scrollable */}
-                <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-5 py-6 sm:px-8 custom-scrollbar">
                   <div className="space-y-8">
                     {/* Quick Info Grid */}
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <DetailCard icon={Users} label="Team" value={selectedMeeting.team.name} />
                       <DetailCard icon={Clock3} label="Duration" value={getMeetingDurationLabel(selectedMeeting)} />
                       <DetailCard icon={MapPin} label="Location" value={selectedMeeting.location || (selectedMeeting.joinUrl ? "Online" : "Not set")} />
@@ -2089,17 +2078,17 @@ export default function MeetingsPage() {
                     {(selectedMeeting.description || selectedMeeting.agenda) && (
                       <div className="space-y-6">
                         {selectedMeeting.description && (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <SectionHeader label="Description" />
-                            <p className="text-[14px] font-medium leading-relaxed text-foreground/70 bg-muted/5 rounded-2xl p-4 border border-border/40">
+                            <div className="text-sm font-medium leading-relaxed text-foreground/70 whitespace-pre-line">
                               {selectedMeeting.description}
-                            </p>
+                            </div>
                           </div>
                         )}
                         {selectedMeeting.agenda && (
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <SectionHeader label="Agenda" />
-                            <div className="text-[14px] font-medium leading-relaxed text-foreground/70 bg-muted/5 rounded-2xl p-4 border border-border/40 whitespace-pre-line">
+                            <div className="text-sm font-medium leading-relaxed text-foreground/70 whitespace-pre-line">
                               {selectedMeeting.agenda}
                             </div>
                           </div>
@@ -2134,7 +2123,7 @@ export default function MeetingsPage() {
                               </div>
                               <Badge variant="outline" className={cn("gap-1.5 h-7 px-2.5 rounded-full border shadow-none", meta.className)}>
                                 <Icon className="h-3 w-3" />
-                                <span className="text-[10px] font-bold uppercase tracking-wider">{meta.label}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">{meta.label}</span>
                               </Badge>
                             </div>
                           )
@@ -2178,8 +2167,8 @@ export default function MeetingsPage() {
                 </div>
 
                 {/* Footer - Actions */}
-                <div className="border-t border-border/40 bg-muted/5 px-8 py-6">
-                  <div className="flex flex-wrap gap-3">
+                <div className="border-t border-border/40 bg-muted/5 px-5 py-6 sm:px-8">
+                  <div className="flex flex-wrap gap-3 justify-end sm:justify-start">
                     {meetingActions(selectedMeeting)}
                   </div>
                 </div>
@@ -2472,9 +2461,10 @@ function MeetingCard({ meeting, actions, onSelect }: { meeting: ApiMeeting; acti
   return (
     <motion.div
       whileHover={{ y: -2, transition: { duration: 0.2 } }}
+      onClick={onSelect}
       className={cn(
-        "group relative overflow-hidden rounded-[24px] border border-border/40 bg-background/50 p-5 transition-all hover:border-primary/20 hover:bg-background hover:shadow-xl hover:shadow-primary/5",
-        meeting.status === "PENDING_APPROVAL" && "bg-amber-500/[0.01] border-amber-500/10"
+        "group relative overflow-hidden rounded-[24px] bg-background/40 p-5 transition-all hover:bg-background hover:shadow-lg hover:shadow-primary/5 cursor-pointer",
+        meeting.status === "PENDING_APPROVAL" && "bg-amber-500/[0.02]"
       )}
     >
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -2508,10 +2498,7 @@ function MeetingCard({ meeting, actions, onSelect }: { meeting: ApiMeeting; acti
               </Badge>
             </div>
             
-            <h3 
-              onClick={onSelect}
-              className="text-lg font-bold tracking-tight text-foreground transition-colors leading-tight cursor-pointer group-hover:text-primary"
-            >
+            <h3 className="text-lg font-bold tracking-tight text-foreground transition-colors leading-tight group-hover:text-primary">
               {meeting.title}
             </h3>
 
@@ -2524,8 +2511,21 @@ function MeetingCard({ meeting, actions, onSelect }: { meeting: ApiMeeting; acti
 
           <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/30">
             <div className="flex items-center gap-1.5">
-              <Users className="h-3 w-3" />
-              <span>{meeting.participants.length}</span>
+              <div className="flex -space-x-1.5">
+                {visibleParticipants.map((p, i) => {
+                  const initial = (p.user?.fullName || p.displayName || p.email || "?").charAt(0).toUpperCase()
+                  return (
+                    <div key={p.userId || i} className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[8px] font-bold text-primary ring-2 ring-background">
+                      {initial}
+                    </div>
+                  )
+                })}
+                {extraCount > 0 && (
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted/50 text-[8px] font-bold text-muted-foreground ring-2 ring-background">
+                    +{extraCount}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-1.5">
               <Clock3 className="h-3 w-3" />
@@ -2551,7 +2551,6 @@ function MeetingCard({ meeting, actions, onSelect }: { meeting: ApiMeeting; acti
             size="sm" 
             variant="ghost" 
             className="h-8 w-8 rounded-lg border border-border/40 bg-background/50 transition-all hover:bg-primary/5 hover:text-primary hover:border-primary/20" 
-            onClick={onSelect}
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -2573,7 +2572,7 @@ function SelectedDayPanel({
   onCreate?: () => void
 }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-xl backdrop-blur-xl transition-all duration-500 hover:border-primary/20">
+    <div className="overflow-hidden rounded-3xl transition-all duration-500 hover:bg-white/5">
       <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-white/[0.02]">
         <div className="space-y-0.5">
           <h3 className="text-sm font-bold tracking-tight text-foreground/80 uppercase tracking-wider">{format(selectedDate, "EEE, MMM d")}</h3>
@@ -2651,7 +2650,7 @@ function CalendarMiniPanel({
   onSelectDay: (day: Date) => void
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl transition-all duration-500 hover:border-primary/20">
+    <div className="p-5 transition-all duration-500 rounded-3xl hover:bg-white/5">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h3 className="text-sm font-bold tracking-tight text-foreground/80 uppercase tracking-wider">{format(month, "MMMM yyyy")}</h3>
         <div className="flex items-center gap-1.5">
@@ -2750,7 +2749,7 @@ function CalendarFullPanel({
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl">
+    <div className="overflow-hidden rounded-3xl bg-background/20">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-white/[0.02]">
         <h2 className="text-lg font-bold tracking-tight text-foreground/80">{format(month, "MMMM yyyy")}</h2>

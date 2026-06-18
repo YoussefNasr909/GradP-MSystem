@@ -67,10 +67,12 @@ export function RoleActionInbox() {
     async function load() {
       try {
         if (isDoctor || isAdmin) {
-          const [pendingProposals, awaitingFinalGrade] = await Promise.all([
+          const [submittedProposals, underReviewProposals, awaitingFinalGrade] = await Promise.all([
             proposalsApi.list({ status: "SUBMITTED" }).catch(() => []),
+            proposalsApi.list({ status: "UNDER_REVIEW" }).catch(() => []),
             submissionsApi.list({ status: "UNDER_REVIEW" }).catch(() => []),
           ])
+          const pendingProposals = [...submittedProposals, ...underReviewProposals]
           if (cancelled) return
           setItems([
             {

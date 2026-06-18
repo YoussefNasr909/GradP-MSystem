@@ -146,6 +146,8 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
     technologies: team.stack.join(", "),
     projectDescription: team.bio,
   })
+  const [isAiMatching, setIsAiMatching] = useState(false)
+  const [aiMatches, setAiMatches] = useState<{ doctorId: string; matchScore: number; reasoning: string; role?: string; doctor?: ApiDirectoryUser }[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -257,6 +259,42 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
     }
   }
 
+  async function handleAiMatchSupervisor() {
+    setIsAiMatching(true)
+    setAiMatches([])
+    try {
+      const [allDoctors, allTas] = await Promise.all([
+        usersApi.directory({ role: "DOCTOR", limit: 50 }),
+        usersApi.directory({ role: "TA", limit: 50 }),
+      ])
+      const allSupervisors = [
+        ...allDoctors.items.map(d => ({ id: d.id, name: d.fullName, department: d.department, specialties: [], bio: d.bio, role: "DOCTOR", _ref: d })),
+        ...allTas.items.map(d => ({ id: d.id, name: d.fullName, department: d.department, specialties: [], bio: d.bio, role: "TA", _ref: d })),
+      ]
+      const docData = allSupervisors.map(({ _ref: _, ...rest }) => rest)
+      const res = await fetch("/api/generate-supervisor-matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          team: { name: team.name, stack: team.stack, bio: team.bio },
+          doctors: docData,
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to generate matches")
+      const result = await res.json()
+      const hydrated = result.map((m: { doctorId: string; matchScore: number; reasoning: string; role?: string }) => {
+        const found = allSupervisors.find(d => d.id === m.doctorId)
+        return { ...m, role: m.role ?? found?.role, doctor: found?._ref }
+      })
+      setAiMatches(hydrated)
+      toast.success("AI found your top 3 supervisor matches!")
+    } catch {
+      toast.error("AI matching failed. Please try again.")
+    } finally {
+      setIsAiMatching(false)
+    }
+  }
+
   const pendingDoctorRequest = requests.find(
     (item) => item.supervisorRole === "DOCTOR" && item.status === "PENDING",
   ) ?? null
@@ -324,6 +362,118 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
               ))}
             </CardContent>
           </Card>
+        </motion.div>
+      )}
+
+      {/* AI Supervisor Matchmaker */}
+      {(!team.doctor || !team.ta) && (
+        <motion.div {...getSupervisorRevealMotion(reduceMotion, 0.09)}>
+          <div className="overflow-hidden rounded-2xl border border-indigo-500/25 bg-gradient-to-br from-indigo-500/8 via-purple-500/5 to-transparent shadow-sm relative">
+            {/* Top gradient bar */}
+            <div className="absolute top-0 left-0 w-full h-[3px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                    <Sparkles className="h-3 w-3" /> AI Matchmaker
+                  </div>
+                  <h3 className="text-base font-bold text-foreground">Not sure who to pick?</h3>
+                  <p className="text-sm text-muted-foreground max-w-lg leading-relaxed">
+                    Let our AI analyze your stack ({team.stack?.slice(0, 3).join(", ") || "your technologies"}) and project idea to recommend the <span className="font-semibold text-indigo-600 dark:text-indigo-400">Top 3</span> best-suited Doctors & TAs.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => void handleAiMatchSupervisor()}
+                  disabled={isAiMatching || aiMatches.length > 0}
+                  className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl shadow-lg shadow-indigo-500/25 shrink-0 transition-all hover:scale-105 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {isAiMatching
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                    : <><Sparkles className="mr-2 h-4 w-4" /> Find Best Match</>}
+                </Button>
+              </div>
+
+              {/* Match Cards */}
+              {aiMatches.length > 0 && (
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {aiMatches.map((m, i) => {
+                    const rankColors = [
+                      "from-amber-400 to-yellow-500",
+                      "from-slate-400 to-slate-500",
+                      "from-orange-400 to-amber-500",
+                    ]
+                    const rankLabels = ["#1 Best Pick", "#2 Runner Up", "#3 Option"]
+                    const isDoctor = m.role === "DOCTOR"
+                    return (
+                      <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.12, ease: [0.22, 1, 0.36, 1] }}>
+                        <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-background hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-md transition-all duration-200 p-4 h-full relative overflow-hidden group">
+                          {/* Rank ribbon */}
+                          <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${rankColors[i]}`} />
+
+                          {/* Rank badge */}
+                          <div className={`self-start px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r ${rankColors[i]} text-white`}>
+                            {rankLabels[i]}
+                          </div>
+
+                          {/* Doctor info */}
+                          <div className="flex items-center gap-3">
+                            <div className={`relative p-0.5 rounded-full bg-gradient-to-br ${rankColors[i]}`}>
+                              <Avatar className="h-10 w-10 border-2 border-background">
+                                <AvatarImage src={m.doctor?.avatarUrl} />
+                                <AvatarFallback className="bg-indigo-50 text-indigo-700 font-bold text-sm">
+                                  {m.doctor ? getAvatarInitial(m.doctor) : "?"}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-sm truncate">{m.doctor?.fullName ?? "Unknown"}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <Badge className={`text-[9px] px-1.5 py-0 border-0 font-semibold ${
+                                  isDoctor
+                                    ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300"
+                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                }`}>
+                                  {isDoctor ? "Doctor" : "TA"}
+                                </Badge>
+                                <Badge className="text-[9px] px-1.5 py-0 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 font-semibold">
+                                  {m.matchScore}% Match
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Department chip */}
+                          {m.doctor?.department && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <GraduationCap className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{m.doctor.department.replace(/_/g, " ")}</span>
+                            </div>
+                          )}
+
+                          {/* AI Reasoning */}
+                          <p className="text-xs leading-relaxed text-muted-foreground italic flex-1 bg-muted/40 rounded-lg p-2.5 border border-border/40">
+                            "{m.reasoning}"
+                          </p>
+
+                          {/* CTA */}
+                          {m.doctor && (
+                            <Button
+                              size="sm"
+                              className="w-full text-xs rounded-lg mt-auto bg-transparent text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-600 hover:text-white dark:hover:bg-indigo-600 dark:hover:text-white shadow-none transition-all"
+                              onClick={() => openRequestDialog(m.doctor!)}
+                            >
+                              <Send className="mr-1.5 h-3 w-3" /> Send Request
+                            </Button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </motion.div>
       )}
 
