@@ -95,13 +95,13 @@ const navigationItemByName = Object.fromEntries(navigationItems.map((item) => [i
 
 const roleNavigationGroups: Record<Role, { name: string; items: string[] }[]> = {
   admin: [
-    { name: "Main", items: ["Dashboard", "User Management", "All Teams", "System Logs"] },
+    { name: "Main", items: ["Dashboard", "Sprints", "User Management", "All Teams", "System Logs"] },
     { name: "Management & Reports", items: ["Analytics", "Reports", "Grades Overview"] },
     { name: "Communication", items: ["Announcements", "Chat"] },
     { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
   ],
   doctor: [
-    { name: "Main", items: ["Dashboard", "Supervision", "My Teams", "Submissions", "Grades Overview", "Proposals"] },
+    { name: "Main", items: ["Dashboard", "Supervision", "My Teams", "Sprints", "Submissions", "Grades Overview", "Proposals"] },
     {
       name: "Work & Collaboration",
       items: ["Meetings", "Calendar", "Risk Management", "Announcements", "Resources", "Documents", "GitHub", "Discussions", "Chat"],
@@ -110,7 +110,7 @@ const roleNavigationGroups: Record<Role, { name: string; items: string[] }[]> = 
     { name: "Help & Support", items: ["Help Center", "FAQs", "Contact Support"] },
   ],
   ta: [
-    { name: "Main", items: ["Dashboard", "Review Tasks", "Supervision", "Submissions", "Risk Management", "My Teams"] },
+    { name: "Main", items: ["Dashboard", "Review Tasks", "Supervision", "Sprints", "Submissions", "Risk Management", "My Teams"] },
     {
       name: "Work & Collaboration",
       items: ["Meetings", "Calendar", "Announcements", "Resources", "Documents", "GitHub", "Discussions", "Chat"],

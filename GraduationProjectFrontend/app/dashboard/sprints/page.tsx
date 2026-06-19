@@ -338,11 +338,27 @@ function getTaskPoints(task: ApiSprintTask) {
   return task.actualPoints ?? task.storyPoints
 }
 
-function buildDefaultSprintDates() {
-  const start = new Date()
+function buildDefaultSprintDates(sprints: ApiSprint[] = [], durationDays: number = 13) {
+  let start = new Date()
   start.setHours(0, 0, 0, 0)
+
+  if (sprints && sprints.length > 0) {
+    let maxDate = start.getTime()
+    for (const sprint of sprints) {
+      const d = new Date(sprint.endDate).getTime()
+      if (d > maxDate) {
+        maxDate = d
+      }
+    }
+    if (maxDate >= start.getTime()) {
+      start = new Date(maxDate)
+      start.setDate(start.getDate() + 1)
+      start.setHours(0, 0, 0, 0)
+    }
+  }
+
   const end = new Date(start)
-  end.setDate(end.getDate() + 13)
+  end.setDate(end.getDate() + durationDays)
   return {
     startDate: toInputDate(start.toISOString()),
     endDate: toInputDate(end.toISOString()),
@@ -730,6 +746,7 @@ function SprintEvaluationPanel({
   onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
   onReviewEvaluation: (sprint: ApiSprint, evaluation: ApiSprintEvaluation, status: Extract<ApiSprintEvaluationStatus, "APPROVED" | "REJECTED" | "NEEDS_CHANGES">) => void
 }) {
+  const [isGenerating, setIsGenerating] = useState(false)
   const ownEvaluationRole = currentUserRole === "ta" ? "TA" : null
   const ownEvaluation = ownEvaluationRole
     ? sprint.evaluations.find((evaluation) => evaluation.evaluatorRole === ownEvaluationRole && evaluation.evaluator?.id === currentUserId) ?? null
@@ -741,6 +758,50 @@ function SprintEvaluationPanel({
   const isSaving = actionInFlight === `evaluation-${sprint.id}`
   const isEarlyFinal = sprint.status !== "COMPLETED"
   const isDoctorReadOnly = currentUserRole === "doctor"
+
+  async function handleAutoDraft() {
+    if (!sprint.stats) {
+      toast.error("Sprint metrics not available.")
+      return
+    }
+    setIsGenerating(true)
+    try {
+      const res = await fetch("/api/generate-evaluation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sprintName: sprint.name,
+          metrics: sprint.stats,
+          teamName: "", 
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Failed to generate evaluation")
+      }
+
+      const evalData = await res.json()
+      
+      onDraftChange(sprint.id, (current) => ({
+        ...current,
+        feedback: evalData.feedback || current.feedback,
+        criteria: {
+          planningQuality: evalData.planningQuality?.toString() || current.criteria.planningQuality,
+          taskCompletion: evalData.taskCompletion?.toString() || current.criteria.taskCompletion,
+          progressConsistency: evalData.progressConsistency?.toString() || current.criteria.progressConsistency,
+          teamCollaboration: evalData.teamCollaboration?.toString() || current.criteria.teamCollaboration,
+          deadlineCommitment: evalData.deadlineCommitment?.toString() || current.criteria.deadlineCommitment,
+        }
+      }))
+      
+      toast.success("Evaluation auto-drafted by AI")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't generate evaluation")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
 
   return (
     <div className={cn("mt-4 rounded-lg border p-4", isDoctorReadOnly ? "border-blue-500/20 bg-blue-500/[0.04]" : "border-border/70 bg-muted/15")}>
@@ -877,11 +938,25 @@ function SprintEvaluationPanel({
                 {canEditOwnEvaluation ? "Save a draft or submit the evaluation when it is ready." : "This evaluation has been finalized and cannot be edited here."}
               </p>
             </div>
-            {ownEvaluation ? (
-              <Badge variant="outline" className={cn("w-fit rounded-md", getEvaluationBadgeClass(ownEvaluation.status))}>
-                {formatEvaluationStatus(ownEvaluation.status)}
-              </Badge>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {canEditOwnEvaluation && (
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  className="rounded-lg bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-500/20" 
+                  onClick={handleAutoDraft} 
+                  disabled={isGenerating || isSaving}
+                >
+                  {isGenerating ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                  Auto-Draft Evaluation
+                </Button>
+              )}
+              {ownEvaluation ? (
+                <Badge variant="outline" className={cn("w-fit rounded-md", getEvaluationBadgeClass(ownEvaluation.status))}>
+                  {formatEvaluationStatus(ownEvaluation.status)}
+                </Badge>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
@@ -1189,6 +1264,8 @@ export default function SprintsPage() {
   const [editingSprintId, setEditingSprintId] = useState<string | null>(null)
   const [sprintPendingDelete, setSprintPendingDelete] = useState<ApiSprint | null>(null)
   const [sprintForm, setSprintForm] = useState<SprintFormState>(DEFAULT_SPRINT_FORM)
+  const [sprintAiPlan, setSprintAiPlan] = useState<{ suggestedTaskIds: string[], reasoning: string } | null>(null)
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false)
   const [hasSubmittedSprintForm, setHasSubmittedSprintForm] = useState(false)
   const [evaluationDrafts, setEvaluationDrafts] = useState<Record<string, EvaluationFormState>>({})
   const [evaluationErrors, setEvaluationErrors] = useState<Record<string, EvaluationFormErrors>>({})
@@ -1423,7 +1500,7 @@ export default function SprintsPage() {
   }, [editingSprint?.status, sprintDialogMode])
 
   function openCreateDialog() {
-    const dates = buildDefaultSprintDates()
+    const dates = buildDefaultSprintDates(board?.sprints ?? [])
     setSprintDialogMode("create")
     setEditingSprintId(null)
     setHasSubmittedSprintForm(false)
@@ -1455,6 +1532,56 @@ export default function SprintsPage() {
     setSprintDialogMode("create")
     setHasSubmittedSprintForm(false)
     setSprintForm(DEFAULT_SPRINT_FORM)
+    setSprintAiPlan(null)
+  }
+
+  async function handleGenerateSprintPlan() {
+    if (!activeTeamId || !board || board.backlogTasks.length === 0) {
+      toast.error("You need tasks in your backlog to generate a plan.")
+      return
+    }
+    setIsGeneratingPlan(true)
+    try {
+      const res = await fetch("/api/generate-sprint-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamName: board.team.name,
+          backlogTasks: board.backlogTasks,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Failed to generate plan")
+      }
+
+      const plan = await res.json()
+      
+      const recommendedDuration = plan.recommendedDuration || 14
+      // buildDefaultSprintDates expects duration in days (0-indexed effectively, so 14 days duration is start + 13 days)
+      const dates = buildDefaultSprintDates(board?.sprints ?? [], recommendedDuration - 1)
+
+      setSprintForm({
+        name: plan.sprintName || "",
+        goal: plan.goal || "",
+        startDate: dates.startDate,
+        endDate: dates.endDate,
+        status: "PLANNED",
+      })
+      setSprintAiPlan({
+        suggestedTaskIds: plan.suggestedTaskIds || [],
+        reasoning: plan.reasoning || "",
+      })
+      
+      setSprintDialogMode("create")
+      setCreateDialogOpen(true)
+      toast.success("AI Sprint Plan generated")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Couldn't generate plan")
+    } finally {
+      setIsGeneratingPlan(false)
+    }
   }
 
   async function handleSaveSprint() {
@@ -1490,8 +1617,22 @@ export default function SprintsPage() {
           endDate: sprintForm.endDate,
           status: sprintForm.status,
         })
+        
+        let assignmentFailed = false;
+        if (sprintDialogMode === "create" && sprintAiPlan && sprintAiPlan.suggestedTaskIds.length > 0) {
+          const results = await Promise.allSettled(sprintAiPlan.suggestedTaskIds.map((taskId) => sprintsApi.assignTask(created.id, taskId)));
+          const failures = results.filter(r => r.status === 'rejected');
+          if (failures.length > 0) {
+            console.error(failures);
+            assignmentFailed = true;
+            toast.error("Sprint created, but failed to assign some tasks: " + ((failures[0] as PromiseRejectedResult).reason?.message || ''));
+          }
+        }
+
         setSelectedSprintId(created.id)
-        toast.success("Sprint created")
+        if (!assignmentFailed) {
+          toast.success("Sprint created")
+        }
       }
       closeSprintDialog()
       await loadBoard()
@@ -1721,16 +1862,27 @@ export default function SprintsPage() {
                 : "Plan sprint goals, pull tasks from your team backlog, and watch progress through burndown, velocity, and workload charts."}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex shrink-0 items-center gap-2 max-sm:flex-wrap sm:mb-1">
             <Button variant="outline" className="rounded-lg bg-transparent" onClick={() => void loadBoard()} disabled={isLoading}>
               <RefreshCw className={cn("mr-2 h-4 w-4", isLoading && "animate-spin")} />
               Refresh
             </Button>
             {canManage ? (
-              <Button className="rounded-lg shadow-sm transition-transform motion-safe:hover:-translate-y-0.5" onClick={openCreateDialog} disabled={Boolean(actionInFlight)}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Sprint
-              </Button>
+              <>
+                <Button 
+                  variant="secondary" 
+                  className="rounded-lg bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-500/20 transition-transform motion-safe:hover:-translate-y-0.5" 
+                  onClick={handleGenerateSprintPlan} 
+                  disabled={Boolean(actionInFlight) || isGeneratingPlan}
+                >
+                  {isGeneratingPlan ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                  AI Plan
+                </Button>
+                <Button className="rounded-lg shadow-sm transition-transform motion-safe:hover:-translate-y-0.5" onClick={openCreateDialog} disabled={Boolean(actionInFlight) || isGeneratingPlan}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Sprint
+                </Button>
+              </>
             ) : null}
           </div>
         </motion.div>
@@ -2113,10 +2265,21 @@ export default function SprintsPage() {
                         description={isSupportView ? "When students create sprints, they will appear here for supervision." : "Create your first sprint to group backlog tasks into an iteration."}
                         action={
                           canManage ? (
-                            <Button className="rounded-lg" onClick={openCreateDialog} disabled={Boolean(actionInFlight)}>
-                              <Plus className="mr-2 h-4 w-4" />
-                              New Sprint
-                            </Button>
+                            <div className="flex items-center gap-3">
+                              <Button 
+                                variant="secondary" 
+                                className="rounded-lg bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 dark:text-indigo-400 border border-indigo-500/20" 
+                                onClick={handleGenerateSprintPlan} 
+                                disabled={Boolean(actionInFlight) || isGeneratingPlan}
+                              >
+                                {isGeneratingPlan ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                AI Plan Sprint
+                              </Button>
+                              <Button className="rounded-lg" onClick={openCreateDialog} disabled={Boolean(actionInFlight) || isGeneratingPlan}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                New Sprint
+                              </Button>
+                            </div>
                           ) : null
                         }
                       />
@@ -2393,6 +2556,40 @@ export default function SprintsPage() {
               </DialogHeader>
 
               <div className="max-h-[62vh] space-y-5 overflow-y-auto px-6 py-5">
+                {sprintAiPlan && sprintDialogMode === "create" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4"
+                  >
+                    <div className="flex gap-3">
+                      <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                      <div className="w-full">
+                        <h4 className="font-medium text-indigo-900 dark:text-indigo-300">AI Plan Generated</h4>
+                        <p className="mt-1 text-sm text-indigo-800/80 dark:text-indigo-300/80">
+                          {sprintAiPlan.reasoning}
+                        </p>
+                        <div className="mt-3">
+                          <p className="text-xs font-medium text-indigo-700 dark:text-indigo-400 mb-2">
+                            {sprintAiPlan.suggestedTaskIds.length} tasks will be automatically added to this sprint when you save:
+                          </p>
+                          <ul className="space-y-1.5">
+                            {sprintAiPlan.suggestedTaskIds.map((taskId) => {
+                              const task = board?.backlogTasks.find((t) => t.id === taskId)
+                              if (!task) return null
+                              return (
+                                <li key={taskId} className="flex items-start gap-2 text-xs text-indigo-800/70 dark:text-indigo-300/70">
+                                  <div className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400 dark:bg-indigo-500" />
+                                  <span className="font-medium text-indigo-900 dark:text-indigo-200">{task.title}</span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
                 <motion.div
                   initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2622,3 +2819,5 @@ export default function SprintsPage() {
     </TeamRequiredGuard>
   )
 }
+
+

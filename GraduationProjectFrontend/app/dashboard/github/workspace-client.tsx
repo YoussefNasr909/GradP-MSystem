@@ -1318,6 +1318,7 @@ const PullRequestListItem = memo(function PullRequestListItem({
   busyAction,
   onRefresh,
   onReview,
+  onAiReview,
   onToggleState,
   onMerge,
 }: {
@@ -1327,6 +1328,7 @@ const PullRequestListItem = memo(function PullRequestListItem({
   busyAction: string | null
   onRefresh: (number: number) => void
   onReview: (pr: ApiGitHubPullRequest) => void
+  onAiReview: (pr: ApiGitHubPullRequest) => void
   onToggleState: (pr: ApiGitHubPullRequest) => void
   onMerge: (pr: ApiGitHubPullRequest) => void
 }) {
@@ -1334,6 +1336,7 @@ const PullRequestListItem = memo(function PullRequestListItem({
   const isRefreshing = busyAction === `pull-refresh-${pullRequest.number}`
   const isToggling = busyAction === `pull-${pullRequest.number}`
   const isMerging = busyAction === `merge-${pullRequest.number}`
+  const isAiReviewing = busyAction === `ai-review-${pullRequest.number}`
 
   return (
     <motion.div
@@ -1452,26 +1455,39 @@ const PullRequestListItem = memo(function PullRequestListItem({
             </Button>
 
             {canManageActions && pullRequest.state === "open" && (
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="h-9 rounded-xl border-primary/20 bg-primary/5 text-xs font-semibold text-primary hover:bg-primary/10 hover:border-primary/30 transition-all" 
-                onClick={() => onReview(pullRequest)}
-              >
-                Review
-              </Button>
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-9 rounded-xl border border-primary/20 bg-primary/5 text-xs font-semibold text-primary hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all" 
+                  onClick={() => onReview(pullRequest)}
+                  disabled={isAiReviewing}
+                >
+                  Review
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-9 rounded-xl bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 border border-indigo-500/20 text-xs font-semibold transition-all" 
+                  onClick={() => onAiReview(pullRequest)}
+                  disabled={isAiReviewing}
+                >
+                  {isAiReviewing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <WandSparkles className="mr-1.5 h-3.5 w-3.5" />}
+                  AI Review
+                </Button>
+              </>
             )}
 
             {canRunLeaderActions && !pullRequest.merged && (
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 size="sm" 
                 title={pullRequest.state === "open" ? "Close PR" : "Reopen PR"}
                 className={cn(
-                  "h-9 rounded-xl text-xs font-semibold transition-all border-none",
+                  "h-9 rounded-xl text-xs font-semibold transition-all border border-transparent",
                   pullRequest.state === "open" 
-                    ? "bg-red-500/10 text-red-600 hover:bg-red-500/20" 
-                    : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20",
+                    ? "bg-red-500/10 text-red-600 hover:bg-red-500/20 hover:text-red-700" 
+                    : "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700",
                 )} 
                 onClick={() => onToggleState(pullRequest)} 
                 disabled={isToggling}
@@ -1864,6 +1880,7 @@ export function GitHubWorkspaceClient() {
   })
 
   const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [aiReviewResult, setAiReviewResult] = useState<any>(null)
   const [copiedActionKey, setCopiedActionKey] = useState<string | null>(null)
   const [commitSearch, setCommitSearch] = useState("")
   const [codeSearch, setCodeSearch] = useState("")
@@ -3562,6 +3579,79 @@ export function GitHubWorkspaceClient() {
       toast.error(friendlyError(error, "Couldn't refresh this pull request."))
     } finally {
       setBusyAction(null)
+    }
+  }
+
+  const handleAiReviewPullRequest = async (pullRequest: ApiGitHubPullRequest) => {
+    try {
+      if (!pullRequest.base || !pullRequest.head) {
+        toast.error("PR base or head branch missing. Cannot generate AI review.");
+        return;
+      }
+
+      setBusyAction(`ai-review-${pullRequest.number}`);
+      
+      const compareData = await githubApi.compare({
+        teamId: activeTeamId,
+        base: pullRequest.base,
+        head: pullRequest.head
+      });
+
+      if (!compareData.files || compareData.files.length === 0) {
+        toast.error("No file changes found in this PR.");
+        return;
+      }
+
+      const res = await fetch("/api/review-pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: pullRequest.title,
+          description: pullRequest.body,
+          baseBranch: pullRequest.base,
+          headBranch: pullRequest.head,
+          changedFiles: compareData.files
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to generate AI PR review.");
+      }
+
+      const aiReview = await res.json();
+      
+      const markdownBody = [
+        `### ✨ AI Code Review`,
+        `**Verdict**: \`${aiReview.verdict}\`\n`,
+        `${aiReview.summary}\n`,
+        ...(aiReview.lineComments?.length ? [
+          `#### 📝 Line Comments`,
+          ...aiReview.lineComments.map((c: any) => `- **\`${c.file}\`** (Line ${c.line}): ${c.comment}`)
+        ] : []),
+        `\n#### 💡 Suggestions`,
+        ...(aiReview.suggestions?.map((s: string) => `- ${s}`) || [])
+      ].join("\n");
+
+      await githubApi.reviewPullRequest(pullRequest.number, {
+        teamId: activeTeamId,
+        body: markdownBody,
+        event: aiReview.verdict
+      });
+
+      toast.success("AI code review posted to GitHub!", {
+        action: {
+          label: "View on GitHub",
+          onClick: () => window.open(pullRequest.htmlUrl, "_blank")
+        }
+      });
+      setAiReviewResult(aiReview);
+      await refreshPullRequest(pullRequest.number);
+
+    } catch (error) {
+      toast.error(friendlyError(error, "Couldn't generate AI PR review."));
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -6089,7 +6179,14 @@ export function GitHubWorkspaceClient() {
                       </div>
 
                       <AnimatePresence mode="wait">
-                        {filteredIssues.length ? (
+                        {repositoryDataLoading ? (
+                          <motion.div key="issue-loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5">
+                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-amber-500/5 text-amber-500/20 ring-1 ring-amber-500/10">
+                              <Loader2 className="h-10 w-10 animate-spin" />
+                            </div>
+                            <h4 className="text-xl font-semibold tracking-tight text-foreground/80">Loading issues...</h4>
+                          </motion.div>
+                        ) : filteredIssues.length ? (
                           <motion.div 
                             key="issue-list"
                             variants={{
@@ -6288,7 +6385,14 @@ export function GitHubWorkspaceClient() {
                     </div>
 
                     <AnimatePresence mode="wait">
-                      {filteredPullRequests.length ? (
+                      {repositoryDataLoading ? (
+                        <motion.div key="pr-loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5">
+                          <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                            <Loader2 className="h-10 w-10 animate-spin" />
+                          </div>
+                          <h4 className="text-xl font-semibold tracking-tight text-foreground/80">Loading pull requests...</h4>
+                        </motion.div>
+                      ) : filteredPullRequests.length ? (
                         <motion.div 
                           key="pr-list"
                           variants={{
@@ -6307,6 +6411,7 @@ export function GitHubWorkspaceClient() {
                               busyAction={busyAction}
                               onRefresh={refreshPullRequest}
                               onReview={setReviewingPullRequest}
+                              onAiReview={handleAiReviewPullRequest}
                               onToggleState={requestTogglePullRequestState}
                               onMerge={openMergeDialog}
                             />
@@ -6412,7 +6517,14 @@ export function GitHubWorkspaceClient() {
                       )}
 
                       <AnimatePresence mode="wait">
-                        {branches.length ? (
+                        {repositoryDataLoading ? (
+                          <motion.div key="branch-loading" initial={ANIM_ENTRY_FADE} animate={ANIM_FADE_IN} className="flex min-h-[400px] flex-col items-center justify-center p-12 text-center rounded-[32px] border border-dashed border-border/60 bg-muted/5">
+                            <div className="relative mb-8 flex h-24 w-24 items-center justify-center rounded-[32px] bg-primary/5 text-primary/20 ring-1 ring-primary/10">
+                              <Loader2 className="h-10 w-10 animate-spin" />
+                            </div>
+                            <h4 className="text-xl font-semibold tracking-tight text-foreground/80">Loading branches...</h4>
+                          </motion.div>
+                        ) : branches.length ? (
                           <motion.div 
                             key="branch-list"
                             variants={{
@@ -8574,6 +8686,61 @@ export function GitHubWorkspaceClient() {
           </Dialog>
         </>
       )}
+
+      <Dialog open={Boolean(aiReviewResult)} onOpenChange={(open) => !open && setAiReviewResult(null)}>
+        <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] overflow-y-auto rounded-[28px] sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <WandSparkles className="h-5 w-5 text-indigo-500" />
+              AI Code Review Result
+            </DialogTitle>
+            <DialogDescription>
+              The AI has reviewed the pull request and posted the following feedback to GitHub.
+            </DialogDescription>
+          </DialogHeader>
+          {aiReviewResult && (
+            <div className="space-y-4">
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 font-semibold">
+                  <span>Verdict:</span>
+                  <Badge variant={aiReviewResult.verdict === "APPROVE" ? "default" : aiReviewResult.verdict === "REQUEST_CHANGES" ? "destructive" : "secondary"}>
+                    {aiReviewResult.verdict}
+                  </Badge>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{aiReviewResult.summary}</p>
+              </div>
+
+              {aiReviewResult.lineComments?.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Line Comments</h4>
+                  <ul className="space-y-2">
+                    {aiReviewResult.lineComments.map((c: any, i: number) => (
+                      <li key={i} className="rounded-lg border bg-background p-3 text-sm">
+                        <span className="font-mono text-xs text-muted-foreground mr-2">{c.file}:{c.line}</span>
+                        {c.comment}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {aiReviewResult.suggestions?.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-2">Suggestions</h4>
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                    {aiReviewResult.suggestions.map((s: string, i: number) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setAiReviewResult(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkspaceShell>
   )
 }

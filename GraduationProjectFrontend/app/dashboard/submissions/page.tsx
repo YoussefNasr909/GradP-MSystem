@@ -56,6 +56,8 @@ import {
   LockKeyhole,
   Info,
   ChevronDown,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -523,12 +525,12 @@ function SubmissionCommentsThread({ submissionId }: { submissionId: string }) {
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 w-full min-w-0 overflow-hidden">
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Write a comment..."
-          className="resize-none text-sm"
+          className="resize-none text-sm flex-1 min-w-0"
           rows={2}
           maxLength={2000}
           onKeyDown={(e) => {
@@ -638,6 +640,7 @@ function SubmissionDetailDialog({
   const [doctorRubricScore, setDoctorRubricScore] = useState<number | null>(null)
   const [doctorRubricTouched, setDoctorRubricTouched] = useState(false)
   const [taRubricTouched, setTaRubricTouched] = useState(false)
+  const [isGeneratingEvaluation, setIsGeneratingEvaluation] = useState(false)
   const [overrideReason, setOverrideReason] = useState("")
   const [loading, setLoading] = useState(false)
   const doctorRubricScoreRef = useRef<number | null>(null)
@@ -732,6 +735,133 @@ function SubmissionDetailDialog({
     setGradeDialogOpen(true)
   }
 
+  async function handleGenerateEvaluation() {
+    if (!submission) return
+    setIsGeneratingEvaluation(true)
+    try {
+      const res = await fetch("/api/evaluate-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submission: {
+            title: submission.title,
+            deliverableType: submission.deliverableType,
+            notes: submission.notes,
+            fileUrl: submission.fileUrl,
+            fileType: submission.fileType,
+          },
+          rubric: doctorRubric,
+        }),
+      })
+
+      if (!res.ok) {
+        let errMsg = "Failed to generate evaluation";
+        try { const errData = await res.json(); if (errData.error) errMsg = errData.error; } catch(e) {}
+        throw new Error(errMsg);
+      }
+      
+      const data = await res.json()
+      
+      // Update the rubric with the AI suggested scores
+      if (data.rubricScores && Array.isArray(data.rubricScores)) {
+        const updatedRubric = doctorRubric.map((item) => {
+          const aiMatch = data.rubricScores.find((aiItem: any) => aiItem.name === item.name)
+          if (aiMatch) {
+            return { ...item, score: aiMatch.score }
+          }
+          return item
+        })
+        setDoctorRubric(updatedRubric)
+        setDoctorRubricTouched(true)
+        
+        // Compute total
+        let total = 0
+        let possible = 0
+        updatedRubric.forEach(r => {
+          total += Number(r.score) || 0
+          possible += Number(r.maxScore) || 0
+        })
+        const scaled = possible > 0 ? Math.round((total / possible) * 100) : 0
+        setDoctorRubricScore(scaled)
+        setGrade(String(scaled))
+      }
+
+      if (data.feedback) {
+        setGradeFeedback(data.feedback)
+      }
+
+      toast.success("AI Evaluation completed")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to generate AI evaluation")
+    } finally {
+      setIsGeneratingEvaluation(false)
+    }
+  }
+
+  async function handleTaGenerateEvaluation() {
+    if (!submission) return
+    setIsGeneratingEvaluation(true)
+    try {
+      const res = await fetch("/api/evaluate-submission", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          submission: {
+            title: submission.title,
+            deliverableType: submission.deliverableType,
+            notes: submission.notes,
+            fileUrl: submission.fileUrl,
+            fileType: submission.fileType,
+          },
+          rubric: taRubric,
+        }),
+      })
+
+      if (!res.ok) {
+        let errMsg = "Failed to generate evaluation";
+        try { const errData = await res.json(); if (errData.error) errMsg = errData.error; } catch(e) {}
+        throw new Error(errMsg);
+      }
+      
+      const data = await res.json()
+      
+      if (data.rubricScores && Array.isArray(data.rubricScores)) {
+        const updatedRubric = taRubric.map((item) => {
+          const aiMatch = data.rubricScores.find((aiItem: any) => aiItem.name === item.name)
+          if (aiMatch) {
+            return { ...item, score: aiMatch.score }
+          }
+          return item
+        })
+        setTaRubric(updatedRubric)
+        setTaRubricTouched(true)
+        
+        let total = 0
+        let possible = 0
+        updatedRubric.forEach(r => {
+          total += Number(r.score) || 0
+          possible += Number(r.maxScore) || 0
+        })
+        const scaled = possible > 0 ? Math.round((total / possible) * 100) : 0
+        
+        taRubricScoreRef.current = scaled
+        setRecommendedGrade(String(scaled))
+      }
+
+      if (data.feedback) {
+        setTaFeedback(data.feedback)
+      }
+
+      toast.success("AI Evaluation completed")
+    } catch (error) {
+      console.error(error)
+      toast.error("Failed to generate AI evaluation")
+    } finally {
+      setIsGeneratingEvaluation(false)
+    }
+  }
+
   function openTaReviewDialog() {
     taGradeManuallyEditedRef.current = false
     taRubricScoreRef.current = null
@@ -742,6 +872,7 @@ function SubmissionDetailDialog({
         : "",
     )
     setTaFeedback(submission.taFeedback || "")
+    void resolveInitialRubric(submission).then(setTaRubric)
     setTaReviewDialogOpen(true)
   }
 
@@ -899,7 +1030,7 @@ function SubmissionDetailDialog({
           </Button>
         </DialogTrigger>
         <DialogContent className={hasMultipleVersions ? "sm:max-w-[1000px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden" : "sm:max-w-[700px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden"}>
-          <div className="flex h-full max-h-[85vh] bg-background">
+          <div className="flex h-full max-h-[85vh] bg-background w-full min-w-0 overflow-hidden">
             {/* Version Sidebar */}
             {hasMultipleVersions && (
               <div className="w-[240px] md:w-[300px] shrink-0 border-r bg-muted/10 flex flex-col hidden md:flex">
@@ -937,7 +1068,7 @@ function SubmissionDetailDialog({
             )}
 
             {/* Main Content */}
-             <div className="flex-1 flex flex-col overflow-y-auto min-w-0 p-6 md:p-8">
+             <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden min-w-0 p-6 md:p-8 w-full max-w-full">
               <DialogHeader className="pb-6 border-b flex flex-row flex-wrap items-start justify-between gap-4 mb-4">
                 <div className="space-y-2">
                   <Badge variant="secondary" className="font-medium bg-secondary/50 text-secondary-foreground mb-1">Version {submission.version}</Badge>
@@ -1033,28 +1164,28 @@ function SubmissionDetailDialog({
                 {submission.notes && (
                   <div>
                     <h4 className="text-base font-semibold mb-3">Submission Notes</h4>
-                    <p className="text-sm text-foreground bg-muted/30 p-4 rounded-xl italic leading-relaxed border">
+                    <p className="text-sm text-foreground bg-muted/30 p-4 rounded-xl italic leading-relaxed border break-words">
                       &quot;{submission.notes}&quot;
                     </p>
                   </div>
                )}
 
                 {submission.fileName && (
-                  <div>
+                  <div className="w-full min-w-0 overflow-hidden">
                     <h4 className="text-base font-semibold mb-3 flex items-center gap-2">
                        <FileUp className="h-4 w-4 text-muted-foreground" /> Deliverable File
                     </h4>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-xl bg-card shadow-sm hover:border-primary/50 transition-all gap-4">
-                      <div className="flex items-center gap-4 min-w-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 border rounded-xl bg-card shadow-sm hover:border-primary/50 transition-all gap-4 w-full min-w-0 overflow-hidden">
+                      <div className="flex items-center gap-4 min-w-0 flex-1 w-full overflow-hidden">
                         <div className="p-3 bg-primary/10 rounded-lg shrink-0">
                           <FileText className="h-6 w-6 text-primary" />
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate">{submission.fileName}</p>
-                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                            <span className="uppercase font-medium tracking-wider">{submission.fileType?.split('/')[1] || submission.fileType || "file"}</span>
-                            <span>•</span>
-                            <span>{formatFileSize(submission.fileSize)}</span>
+                        <div className="min-w-0 flex-1 w-full overflow-hidden">
+                          <p className="text-sm font-semibold truncate block w-full" title={submission.fileName}>{submission.fileName}</p>
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2 truncate block w-full">
+                            <span className="uppercase font-medium tracking-wider shrink-0">{submission.fileType?.split('/')[1] || submission.fileType || "file"}</span>
+                            <span className="shrink-0">•</span>
+                            <span className="shrink-0">{formatFileSize(submission.fileSize)}</span>
                           </p>
                         </div>
                       </div>
@@ -1291,7 +1422,7 @@ function SubmissionDetailDialog({
 
                 {/* ── Actions (branch by role) ── */}
                 {canGrade && submission.status !== "APPROVED" && isLatest && (
-                  <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-6 border-t mt-8 w-full">
                     {isTa && (submission.status === "PENDING" || submission.status === "REVISION_REQUIRED") && (
                       <Button
                         size="lg"
@@ -1437,14 +1568,24 @@ function SubmissionDetailDialog({
                 rows={4}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Button onClick={handleGrade} disabled={loading || deploymentDefenseBlocked} className="flex-1 bg-amber-600 hover:bg-amber-700">
                 {loading ? "Saving..." : "Finalize Grade"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleGenerateEvaluation}
+                disabled={loading || isGeneratingEvaluation || deploymentDefenseBlocked}
+                className="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800"
+              >
+                {isGeneratingEvaluation ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                AI Evaluate
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setGradeDialogOpen(false)}
                 disabled={loading}
+                className="flex-none"
               >
                 Cancel
               </Button>
@@ -1484,6 +1625,7 @@ function SubmissionDetailDialog({
               onChange={handleTaRubricChange}
               onTotalChange={handleTaRubricTotalChange}
               defaultRubricType={submission.deliverableType}
+              compact={true}
             />
 
             {!shouldSubmitTaRubric && taRubric.length > 0 && (
@@ -1499,12 +1641,9 @@ function SubmissionDetailDialog({
                 min={0}
                 max={100}
                 value={recommendedGrade}
-                onChange={(e) => {
-                  taGradeManuallyEditedRef.current = true
-                  setRecommendedGrade(e.target.value)
-                }}
-                placeholder="Driven by rubric, or override here"
-                className="mt-1.5"
+                readOnly
+                placeholder="Driven by rubric"
+                className="mt-1.5 opacity-70 cursor-not-allowed bg-muted"
               />
             </div>
             <div>
@@ -1517,14 +1656,24 @@ function SubmissionDetailDialog({
                 rows={4}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
               <Button onClick={handleTaReview} disabled={loading} className="flex-1 bg-cyan-600 hover:bg-cyan-700">
                 {loading ? "Submitting..." : "Send to Doctor"}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleTaGenerateEvaluation}
+                disabled={loading || isGeneratingEvaluation}
+                className="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800"
+              >
+                {isGeneratingEvaluation ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                AI Evaluate
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setTaReviewDialogOpen(false)}
                 disabled={loading}
+                className="flex-none"
               >
                 Cancel
               </Button>

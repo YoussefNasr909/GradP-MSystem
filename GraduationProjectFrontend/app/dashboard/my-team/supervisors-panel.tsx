@@ -420,7 +420,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
                           <div className="flex items-center gap-3">
                             <div className={`relative p-0.5 rounded-full bg-gradient-to-br ${rankColors[i]}`}>
                               <Avatar className="h-10 w-10 border-2 border-background">
-                                <AvatarImage src={m.doctor?.avatarUrl} />
+                                <AvatarImage src={m.doctor?.avatarUrl ?? undefined} />
                                 <AvatarFallback className="bg-indigo-50 text-indigo-700 font-bold text-sm">
                                   {m.doctor ? getAvatarInitial(m.doctor) : "?"}
                                 </AvatarFallback>
