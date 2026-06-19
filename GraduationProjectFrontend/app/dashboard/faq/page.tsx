@@ -350,7 +350,7 @@ export default function FAQPage() {
     [],
   )
 
-  const getHelpfulCount = (faqId: string, baseHelpful = 0) => baseHelpful + (helpfulUsersByFaq[faqId]?.length || 0)
+  const getHelpfulCount = (faqId: string) => helpfulUsersByFaq[faqId]?.length || 0
   const getVoteState = (faqId: string) => (currentUser?.id && helpfulUsersByFaq[faqId]?.includes(currentUser.id) ? "up" : null)
 
   const filteredFAQs: Array<{ id: string; question: string; answer: string; helpful?: number; category?: string }> = searchQuery
@@ -425,7 +425,7 @@ export default function FAQPage() {
                   key={faq.id}
                   question={faq.question}
                   answer={faq.answer}
-                  helpfulCount={getHelpfulCount(faq.id, faq.helpful)}
+                  helpfulCount={getHelpfulCount(faq.id)}
                   isExpanded={expandedQuestions.includes(faq.question)}
                   onToggle={() => toggleQuestion(faq.question)}
                   vote={getVoteState(faq.id)}
@@ -501,7 +501,7 @@ export default function FAQPage() {
                     <FAQItem
                       question={faq.question}
                       answer={faq.answer}
-                      helpfulCount={getHelpfulCount(faqId, faq.helpful)}
+                      helpfulCount={getHelpfulCount(faqId)}
                       isExpanded={expandedQuestions.includes(faq.question)}
                       onToggle={() => toggleQuestion(faq.question)}
                       vote={getVoteState(faqId)}
@@ -608,7 +608,7 @@ function FAQItem({
             <div className="px-4 pb-4 pt-0 border-t">
               <p className="text-muted-foreground mt-4 leading-relaxed">{answer}</p>
               <div className="mt-4 pt-4 border-t space-y-3">
-                <div className="flex flex-col items-end gap-2">
+                <div className="flex flex-col items-start gap-2">
                   <div className="text-sm text-muted-foreground">Was this helpful?</div>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Button
@@ -630,7 +630,7 @@ function FAQItem({
                     </span>
                   </div>
                   {showCounted && (
-                    <p className="text-sm text-primary mt-1 text-right">
+                    <p className="text-sm text-primary mt-1 text-left">
                       Your helpful vote has been counted for this FAQ card.
                     </p>
                   )}
