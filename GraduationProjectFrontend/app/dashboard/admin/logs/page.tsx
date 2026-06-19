@@ -113,15 +113,16 @@ function SummaryTile({
   tone: string
 }) {
   return (
-    <Card className="border-border/60 bg-card/80 p-4 shadow-sm">
+    <Card className="relative overflow-visible border-border/60 bg-card/80 p-4 pr-16 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         </div>
-        <div className={cn("rounded-2xl border p-2.5", tone)}>
-          <Icon className="h-4 w-4" />
-        </div>
+      </div>
+
+      <div className={cn("absolute -right-3 top-1/2 -translate-y-1/2 rounded-full border p-2.5", tone)}>
+        <Icon className="h-4 w-4" />
       </div>
     </Card>
   )
@@ -361,7 +362,7 @@ export default function AdminLogsPage() {
             </div>
           </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4 items-start">
             <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
             <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
             <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
