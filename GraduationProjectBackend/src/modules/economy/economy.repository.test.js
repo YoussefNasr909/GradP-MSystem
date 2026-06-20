@@ -4,16 +4,37 @@ import { prisma } from "../../loaders/dbLoader.js";
 import {
   awardCoinsForXpTransaction,
   claimQuestRewardTransaction,
+  countMetricForUser,
+  ECONOMY_TRANSACTION_OPTIONS,
   equipRewardPurchaseTransaction,
   purchaseRewardTransaction,
 } from "./economy.repository.js";
 
-function mockPrismaTransaction(t, tx) {
+function overridePrismaProperty(t, key, value) {
+  const descriptor = Object.getOwnPropertyDescriptor(prisma, key);
+  Object.defineProperty(prisma, key, {
+    configurable: true,
+    writable: true,
+    value,
+  });
+  t.after(() => {
+    if (descriptor) {
+      Object.defineProperty(prisma, key, descriptor);
+    } else {
+      delete prisma[key];
+    }
+  });
+}
+
+function mockPrismaTransaction(t, tx, onOptions = () => {}) {
   const originalTransaction = prisma.$transaction;
   Object.defineProperty(prisma, "$transaction", {
     configurable: true,
     writable: true,
-    value: async (callback) => callback(tx),
+    value: async (callback, options) => {
+      onOptions(options);
+      return callback(tx);
+    },
   });
   t.after(() => {
     Object.defineProperty(prisma, "$transaction", {
@@ -79,6 +100,83 @@ test("purchaseRewardTransaction atomically refuses purchases that would overdraw
     calls.find((call) => call.model === "userCoinBalance" && call.method === "updateMany").args.where,
     { userId: "user-1", balance: { gte: 150 } },
   );
+});
+
+test("purchaseRewardTransaction uses extended economy transaction options", async (t) => {
+  const tx = {
+    rewardItem: {
+      findUnique: async () => null,
+    },
+  };
+  let receivedOptions = null;
+  mockPrismaTransaction(t, tx, (options) => {
+    receivedOptions = options;
+  });
+
+  await purchaseRewardTransaction({ userId: "user-1", rewardItemId: "missing-reward" });
+
+  assert.deepEqual(receivedOptions, ECONOMY_TRANSACTION_OPTIONS);
+});
+
+test("purchaseRewardTransaction refuses any existing purchase record before debiting", async (t) => {
+  const calls = [];
+  const existingPurchase = {
+    id: "purchase-1",
+    userId: "user-1",
+    rewardItemId: "reward-1",
+    status: "REVOKED",
+    isEquipped: false,
+    equippedAt: null,
+    rewardItem: { id: "reward-1", type: "TITLE", name: "Archived title" },
+    coinTransaction: { id: "coin-1" },
+  };
+  const tx = {
+    rewardItem: {
+      findUnique: async () => ({
+        id: "reward-1",
+        code: "TITLE_TEST",
+        name: "Test Title",
+        description: "Test",
+        type: "TITLE",
+        cost: 80,
+        status: "ACTIVE",
+        inventory: null,
+        imageUrl: null,
+        metadata: null,
+        sortOrder: 1,
+      }),
+    },
+    rewardPurchase: {
+      findUnique: async () => existingPurchase,
+      count: async () => {
+        calls.push({ model: "rewardPurchase", method: "count" });
+        return 0;
+      },
+      create: async (args) => {
+        calls.push({ model: "rewardPurchase", method: "create", args });
+        return args;
+      },
+    },
+    userCoinBalance: {
+      updateMany: async (args) => {
+        calls.push({ model: "userCoinBalance", method: "updateMany", args });
+        return { count: 1 };
+      },
+    },
+    coinTransaction: {
+      create: async (args) => {
+        calls.push({ model: "coinTransaction", method: "create", args });
+        return args;
+      },
+    },
+  };
+  mockPrismaTransaction(t, tx);
+
+  const result = await purchaseRewardTransaction({ userId: "user-1", rewardItemId: "reward-1" });
+
+  assert.equal(result.kind, "ALREADY_OWNED");
+  assert.equal(result.purchase, existingPurchase);
+  assert.equal(calls.length, 0);
 });
 
 test("purchaseRewardTransaction debits wallet and records immutable transaction", async (t) => {
@@ -273,4 +371,53 @@ test("awardCoinsForXpTransaction grants deterministic coins for awarded user XP"
   assert.equal(calls[0].args.data.idempotencyKey, "XP_AWARD:xp-1");
   assert.equal(calls[0].args.data.sourceType, "XP_AWARD");
   assert.deepEqual(calls[1].args.update.balance, { increment: 8 });
+});
+
+test("countMetricForUser counts processed sprint completions for the user's led and member teams", async (t) => {
+  const countCalls = [];
+  overridePrismaProperty(t, "team", {
+    findMany: async (args) => {
+      assert.deepEqual(args.where.OR, [
+        { leaderId: "user-1" },
+        { members: { some: { userId: "user-1" } } },
+      ]);
+      return [{ id: "team-led" }, { id: "team-member" }];
+    },
+  });
+  overridePrismaProperty(t, "gamificationEvent", {
+    count: async (args) => {
+      countCalls.push(args);
+      return 2;
+    },
+  });
+
+  const start = new Date("2026-05-01T00:00:00.000Z");
+  const end = new Date("2026-06-01T00:00:00.000Z");
+  const result = await countMetricForUser("user-1", "SPRINTS_COMPLETED", { start, end });
+
+  assert.equal(result, 2);
+  assert.equal(countCalls.length, 1);
+  assert.deepEqual(countCalls[0].where, {
+    eventType: "SPRINT_COMPLETED",
+    sourceType: "Sprint",
+    teamId: { in: ["team-led", "team-member"] },
+    status: "PROCESSED",
+    occurredAt: { gte: start, lt: end },
+  });
+  assert.equal(countCalls[0].where.actorUserId, undefined);
+});
+
+test("countMetricForUser returns zero sprint completions for unrelated users with no team", async (t) => {
+  overridePrismaProperty(t, "team", {
+    findMany: async () => [],
+  });
+  overridePrismaProperty(t, "gamificationEvent", {
+    count: async () => {
+      throw new Error("Sprint completion events should not be queried when the user has no team.");
+    },
+  });
+
+  const result = await countMetricForUser("unrelated-user", "SPRINTS_COMPLETED", {});
+
+  assert.equal(result, 0);
 });

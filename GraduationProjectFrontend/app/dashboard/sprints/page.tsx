@@ -50,7 +50,6 @@ import { TeamRequiredGuard } from "@/components/team-required-guard"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 import { sprintsApi } from "@/lib/api/sprints"
-import { tasksApi } from "@/lib/api/tasks"
 import type {
   ApiSprint,
   ApiSprintBoard,
@@ -112,6 +111,7 @@ type EvaluationFormState = {
 }
 
 type EvaluationFormErrors = Partial<Record<keyof ApiSprintEvaluationCriteria | "feedback" | "form", string>>
+type SprintTaskMetaPatch = Pick<ApiSprintTask, "storyPoints" | "actualPoints" | "unplanned">
 
 const DEFAULT_SPRINT_FORM: SprintFormState = {
   name: "",
@@ -529,7 +529,7 @@ function SprintTaskCard({
   isBusy: boolean
   reduceMotion: boolean
   onMove: (task: ApiSprintTask, sprintId: string) => void
-  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<SprintTaskMetaPatch>) => void
 }) {
   const sprintOptions = board.sprints
     .filter((sprint) => sprint.status !== "COMPLETED" || sprint.id === task.sprintId)
@@ -1100,7 +1100,7 @@ function SprintGroup({
   onStart: (id: string) => void
   onComplete: (id: string) => void
   onMove: (task: ApiSprintTask, sprintId: string) => void
-  onMetaChange: (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => void
+  onMetaChange: (task: ApiSprintTask, meta: Partial<SprintTaskMetaPatch>) => void
   onEvaluationDraftChange: (sprintId: string, updater: (current: EvaluationFormState) => EvaluationFormState) => void
   onReviewCommentChange: (evaluationId: string, value: string) => void
   onSaveEvaluation: (sprint: ApiSprint, status: Extract<ApiSprintEvaluationStatus, "DRAFT" | "SUBMITTED">) => void
@@ -1687,12 +1687,12 @@ export default function SprintsPage() {
     }
   }
 
-  const handleTaskMetaChange = useCallback(async (task: ApiSprintTask, meta: Partial<ApiSprintTask>) => {
+  const handleTaskMetaChange = useCallback(async (task: ApiSprintTask, meta: Partial<SprintTaskMetaPatch>) => {
     if (actionInFlight) return
     setActionInFlight(`meta-${task.id}`)
 
     try {
-      await tasksApi.update(task.id, meta as any)
+      await sprintsApi.updateTask(task.id, meta)
       await loadBoard()
       toast.success("Task updated.")
     } catch (error: any) {

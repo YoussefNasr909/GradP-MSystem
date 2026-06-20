@@ -1,6 +1,7 @@
 import { prisma } from "../../loaders/dbLoader.js";
 import { evaluateBadgesForTeam, evaluateBadgesForUser } from "./gamification.badges.js";
 import { computeLevel } from "./gamification.math.js";
+import { GAMIFICATION_TRANSACTION_OPTIONS } from "./gamification.transactions.js";
 
 // ─── Select shapes (safe DTOs — no sensitive anti-cheat internals) ───
 
@@ -155,7 +156,29 @@ export async function listAllBadgeDefinitions() {
 // ─── Leaderboards ────────────────────────────────────────────
 
 export async function listLeaderboardSnapshots(type, { page, limit }) {
-  const where = { leaderboardType: type };
+  const baseWhere = {
+    leaderboardType: type,
+    scopeType: "GLOBAL",
+    scopeId: null,
+  };
+  const latestSnapshot = await prisma.leaderboardSnapshot.findFirst({
+    where: baseWhere,
+    select: {
+      periodStart: true,
+      periodEnd: true,
+    },
+    orderBy: [{ periodEnd: "desc" }, { generatedAt: "desc" }],
+  });
+
+  if (!latestSnapshot) {
+    return { items: [], total: 0, page, limit, totalPages: 0 };
+  }
+
+  const where = {
+    ...baseWhere,
+    periodStart: latestSnapshot.periodStart,
+    periodEnd: latestSnapshot.periodEnd,
+  };
 
   const [items, total] = await Promise.all([
     prisma.leaderboardSnapshot.findMany({
@@ -468,7 +491,7 @@ export function resolveSuspiciousCaseTransaction({
     });
 
     return { outcome: "RESOLVED", case: resolvedCase };
-  });
+  }, GAMIFICATION_TRANSACTION_OPTIONS);
 }
 
 async function resolveUserFrozenTransaction(tx, userId, amount, approved) {
@@ -677,7 +700,7 @@ export async function createAdjustmentRequest({
     });
 
     return request;
-  });
+  }, GAMIFICATION_TRANSACTION_OPTIONS);
 }
 
 export async function findAdjustmentRequestForReview(adjustmentId) {
@@ -931,7 +954,7 @@ export function reviewAdjustmentRequestTransaction({
     });
 
     return { outcome: nextStatus, request: updatedRequest, transaction };
-  });
+  }, GAMIFICATION_TRANSACTION_OPTIONS);
 }
 
 export async function listAuditLogs({ page, limit, action, targetType, targetId }) {

@@ -111,6 +111,6 @@ export async function generateLeaderboardSnapshots(req, res) {
 // ─── Processor trigger (Admin only) ──────────────────────────
 
 export async function processEvents(req, res) {
-  const result = await processPendingEvents();
+  const result = await processPendingEvents(req.validated?.body ?? {});
   res.json({ ok: true, data: result });
 }

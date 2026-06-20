@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../loaders/dbLoader.js";
 import { env } from "../../config/env.js";
 import { notify } from "../../common/utils/notify.js";
@@ -6,17 +5,23 @@ import { matchRules, calculateXp } from "./gamification.rules-engine.js";
 import { evaluateBadgesForTeam, evaluateBadgesForUser } from "./gamification.badges.js";
 import { computeLevel } from "./gamification.math.js";
 import { awardCoinsForXpTransaction } from "../economy/economy.repository.js";
+import {
+  GAMIFICATION_TRANSACTION_OPTIONS,
+  MAX_SERIALIZATION_RETRIES,
+  isPrismaSerializationConflict,
+} from "./gamification.transactions.js";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 3;
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 
-export async function processPendingEvents() {
+export async function processPendingEvents({ retryFailed = false, eventIds = [] } = {}) {
   if (!env.gamificationEnabled) {
     return {
       processed: 0,
       failed: 0,
       skipped: 0,
+      retried: 0,
       disabled: true,
       reason: "Gamification is disabled. Set GAMIFICATION_ENABLED=true to enable it.",
     };
@@ -27,9 +32,27 @@ export async function processPendingEvents() {
       processed: 0,
       failed: 0,
       skipped: 0,
+      retried: 0,
       disabled: true,
       reason: "Gamification processing is disabled. Set GAMIFICATION_WORKER_ENABLED=true to award XP.",
     };
+  }
+
+  let retried = 0;
+  if (retryFailed) {
+    const retryResult = await prisma.gamificationEvent.updateMany({
+      where: {
+        status: "FAILED",
+        ...(eventIds.length > 0 ? { id: { in: eventIds } } : {}),
+      },
+      data: {
+        status: "PENDING",
+        attempts: 0,
+        lastError: null,
+        processedAt: null,
+      },
+    });
+    retried = retryResult.count;
   }
 
   const staleProcessingBefore = new Date(Date.now() - PROCESSING_STALE_MS);
@@ -53,7 +76,7 @@ export async function processPendingEvents() {
   });
 
   if (events.length === 0) {
-    return { processed: 0, failed: 0, skipped: 0 };
+    return { processed: 0, failed: 0, skipped: 0, retried };
   }
 
   const activeRules = await prisma.gamificationRule.findMany({
@@ -150,7 +173,7 @@ export async function processPendingEvents() {
     }
   }
 
-  return { processed, failed, skipped };
+  return { processed, failed, skipped, retried };
 }
 
 export async function processRuleForEvent(event, rule) {
@@ -207,7 +230,6 @@ export async function processRuleForEvent(event, rule) {
     recipientTeamId,
   });
 
-  const MAX_SERIALIZATION_RETRIES = 3;
   let attempt = 0;
 
   while (attempt < MAX_SERIALIZATION_RETRIES) {
@@ -334,12 +356,10 @@ export async function processRuleForEvent(event, rule) {
             triggeringTransaction: transaction,
           });
         }
-      }, {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      });
+      }, GAMIFICATION_TRANSACTION_OPTIONS);
       break; // Success, exit retry loop
     } catch (error) {
-      if (error.code === "P2034") {
+      if (isPrismaSerializationConflict(error)) {
         attempt++;
         if (attempt >= MAX_SERIALIZATION_RETRIES) {
           throw error;
@@ -593,7 +613,7 @@ export async function processTaskReopenedEvent(event) {
       });
       await notifyXpTransaction(tx, { transaction: originalTransaction, kind: "REVERSED" });
     }
-  });
+  }, GAMIFICATION_TRANSACTION_OPTIONS);
 
   await prisma.gamificationEvent.update({
     where: { id: event.id },

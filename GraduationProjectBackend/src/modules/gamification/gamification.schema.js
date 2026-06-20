@@ -181,3 +181,15 @@ export const generateLeaderboardSnapshotsSchema = z.object({
     .optional()
     .default({}),
 });
+
+export const processEventsSchema = z.object({
+  params: z.object({}).optional().default({}),
+  query: z.object({}).optional().default({}),
+  body: z
+    .object({
+      retryFailed: z.boolean().optional().default(false),
+      eventIds: z.array(z.string().trim().min(1)).max(50).optional().default([]),
+    })
+    .optional()
+    .default({ retryFailed: false, eventIds: [] }),
+});
