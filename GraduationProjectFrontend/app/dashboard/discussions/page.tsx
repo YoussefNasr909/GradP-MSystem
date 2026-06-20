@@ -1523,22 +1523,22 @@ export default function DiscussionsPage() {
           }
         }}
       >
-        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-3xl border border-border/70 bg-background/95 p-0 shadow-2xl ring-1 ring-primary/10 sm:max-w-[min(1280px,96vw)] [&_[data-slot=dialog-close]]:right-4 [&_[data-slot=dialog-close]]:top-4 [&_[data-slot=dialog-close]]:z-20 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:border [&_[data-slot=dialog-close]]:border-border/70 [&_[data-slot=dialog-close]]:bg-background/95 [&_[data-slot=dialog-close]]:p-2 [&_[data-slot=dialog-close]]:opacity-100 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-muted">
-          <DialogHeader className="relative border-b border-border/70 bg-gradient-to-br from-primary/[0.075] via-background to-background px-5 py-5 pr-20 shadow-sm sm:px-7 sm:py-6 sm:pr-24">
+        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/70 bg-background/95 p-0 shadow-2xl ring-1 ring-primary/10 sm:rounded-3xl sm:max-w-[min(1280px,96vw)] [&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:z-20 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:border [&_[data-slot=dialog-close]]:border-border/70 [&_[data-slot=dialog-close]]:bg-background/95 [&_[data-slot=dialog-close]]:p-1.5 [&_[data-slot=dialog-close]]:opacity-100 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-muted">
+          <DialogHeader className="relative border-b border-border/70 bg-gradient-to-br from-primary/[0.075] via-background to-background px-4 py-4 pr-12 shadow-sm sm:px-7 sm:py-6 sm:pr-24">
             <div className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-primary/70 sm:inset-x-8" aria-hidden="true" />
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-2">
+              <div className="min-w-0 overflow-hidden space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                  <span>{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
+                  <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="shrink-0">{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
                   {selectedDiscussion ? (
                     <>
-                      <span className="text-border">/</span>
-                      <span>{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
+                      <span className="text-border shrink-0">/</span>
+                      <span className="truncate">{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
                     </>
                   ) : null}
                 </div>
-                <DialogTitle className="max-w-4xl break-words pr-2 text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl">
+                <DialogTitle className="max-w-4xl break-words text-xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl">
                   {selectedDiscussion?.title ?? selectedDiscussionSummary?.title ?? "Discussion details"}
                 </DialogTitle>
                 {selectedDiscussion ? (
@@ -1553,7 +1553,7 @@ export default function DiscussionsPage() {
               </div>
 
               {selectedDiscussion ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-2 pr-2 lg:max-w-[48%] lg:justify-end lg:pr-8 xl:pr-10">
+                <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:max-w-[48%] lg:justify-end lg:pr-8 xl:pr-10">
                   <Badge variant="secondary" className="h-9 gap-1.5 rounded-full px-3">
                     <MessageCircle className="h-3.5 w-3.5" />
                     <span className="tabular-nums">{selectedDiscussion.commentCount}</span>
@@ -1643,8 +1643,8 @@ export default function DiscussionsPage() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                      <div className="flex gap-4">
-                        <Avatar className="h-12 w-12 shrink-0 border border-primary/20 bg-background shadow-sm">
+                      <div className="flex min-w-0 gap-3 sm:gap-4">
+                        <Avatar className="h-10 w-10 shrink-0 border border-primary/20 bg-background shadow-sm sm:h-12 sm:w-12">
                           <AvatarImage
                             src={selectedDiscussion.author.avatarUrl ?? undefined}
                             alt={selectedDiscussion.author.fullName}

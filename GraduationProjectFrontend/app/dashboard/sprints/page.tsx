@@ -542,7 +542,7 @@ function SprintTaskCard({
       layout
       transition={{ duration: reduceMotion ? 0 : 0.22, ease: EASE_OUT_QUINT }}
       className={cn(
-        "rounded-lg border border-border/70 bg-background/85 p-3 shadow-sm transition-[border-color,box-shadow,transform] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md",
+        "overflow-hidden rounded-lg border border-border/70 bg-background/85 p-3 shadow-sm transition-[border-color,box-shadow,transform] duration-200 motion-safe:hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-md",
         isBusy && "pointer-events-none opacity-70"
       )}
     >
@@ -981,7 +981,7 @@ function SprintEvaluationPanel({
             </div>
           </div>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             {EVALUATION_CRITERIA.map((criterion) => {
               const liveError = getCriterionFieldError(draft.criteria[criterion.key], false)
               const message = liveError || (draft.criteria[criterion.key].trim() === "" ? formErrors[criterion.key] : "")
@@ -1146,7 +1146,7 @@ function SprintGroup({
       </button>
 
       <div className="border-t border-border/70 px-4 py-3">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span>{sprint.stats.totalTasks} tasks</span>
             <span>{sprint.stats.unplannedTasks} unplanned</span>
@@ -2011,7 +2011,7 @@ export default function SprintsPage() {
                 hidden: { opacity: 0 },
                 show: { opacity: 1, transition: { staggerChildren: 0.06 } },
               }}
-              className="grid gap-4 md:grid-cols-2 xl:grid-cols-5"
+              className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
             >
               <motion.div
                 variants={{ hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0 } }}
@@ -2312,11 +2312,12 @@ export default function SprintsPage() {
                   </div>
                 </Card>
 
-                <div className="grid gap-3 xl:grid-cols-5">
+                <div className="overflow-x-auto pb-2">
+                <div className="flex min-w-max gap-3 xl:grid xl:min-w-0 xl:grid-cols-5">
                   {kanbanTasksByStatus.map((column) => {
                     const Icon = column.icon
                     return (
-                      <section key={column.status} className="rounded-lg border border-border/70 bg-background/70">
+                      <section key={column.status} className="w-64 shrink-0 rounded-lg border border-border/70 bg-background/70 xl:w-auto">
                         <div className="flex items-center justify-between border-b border-border/70 p-3">
                           <div className="flex items-center gap-2">
                             <span className={cn("flex h-7 w-7 items-center justify-center rounded-md text-white", column.color)}>
@@ -2349,6 +2350,7 @@ export default function SprintsPage() {
                       </section>
                     )
                   })}
+                </div>
                 </div>
               </TabsContent>
 
