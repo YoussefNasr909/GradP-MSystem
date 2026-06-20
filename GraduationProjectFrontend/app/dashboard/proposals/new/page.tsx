@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { AlertTriangle, CheckCircle2, Circle, FileText, Plus, X, ArrowLeft, Save, Send, Lock } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Circle, FileText, Plus, X, ArrowLeft, Save, Send, Lock, Sparkles, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { proposalsApi } from "@/lib/api/proposals"
 import type { ProposalBody } from "@/lib/api/proposals"
+import { teamsApi } from "@/lib/api/teams"
 
 // ─── Chip Input ──────────────────────────────────────────────────────────────
 
@@ -124,6 +125,36 @@ export default function NewProposalPage() {
   })
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [aiGenerating, setAiGenerating] = useState(false)
+
+  async function handleGenerateWithAI() {
+    setAiGenerating(true)
+    try {
+      const teamState = await teamsApi.my()
+      const team = teamState.team
+      if (!team) {
+        toast.error("You need a team before generating a proposal.")
+        return
+      }
+      const res = await fetch("/api/generate-proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectDescription: team.bio,
+          teamSize: team.maxMembers,
+          technologies: team.stack,
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to generate proposal")
+      const generated = await res.json() as ProposalBody
+      setBody(generated)
+      toast.success("Proposal generated! Review and edit before submitting.")
+    } catch {
+      toast.error("Failed to generate proposal. Please try again.")
+    } finally {
+      setAiGenerating(false)
+    }
+  }
 
   function set<K extends keyof ProposalBody>(key: K, value: ProposalBody[K]) {
     setBody((prev) => ({ ...prev, [key]: value }))
@@ -205,6 +236,38 @@ export default function NewProposalPage() {
             <p className="text-sm text-muted-foreground">Save as draft now, or submit for doctor review.</p>
           </div>
         </div>
+      </div>
+
+      {/* AI Banner */}
+      <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">Generate proposal with AI</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              AI will fill all fields based on your team's project description. You can edit everything before submitting.
+            </p>
+          </div>
+        </div>
+        <Button
+          onClick={() => void handleGenerateWithAI()}
+          disabled={aiGenerating}
+          className="shrink-0 rounded-xl px-6 font-bold shadow-sm shadow-primary/20"
+        >
+          {aiGenerating ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate with AI
+            </>
+          )}
+        </Button>
       </div>
 
       {/* Form */}

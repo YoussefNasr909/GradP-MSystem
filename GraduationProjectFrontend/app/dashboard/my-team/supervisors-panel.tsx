@@ -527,8 +527,8 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
         open={Boolean(selectedSupervisor)}
         onOpenChange={(open) => !open && !sendingRequest && setSelectedSupervisor(null)}
       >
-        <DialogContent className="rounded-xl sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="rounded-xl sm:max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="text-xl">Send supervision request</DialogTitle>
             <DialogDescription>
               {selectedSupervisor
@@ -537,7 +537,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5">
+          <div className="space-y-5 overflow-y-auto pr-1">
             {selectedSupervisor && (
               <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/15 p-3">
                 <Avatar className="h-12 w-12 border border-border/60">
@@ -592,7 +592,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 sm:gap-2 shrink-0">
             <Button variant="outline" className="rounded-lg" onClick={() => setSelectedSupervisor(null)} disabled={sendingRequest}>
               Cancel
             </Button>

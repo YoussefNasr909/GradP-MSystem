@@ -3,7 +3,7 @@ import { TEAM_STAGE_VALUES } from "../../common/constants/teamStages.js";
 import { TEAM_VISIBILITY_VALUES } from "../../common/constants/teamVisibilities.js";
 
 const teamNameSchema = z.string().trim().min(3, "Team name must be at least 3 characters").max(120);
-const teamBioSchema = z.string().trim().min(10, "Team bio must be at least 10 characters").max(1000);
+const teamBioSchema = z.string().trim().min(10, "Team bio must be at least 10 characters").max(2000);
 const teamStackSchema = z.array(z.string().trim().min(1).max(50)).max(12).default([]);
 const maxMembersSchema = z.coerce.number().int().min(3).max(6);
 
