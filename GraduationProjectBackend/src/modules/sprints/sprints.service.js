@@ -659,7 +659,7 @@ function emitSprintCompletedGamificationEvent(sprint, actor) {
 
 function canSeeEvaluation(actor, teamRole, evaluation) {
   if (actor.role === ROLES.ADMIN || teamRole === ROLES.DOCTOR || teamRole === ROLES.TA) return true;
-  return [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.APPROVED].includes(evaluation.status);
+  return evaluation.status === EVALUATION_STATUS.APPROVED;
 }
 
 function canEditEvaluation(actor, teamRole, evaluation) {

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, CheckCircle2, Coins, Gift, Loader2, RefreshCw, Search, ShieldAlert, SlidersHorizontal, Sparkles, Target } from "lucide-react"
+import { AlertCircle, CheckCircle2, Coins, Crown, Gift, Loader2, Medal, Palette, RefreshCw, Search, Shield, ShieldAlert, SlidersHorizontal, Sparkles, Target } from "lucide-react"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { usersApi } from "@/lib/api/users"
 import { teamsApi } from "@/lib/api/teams"
+import { getRewardStyle } from "@/lib/gamification/reward-styles"
 import type { ApiDirectoryUser, ApiTeamSummary } from "@/lib/api/types"
 import {
   gamificationApi,
@@ -39,6 +40,12 @@ const QUEST_METRICS: QuestMetric[] = [
   "LOGIN_STREAK",
 ]
 const REWARD_TYPES: RewardItem["type"][] = ["TITLE", "AVATAR_FRAME", "PROFILE_THEME", "BADGE_SKIN"]
+const rewardTypeIcons: Record<RewardItem["type"], typeof Gift> = {
+  TITLE: Crown,
+  AVATAR_FRAME: Shield,
+  PROFILE_THEME: Palette,
+  BADGE_SKIN: Medal,
+}
 
 type AdjustmentTargetType = "USER" | "TEAM"
 
@@ -140,6 +147,43 @@ function PaginationControls({
         <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
           Next
         </Button>
+      </div>
+    </div>
+  )
+}
+
+function RewardTypePreview({
+  type,
+  name,
+  description,
+  status,
+}: {
+  type: RewardItem["type"]
+  name: string
+  description?: string
+  status?: RewardItem["status"]
+}) {
+  const style = getRewardStyle(type)
+  const Icon = rewardTypeIcons[type] ?? Gift
+
+  return (
+    <div className={`rounded-md border p-3 ${style.previewClass}`}>
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${style.iconClass}`}>
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold">{name || style.previewLabel}</p>
+            <Badge variant="outline" className={`text-xs ${style.badgeClass}`}>{style.label}</Badge>
+            {status && <Badge variant={statusVariant(status)} className="text-xs">{status}</Badge>}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">{description || style.description}</p>
+          <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className={`h-3 w-10 rounded-full bg-gradient-to-r ${style.swatchClass}`} />
+            {style.shortLabel} preview
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -741,6 +785,7 @@ function EconomyAdminTab({ canEdit }: { canEdit: boolean }) {
       <div>
         <h2 className="text-xl font-semibold">Economy Management</h2>
         <p className="text-sm text-muted-foreground">Create quest goals and store rewards without changing XP ledger rules.</p>
+        {!canEdit && <p className="mt-1 text-xs text-muted-foreground">Read-only staff view. Reward and quest creation stays admin-only.</p>}
       </div>
       {error && <ErrorPanel message={error} onRetry={load} />}
       {loading ? <LoadingPanel /> : (
@@ -803,12 +848,18 @@ function EconomyAdminTab({ canEdit }: { canEdit: boolean }) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Select value={rewardForm.type} onValueChange={(value) => setRewardForm((v) => ({ ...v, type: value as RewardItem["type"] }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{REWARD_TYPES.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+                    <SelectContent>{REWARD_TYPES.map((value) => <SelectItem key={value} value={value}>{getRewardStyle(value).label}</SelectItem>)}</SelectContent>
                   </Select>
                   <Input placeholder="Cost" value={rewardForm.cost} onChange={(event) => setRewardForm((v) => ({ ...v, cost: event.target.value }))} />
                   <Input placeholder="Inventory blank = unlimited" value={rewardForm.inventory} onChange={(event) => setRewardForm((v) => ({ ...v, inventory: event.target.value }))} />
                   <Input placeholder="Sort order" value={rewardForm.sortOrder} onChange={(event) => setRewardForm((v) => ({ ...v, sortOrder: event.target.value }))} />
                 </div>
+                <RewardTypePreview
+                  type={rewardForm.type}
+                  name={rewardForm.name}
+                  description={rewardForm.description}
+                  status={rewardForm.status}
+                />
                 <Button disabled={!rewardValid || saving === "reward"} onClick={createReward}>
                   {saving === "reward" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Gift className="mr-2 h-4 w-4" />}
                   Create Reward
@@ -816,26 +867,42 @@ function EconomyAdminTab({ canEdit }: { canEdit: boolean }) {
               </div>
             )}
             <div className="space-y-2">
-              {rewards?.items.map((reward) => (
-                <div key={reward.id} className="rounded-md border p-3 text-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{reward.name}</div>
-                      <div className="text-xs text-muted-foreground">{reward.code} | {reward.type} | {reward.status}</div>
-                      <div className="text-xs text-muted-foreground">{reward.cost} coins | {reward.inventory ?? "unlimited"} inventory</div>
+              {rewards?.items.map((reward) => {
+                const style = getRewardStyle(reward.type)
+                return (
+                  <div key={reward.id} className={`rounded-md border p-3 text-sm ${style.cardClass}`}>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium">{reward.name}</div>
+                          <div className="text-xs text-muted-foreground">{reward.code}</div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                            <Badge variant="outline" className={`text-xs ${style.badgeClass}`}>{style.label}</Badge>
+                            <Badge variant={statusVariant(reward.status)} className="text-xs">{reward.status}</Badge>
+                            <span>{reward.cost} coins</span>
+                            <span>{reward.inventory ?? "unlimited"} inventory</span>
+                          </div>
+                        </div>
+                        {canEdit && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => updateRewardStatus(reward, reward.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}
+                          >
+                            {reward.status === "ACTIVE" ? "Disable" : "Enable"}
+                          </Button>
+                        )}
+                      </div>
+                      <RewardTypePreview
+                        type={reward.type}
+                        name={reward.name}
+                        description={reward.description}
+                        status={reward.status}
+                      />
                     </div>
-                    {canEdit && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateRewardStatus(reward, reward.status === "ACTIVE" ? "INACTIVE" : "ACTIVE")}
-                      >
-                        {reward.status === "ACTIVE" ? "Disable" : "Enable"}
-                      </Button>
-                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
             {rewards && <PaginationControls page={rewards.page} totalPages={rewards.totalPages} total={rewards.total} onPageChange={setRewardPage} />}
           </Card>
@@ -852,12 +919,15 @@ export default function GamificationAdminPage() {
   const canReview = REVIEW_ROLES.has(role)
   const [snapshotMessage, setSnapshotMessage] = useState("")
   const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const [processorMessage, setProcessorMessage] = useState("")
+  const [processorBusy, setProcessorBusy] = useState<"pending" | "failed" | null>(null)
 
   const title = useMemo(() => (role === "ta" ? "Gamification Review" : "Gamification Admin"), [role])
 
   const generateSnapshots = async () => {
     setSnapshotBusy(true)
     setSnapshotMessage("")
+    setProcessorMessage("")
     try {
       const result = await gamificationApi.generateLeaderboardSnapshots()
       setSnapshotMessage(`Generated ${result.generated} leaderboard snapshot rows.`)
@@ -865,6 +935,24 @@ export default function GamificationAdminPage() {
       setSnapshotMessage(err?.message ?? "Snapshot generation failed.")
     } finally {
       setSnapshotBusy(false)
+    }
+  }
+
+  const runProcessor = async (retryFailed: boolean) => {
+    setProcessorBusy(retryFailed ? "failed" : "pending")
+    setProcessorMessage("")
+    setSnapshotMessage("")
+    try {
+      const result = await gamificationApi.processEvents({ retryFailed })
+      const retried = result.retried ? ` Retried ${result.retried}.` : ""
+      const disabled = result.disabled && result.reason ? ` ${result.reason}` : ""
+      setProcessorMessage(
+        `Processed ${result.processed}, failed ${result.failed}, skipped ${result.skipped}.${retried}${disabled}`,
+      )
+    } catch (err: any) {
+      setProcessorMessage(err?.message ?? "Event processing failed.")
+    } finally {
+      setProcessorBusy(null)
     }
   }
 
@@ -894,8 +982,18 @@ export default function GamificationAdminPage() {
         </div>
         {role === "admin" && (
           <div className="flex flex-wrap items-center gap-2">
-            {snapshotMessage && <span className="text-sm text-muted-foreground">{snapshotMessage}</span>}
-            <Button variant="outline" onClick={generateSnapshots} disabled={snapshotBusy}>
+            {(processorMessage || snapshotMessage) && (
+              <span className="max-w-xl text-sm text-muted-foreground">{processorMessage || snapshotMessage}</span>
+            )}
+            <Button variant="outline" onClick={() => runProcessor(false)} disabled={processorBusy !== null || snapshotBusy}>
+              {processorBusy === "pending" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Process Pending
+            </Button>
+            <Button variant="outline" onClick={() => runProcessor(true)} disabled={processorBusy !== null || snapshotBusy}>
+              {processorBusy === "failed" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldAlert className="mr-2 h-4 w-4" />}
+              Retry Failed
+            </Button>
+            <Button variant="outline" onClick={generateSnapshots} disabled={snapshotBusy || processorBusy !== null}>
               {snapshotBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               Generate Snapshots
             </Button>
