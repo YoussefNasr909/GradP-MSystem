@@ -1,0 +1,10 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://agentrouter.org/",
+    "ANTHROPIC_AUTH_TOKEN": "",
+    "ANTHROPIC_API_KEY": "sk-pWH3QkusL8k36830oEKCyc8KFaDqPat1kvix5q7HB1WGV6Ru",
+    "ANTHROPIC_MODEL": "claude-sonnet-4-6"
+  },
+  "autoUpdatesChannel": "latest",
+  "theme": "dark"
+}
