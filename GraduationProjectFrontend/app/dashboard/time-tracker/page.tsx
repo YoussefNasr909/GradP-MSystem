@@ -678,109 +678,107 @@ export default function TimeTrackerPage() {
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-[28px] border border-border/60 bg-gradient-to-br from-primary/[0.10] via-background to-background shadow-sm"
+        className="space-y-4"
       >
-        <div className="absolute inset-y-0 right-0 hidden w-1/3 bg-[radial-gradient(circle_at_top,_hsl(var(--primary)/0.16),_transparent_65%)] lg:block" />
-        <div className="relative grid gap-8 p-6 sm:p-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-background/80 px-3 py-1 text-xs font-medium text-primary backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5" />
-              Built around your real team tasks
-            </div>
-            <h1 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
               Time Tracker
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Keep your graduation project moving with a clear next step, a visible focus
-              session, and a calmer layout for the work assigned to you in{" "}
-              <span className="font-semibold text-foreground">{team.name}</span>.
+            <p className="mt-1 text-sm text-muted-foreground">
+              Track your focus sessions for <span className="font-semibold text-foreground">{team.name}</span>
             </p>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link href="/dashboard/tasks">
-                <Button className="rounded-xl">
-                  Open Tasks Board
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-              <Button
-                className="rounded-xl bg-transparent"
-                variant="outline"
-                onClick={() => void refreshAssignedTasks()}
-                disabled={isLoadingTasks}
-              >
-                {isLoadingTasks ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Refresh Queue
-              </Button>
-            </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => void refreshAssignedTasks()}
+              disabled={isLoadingTasks}
+            >
+              {isLoadingTasks ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            </Button>
+            <Link href="/dashboard/tasks">
+              <Button size="sm" className="rounded-xl gap-1.5">
+                Tasks Board <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            {[
-              {
-                label: "Focused Today",
-                value: formatCompactDuration(todaySeconds),
-                helper: `Goal ${formatCompactDuration(TODAY_GOAL_SECONDS)}`,
-              },
-              {
-                label: "Live Session",
-                value: formatCompactDuration(liveSessionSeconds),
-                helper: focusTimer.isRunning ? "Timer is running now" : "Ready for the next sprint",
-              },
-              {
-                label: "Open Tasks",
-                value: String(activeTasks.length),
-                helper: recommendedTask ? "Top priority already suggested" : "Queue is currently clear",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-2xl border border-border/60 bg-background/80 p-4 backdrop-blur"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            {
+              label: "Focused Today",
+              value: formatCompactDuration(todaySeconds),
+              helper: `Goal ${formatCompactDuration(TODAY_GOAL_SECONDS)}`,
+            },
+            {
+              label: "Live Session",
+              value: formatCompactDuration(liveSessionSeconds),
+              helper: focusTimer.isRunning ? "Running" : "Ready",
+            },
+            {
+              label: "Open Tasks",
+              value: String(activeTasks.length),
+              helper: recommendedTask ? "Priority set" : "Clear",
+            },
+            {
+              label: "Completed",
+              value: String(stats.completed),
+              helper: `of ${tasks.length} assigned`,
+            },
+          ].map((item) => (
+            <motion.div
+              key={item.label}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card className="flex flex-col gap-2 border-border/60 bg-background/70 p-3 shadow-sm">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {item.label}
                 </p>
-                <p className="mt-3 text-2xl font-bold text-foreground">{item.value}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{item.helper}</p>
-              </div>
-            ))}
-          </div>
+                <p className="text-lg font-bold text-foreground">{item.value}</p>
+                <p className="text-xs text-muted-foreground">{item.helper}</p>
+              </Card>
+            </motion.div>
+          ))}
         </div>
       </motion.section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           {
-            label: "Needs Acceptance",
+            label: "To Accept",
             value: stats.needsAction,
-            helper: "Tasks waiting for you to claim",
+            color: "text-amber-500",
           },
           {
             label: "In Progress",
             value: stats.inProgress,
-            helper: "Tasks you are actively working on",
+            color: "text-blue-500",
           },
           {
             label: "In Review",
             value: stats.inReview,
-            helper: "Waiting for leader feedback",
+            color: "text-purple-500",
           },
           {
             label: "Completed",
             value: stats.completed,
-            helper: "Finished tasks assigned to you",
+            color: "text-emerald-500",
           },
         ].map((item, index) => (
           <motion.div
             key={item.label}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
           >
-            <Card className="gap-3 border-border/60 bg-background/80 p-5 shadow-sm">
-              <p className="text-sm text-muted-foreground">{item.label}</p>
-              <p className="text-3xl font-bold">{item.value}</p>
-              <p className="text-xs text-muted-foreground">{item.helper}</p>
+            <Card className="flex items-center gap-3 border-border/60 bg-background/70 px-4 py-3 shadow-sm">
+              <p className={cn("text-2xl font-bold tabular-nums", item.color)}>{item.value}</p>
+              <p className="text-xs font-medium text-muted-foreground">{item.label}</p>
             </Card>
           </motion.div>
         ))}
@@ -789,155 +787,94 @@ export default function TimeTrackerPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.28fr)_350px] 2xl:grid-cols-[minmax(0,1.3fr)_370px]">
         <div className="space-y-6">
           <Card className="overflow-hidden border-border/60 bg-background/90 shadow-sm">
-            <div className="border-b border-border/60 bg-gradient-to-r from-primary/12 via-primary/[0.05] to-transparent p-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-                    Your Best Next Move
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold">
-                    {recommendedTask ? recommendedTask.title : "No active tasks right now"}
-                  </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                    {recommendedTask
-                      ? getTaskFocusMessage(recommendedTask)
-                      : "Once your leader assigns a new task, it will show up here automatically."}
+            <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-primary">Best Next Move</p>
+                <h2 className="mt-1.5 text-base font-semibold">
+                  {recommendedTask ? recommendedTask.title : "No active tasks"}
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {recommendedTask
+                    ? getTaskFocusMessage(recommendedTask)
+                    : "Awaiting assignment"}
+                </p>
+              </div>
+
+              {recommendedTask && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs whitespace-nowrap flex-shrink-0",
+                    STATUS_META[recommendedTask.status].badgeClassName,
+                  )}
+                >
+                  {STATUS_META[recommendedTask.status].label}
+                </Badge>
+              )}
+            </div>
+
+            {recommendedTask && (
+              <div className="grid gap-2 p-4 sm:grid-cols-3">
+                <div className="rounded-lg border border-border/60 bg-background/50 p-2.5">
+                  <p className="text-xs font-medium text-muted-foreground">Action</p>
+                  <p className="mt-1 text-xs font-semibold text-foreground">{getTaskActionLabel(recommendedTask)}</p>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-background/50 p-2.5">
+                  <p className="text-xs font-medium text-muted-foreground">Deadline</p>
+                  <p className={cn("mt-1 text-xs font-semibold", recommendedTask.isPastEndDate && "text-destructive")}>
+                    {recommendedTask.isPastEndDate ? "Overdue" : formatDateLabel(recommendedTask.endDate)}
                   </p>
                 </div>
-
-                {recommendedTask ? (
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      "rounded-full px-3 py-1 text-xs font-semibold",
-                      STATUS_META[recommendedTask.status].badgeClassName,
-                    )}
-                  >
-                    {STATUS_META[recommendedTask.status].label}
-                  </Badge>
-                ) : null}
+                <div className="rounded-lg border border-border/60 bg-background/50 p-2.5">
+                  <p className="text-xs font-medium text-muted-foreground">Progress</p>
+                  <Progress value={STATUS_META[recommendedTask.status].progress} className="mt-1.5 h-1" />
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className="grid gap-4 p-6 md:grid-cols-3">
-              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Suggested Action
-                </p>
-                <p className="mt-2 text-base font-semibold">
-                  {recommendedTask ? getTaskActionLabel(recommendedTask) : "Wait for assignment"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {recommendedTask
-                    ? recommendedTask.description || "Open the board for the full brief."
-                    : "Your queue is clear."}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Deadline
-                </p>
-                <p className="mt-2 text-base font-semibold">
-                  {recommendedTask ? formatDateLabel(recommendedTask.endDate) : "No deadline"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {recommendedTask?.isPastEndDate
-                    ? "This task is overdue and deserves immediate attention."
-                    : "Stay aligned with your project milestones and keep moving steadily."}
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-border/60 bg-background/70 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                  Workflow Progress
-                </p>
-                <p className="mt-2 text-base font-semibold">
-                  {recommendedTask ? STATUS_META[recommendedTask.status].label : "No workflow yet"}
-                </p>
-                <Progress
-                  value={recommendedTask ? STATUS_META[recommendedTask.status].progress : 0}
-                  className="mt-4 h-2"
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {recommendedTask
-                    ? `${STATUS_META[recommendedTask.status].progress}% across the workflow`
-                    : "Waiting for the next assignment to enter your workflow"}
-                </p>
-              </div>
-            </div>
-
-            {recommendedTask ? (
-              <div className="flex flex-wrap gap-3 border-t border-border/60 p-6">
-                <Button
-                  variant="outline"
-                  className="rounded-xl bg-transparent"
-                  onClick={() => selectFocusTask(recommendedTask.id)}
-                >
-                  Focus on Recommended Task
+            {recommendedTask && (
+              <div className="flex flex-wrap gap-2 border-t border-border/60 p-4">
+                <Button size="sm" variant="outline" className="rounded-lg h-8" onClick={() => selectFocusTask(recommendedTask.id)}>
+                  Focus
                 </Button>
-
-                {recommendedTask.permissions.canAccept ? (
-                  <Button
-                    className="rounded-xl"
-                    onClick={() => void handleTaskAction(recommendedTask, "accept")}
-                    disabled={taskActionInFlight === `${recommendedTask.id}:accept`}
-                  >
-                    {taskActionInFlight === `${recommendedTask.id}:accept` ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Play className="mr-2 h-4 w-4" />
-                    )}
-                    Accept Task
+                {recommendedTask.permissions.canAccept && (
+                  <Button size="sm" className="rounded-lg h-8 gap-1" onClick={() => void handleTaskAction(recommendedTask, "accept")}
+                    disabled={taskActionInFlight === `${recommendedTask.id}:accept`}>
+                    {taskActionInFlight === `${recommendedTask.id}:accept` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                    Accept
                   </Button>
-                ) : null}
-
-                {recommendedTask.permissions.canSubmitForReview ? (
-                  <Button
-                    variant="secondary"
-                    className="rounded-xl"
-                    onClick={() => void handleTaskAction(recommendedTask, "submit")}
-                    disabled={taskActionInFlight === `${recommendedTask.id}:submit`}
-                  >
-                    {taskActionInFlight === `${recommendedTask.id}:submit` ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                    )}
-                    Submit for Review
+                )}
+                {recommendedTask.permissions.canSubmitForReview && (
+                  <Button size="sm" variant="secondary" className="rounded-lg h-8 gap-1" onClick={() => void handleTaskAction(recommendedTask, "submit")}
+                    disabled={taskActionInFlight === `${recommendedTask.id}:submit`}>
+                    {taskActionInFlight === `${recommendedTask.id}:submit` ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                    Submit
                   </Button>
-                ) : null}
-
-                <Link href={`/dashboard/tasks?taskId=${recommendedTask.id}`}>
-                  <Button variant="ghost" className="rounded-xl">
-                    Task Details
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                )}
+                <Link href={`/dashboard/tasks?taskId=${recommendedTask.id}`} className="ml-auto">
+                  <Button size="sm" variant="ghost" className="rounded-lg h-8">Details</Button>
                 </Link>
               </div>
-            ) : null}
+            )}
           </Card>
 
-          <Card id="task-queue" className="border-border/60 bg-background/90 p-6 shadow-sm">
-            <div className="flex flex-col gap-4 border-b border-border/60 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <Card id="task-queue" className="border-border/60 bg-background/90 shadow-sm">
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
               <div>
-                <h2 className="text-xl font-semibold">My Task Queue</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Ordered by what deserves your attention first, with cleaner paging for longer queues.
-                </p>
+                <h2 className="text-base font-semibold">My Task Queue</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">Click to set focus target</p>
               </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="rounded-full px-3 py-1">
-                  {tasks.length} tasks
-                </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="rounded-full px-2.5 py-0.5 text-xs">{tasks.length}</Badge>
                 {tasks.length > 0 ? (
-                  <Badge variant="outline" className="rounded-full px-3 py-1 text-muted-foreground">
-                    Showing {taskRangeStart}-{taskRangeEnd}
+                  <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs text-muted-foreground">
+                    {taskRangeStart}–{taskRangeEnd}
                   </Badge>
                 ) : null}
               </div>
             </div>
+
+            <div className="p-4">
 
             {isLoadingTasks ? (
               <div className="flex min-h-52 items-center justify-center text-sm text-muted-foreground">
@@ -965,7 +902,7 @@ export default function TimeTrackerPage() {
               </div>
             ) : (
               <>
-                <div className="mt-6 space-y-4">
+                <div className="space-y-3">
                   {paginatedTasks.map((task, index) => {
                     const pendingAccept = taskActionInFlight === `${task.id}:accept`
                     const pendingSubmit = taskActionInFlight === `${task.id}:submit`
@@ -977,96 +914,63 @@ export default function TimeTrackerPage() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.04 }}
-                                              role="button"
-                                              onClick={(e) => {
-                                                const target = e.target as HTMLElement
-                                                if (target.closest("button, a")) return
-                                                selectFocusTask(task.id)
-                                              }}
-                                              className={cn(
-                                                "rounded-[24px] border p-5 transition-all cursor-pointer",
-                                                isSelectedTask
-                                                  ? "border-primary/35 bg-primary/[0.05] shadow-sm"
-                                                  : "border-border/60 bg-background/70 hover:border-primary/20 hover:bg-background",
-                                              )}
-                                            >
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs">
-                                #{(tasksPage - 1) * TASKS_PER_PAGE + index + 1}
-                              </Badge>
-                              <h3 className="text-lg font-semibold">{task.title}</h3>
-                              <Badge
-                                variant="outline"
-                                className={cn("rounded-full", STATUS_META[task.status].badgeClassName)}
-                              >
+                        role="button"
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement
+                          if (target.closest("button, a")) return
+                          selectFocusTask(task.id)
+                        }}
+                        className={cn(
+                          "group overflow-hidden rounded-lg border p-3 transition-all cursor-pointer",
+                          isSelectedTask
+                            ? "border-primary/35 bg-primary/[0.05] shadow-sm"
+                            : "border-border/60 bg-background/70 hover:border-primary/20 hover:bg-background",
+                        )}
+                      >
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2 min-w-0">
+                              <span className="text-xs text-muted-foreground flex-shrink-0">#{(tasksPage - 1) * TASKS_PER_PAGE + index + 1}</span>
+                              <h3 className="text-sm font-semibold truncate">{task.title}</h3>
+                              {isSelectedTask && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary flex-shrink-0">
+                                  <span className="h-1 w-1 rounded-full bg-primary" />focused
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <Badge variant="outline" className="rounded-full px-2 py-0.5 text-xs" >
                                 {STATUS_META[task.status].label}
                               </Badge>
-                              <Badge variant="secondary" className="rounded-full capitalize">
-                                {task.priority.toLowerCase()}
-                              </Badge>
-                            </div>
-
-                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                              {task.description || "Open the task details to read the full assignment brief."}
-                            </p>
-
-                            <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1">
-                                <Clock3 className="h-3.5 w-3.5" />
-                                {task.permissions.canAccept
-                                  ? "Ready to start"
-                                  : STATUS_META[task.status].label}
-                              </span>
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1">
-                                <Timer className="h-3.5 w-3.5" />
-                                {task.taskType.toLowerCase()}
-                              </span>
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-2.5 py-1">
-                                <Target className="h-3.5 w-3.5" />
-                                Due {formatDateLabel(task.endDate)}
-                              </span>
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap gap-2 lg:max-w-[240px] lg:justify-end">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1">
+                              <Clock3 className="h-3 w-3" />
+                              {task.permissions.canAccept ? "Ready" : STATUS_META[task.status].label}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Target className="h-3 w-3" />
+                              {task.isPastEndDate ? <span className="text-destructive font-medium">Overdue</span> : formatDateLabel(task.endDate)}
+                            </span>
+                          </div>
 
-                            {task.permissions.canAccept ? (
-                              <Button
-                                className="rounded-xl"
-                                onClick={() => void handleTaskAction(task, "accept")}
-                                disabled={pendingAccept}
-                              >
-                                {pendingAccept ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Play className="mr-2 h-4 w-4" />
-                                )}
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {task.permissions.canAccept && (
+                              <Button size="sm" className="rounded-lg h-7 gap-1" onClick={() => void handleTaskAction(task, "accept")} disabled={pendingAccept}>
+                                {pendingAccept ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
                                 Accept
                               </Button>
-                            ) : null}
-
-                            {task.permissions.canSubmitForReview ? (
-                              <Button
-                                variant="secondary"
-                                className="rounded-xl"
-                                onClick={() => void handleTaskAction(task, "submit")}
-                                disabled={pendingSubmit}
-                              >
-                                {pendingSubmit ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="mr-2 h-4 w-4" />
-                                )}
+                            )}
+                            {task.permissions.canSubmitForReview && (
+                              <Button size="sm" variant="secondary" className="rounded-lg h-7 gap-1" onClick={() => void handleTaskAction(task, "submit")} disabled={pendingSubmit}>
+                                {pendingSubmit ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
                                 Submit
                               </Button>
-                            ) : null}
-
+                            )}
                             <Link href={`/dashboard/tasks?taskId=${task.id}`}>
-                              <Button variant="ghost" className="rounded-xl">
-                                Open
-                              </Button>
+                              <Button size="sm" variant="ghost" className="rounded-lg h-7">Open</Button>
                             </Link>
                           </div>
                         </div>
@@ -1146,101 +1050,49 @@ export default function TimeTrackerPage() {
             <Card className="overflow-hidden border-border/60 bg-background/95 p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
                     <span
                       className={cn(
                         "h-2 w-2 rounded-full",
                         focusTimer.isRunning ? "animate-pulse bg-emerald-500" : "bg-primary/50",
                       )}
                     />
-                    {focusTimer.isRunning
-                      ? "Live focus session"
-                      : liveSessionSeconds > 0
-                        ? "Paused focus session"
-                        : "Ready to focus"}
+                    {focusTimer.isRunning ? "Running" : "Ready"}
                   </div>
-                  <h2 className="mt-3 text-lg font-semibold">Focus Session</h2>
-                  <p className="mt-1 max-w-[22rem] text-sm leading-6 text-muted-foreground">
-                    A calmer timer panel that keeps the current task and session controls within easy reach.
-                  </p>
+                  <h2 className="mt-3 text-base font-semibold">Focus Session</h2>
                 </div>
-                <div className="rounded-2xl border border-primary/10 bg-primary/10 p-2.5 text-primary">
+                <div className="rounded-lg border border-primary/10 bg-primary/10 p-2 text-primary">
                   <Timer className="h-4 w-4" />
                 </div>
               </div>
 
-              <div className="mt-5 space-y-3.5">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <div className="mt-4 space-y-3">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Focus Task
                   </p>
-                  <div className="mt-2">
-                    <p className="text-sm font-semibold">{selectedTask?.title ?? "No task selected"}</p>
-                    <div className="mt-2">
-                      <Link href="/dashboard/tasks">
-                        <Button variant="ghost" className="rounded-xl">Open Queue</Button>
-                      </Link>
-                    </div>
-                  </div>
+                  <p className="text-sm font-semibold">{selectedTask?.title ?? "No task selected"}</p>
                 </div>
 
-                <div className="rounded-[24px] border border-primary/15 bg-gradient-to-br from-primary/12 via-background to-primary/[0.03] p-5 text-center shadow-[inset_0_1px_0_hsl(var(--background)/0.7)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                <div className="rounded-lg border border-primary/15 bg-gradient-to-br from-primary/10 to-background p-4 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Current Session
                   </p>
-                  <p className="mt-3 font-mono text-[2.6rem] font-bold tracking-tight text-foreground sm:text-[3rem]">
+                  <p className="mt-2 font-mono text-2xl font-bold text-foreground sm:text-3xl">
                     {formatDuration(liveSessionSeconds)}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    {selectedTask
-                      ? `Tracking work on "${selectedTask.title}"`
-                      : "Choose a task to start your first focus session."}
-                  </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Selected Task
-                    </p>
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-6 text-foreground">
-                      {selectedTask?.title ?? "No task selected"}
-                    </p>
-                    <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                      {selectedTask
-                        ? getTaskFocusMessage(selectedTask)
-                        : "Pick a task from your queue to begin a focused session."}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-border/60 bg-muted/20 p-3.5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                      Session Status
-                    </p>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-foreground">
-                      {focusTimer.isRunning
-                        ? "Deep work in progress"
-                        : liveSessionSeconds > 0
-                          ? "Paused and ready to resume"
-                          : "No session started yet"}
-                    </p>
-                    <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
-                      {liveSessionSeconds > 0
-                        ? `${formatCompactDuration(liveSessionSeconds)} already captured in this session.`
-                        : "Your first saved session will appear in the log below."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2.5 sm:grid-cols-3">
+                <div className="grid gap-2 sm:grid-cols-3">
                   {!focusTimer.isRunning ? (
                     <Button
-                      className="h-11 rounded-2xl sm:col-span-2"
+                      size="sm"
+                      className="rounded-lg h-8 gap-1"
                       onClick={handleStartTimer}
                       disabled={!selectedTask}
                     >
-                      <Play className="mr-2 h-4 w-4" />
-                      {liveSessionSeconds > 0 ? "Resume Session" : "Start Focus"}
+                      <Play className="h-3.5 w-3.5" />
+                      {liveSessionSeconds > 0 ? "Resume" : "Start"}
                     </Button>
                   ) : (
                     <Button

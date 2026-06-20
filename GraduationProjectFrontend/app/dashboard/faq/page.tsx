@@ -608,7 +608,7 @@ function FAQItem({
             <div className="px-4 pb-4 pt-0 border-t">
               <p className="text-muted-foreground mt-4 leading-relaxed">{answer}</p>
               <div className="mt-4 pt-4 border-t space-y-3">
-                <div className="flex flex-col items-start gap-2">
+                <div className="flex items-center justify-between gap-4">
                   <div className="text-sm text-muted-foreground">Was this helpful?</div>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <Button
@@ -617,10 +617,13 @@ function FAQItem({
                       className="h-8 px-2"
                       onClick={(e) => {
                         e.stopPropagation()
+                        const isAddingVote = vote !== "up"
                         onVote()
-                        setShowCounted(true)
-                        if (timerRef.current) window.clearTimeout(timerRef.current)
-                        timerRef.current = window.setTimeout(() => setShowCounted(false), 3000)
+                        if (isAddingVote) {
+                          setShowCounted(true)
+                          if (timerRef.current) window.clearTimeout(timerRef.current)
+                          timerRef.current = window.setTimeout(() => setShowCounted(false), 3000)
+                        }
                       }}
                     >
                       <ThumbsUp className="h-4 w-4" />
@@ -629,12 +632,12 @@ function FAQItem({
                       {helpfulCount} {helpfulCount === 1 ? "user finds" : "users found"} this helpful
                     </span>
                   </div>
-                  {showCounted && (
-                    <p className="text-sm text-primary mt-1 text-left">
-                      Your helpful vote has been counted for this FAQ card.
-                    </p>
-                  )}
                 </div>
+                {showCounted && (
+                  <p className="text-sm text-primary mt-1 text-left">
+                    Your helpful vote has been counted for this FAQ card.
+                  </p>
+                )}
               </div>
             </div>
           </motion.div>
