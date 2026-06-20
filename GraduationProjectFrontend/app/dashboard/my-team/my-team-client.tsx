@@ -20,6 +20,7 @@ import {
   Hash,
   Inbox,
   Layers3,
+  Lightbulb,
   Loader2,
   LockKeyhole,
   Mail,
@@ -34,6 +35,7 @@ import {
   UserMinus,
   UserPlus,
   Users,
+  Wand2,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -80,6 +82,21 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 const STAGES: ApiTeamStage[] = ["REQUIREMENTS", "DESIGN", "IMPLEMENTATION", "TESTING", "DEPLOYMENT", "MAINTENANCE"]
 const STACK_SUGGESTIONS = ["Next.js", "React", "Node.js", "TypeScript", "Python", "FastAPI", "PostgreSQL", "Tailwind CSS"]
+const DOMAINS = [
+  "Medical / Healthcare",
+  "Agricultural",
+  "Educational",
+  "Finance / Banking",
+  "E-commerce",
+  "Social / Community",
+  "Environmental",
+  "Transportation / Logistics",
+  "Cybersecurity",
+  "Entertainment / Media",
+  "HR / Workforce",
+  "Smart City / IoT",
+  "Other",
+]
 const TEAM_SETUP_POINTS = [
   {
     icon: Crown,
@@ -906,6 +923,7 @@ function StudentTeamExperience({
   const reduceMotion = Boolean(useReducedMotion())
   const [busy, setBusy] = useState("")
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false)
+  const [bioExpanded, setBioExpanded] = useState(false)
   const sortedMembers = [...team.members].sort((left, right) => {
     if (left.teamRole === right.teamRole) return left.user.firstName.localeCompare(right.user.firstName)
     return left.teamRole === "LEADER" ? -1 : 1
@@ -951,7 +969,18 @@ function StudentTeamExperience({
 
               <div className="space-y-3">
                 <h1 className="text-2xl font-semibold sm:text-3xl">{team.name}</h1>
-                <p className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">{team.bio}</p>
+                <p className={`max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base ${bioExpanded ? "" : "line-clamp-2"}`}>
+                  {team.bio}
+                </p>
+                {team.bio && team.bio.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setBioExpanded((v) => !v)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    {bioExpanded ? "Show less" : "Read more"}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1294,6 +1323,7 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
   const [busy, setBusy] = useState("")
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [bioExpanded, setBioExpanded] = useState(false)
 
   const copyCode = async () => {
     if (!team.inviteCode || copied) return
@@ -1336,7 +1366,18 @@ function TeamHero({ team, isLeader, onRefresh }: { team: ApiTeamDetail; isLeader
             </div>
             <div>
               <h1 className="text-2xl font-semibold sm:text-3xl">{team.name}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">{team.bio}</p>
+              <p className={`mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base ${bioExpanded ? "" : "line-clamp-2"}`}>
+                {team.bio}
+              </p>
+              {team.bio && team.bio.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setBioExpanded((v) => !v)}
+                  className="mt-1 text-xs font-semibold text-primary hover:underline"
+                >
+                  {bioExpanded ? "Show less" : "Read more"}
+                </button>
+              )}
             </div>
             {team.stack.length > 0 && (
               <div className="flex flex-wrap gap-2">
@@ -2947,6 +2988,79 @@ function LeaderNoTeam({
 
   const [direction, setDirection] = useState(0)
 
+  type WizardPhase = "question" | "ai-form" | "ai-results" | "wizard"
+  const [phase, setPhase] = useState<WizardPhase>("question")
+  const [aiForm, setAiForm] = useState<{
+    teamSize: string
+    stack: string
+    domains: string[]
+    description: string
+  }>({
+    teamSize: "5",
+    stack: "",
+    domains: [],
+    description: "",
+  })
+  const [aiIdeas, setAiIdeas] = useState<Array<{ title: string; description: string }>>([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [expandedIdea, setExpandedIdea] = useState<number | null>(null)
+
+  const aiStackItems = aiForm.stack.split(",").map((s) => s.trim()).filter(Boolean)
+
+  const toggleDomain = (domain: string) => {
+    setAiForm((s) => ({
+      ...s,
+      domains: s.domains.includes(domain) ? [] : [domain],
+    }))
+  }
+
+  const addAiStack = (value: string) => {
+    const current = new Set(aiStackItems.map((item) => item.toLowerCase()))
+    if (current.has(value.toLowerCase())) return
+    const newStack = aiStackItems.length > 0 ? [...aiStackItems, value].join(", ") : value
+    setAiForm((s) => ({ ...s, stack: newStack }))
+  }
+
+  const generateIdeas = async () => {
+    setAiLoading(true)
+    try {
+      const res = await fetch("/api/generate-project-ideas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teamSize: aiForm.teamSize,
+          technologies: aiForm.stack,
+          domains: aiForm.domains,
+          description: aiForm.description,
+        }),
+      })
+      const data = await res.json() as { ideas?: Array<{ title: string; description: string }>; error?: string }
+      if (!res.ok) {
+        console.error("[generate-project-ideas] Error response:", data)
+        throw new Error("Failed to generate ideas")
+      }
+      console.log("[generate-project-ideas] Success:", data)
+      setAiIdeas(data.ideas ?? [])
+      setPhase("ai-results")
+    } catch (err) {
+      console.error("[generate-project-ideas] Caught:", err)
+      toast.error("Failed to generate ideas. Please try again.")
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const selectIdea = (idea: { title: string; description: string }) => {
+    setForm((s) => ({
+      ...s,
+      name: idea.title,
+      bio: idea.description.slice(0, 2000),
+      maxMembers: aiForm.teamSize,
+      stack: aiForm.stack,
+    }))
+    setPhase("wizard")
+  }
+
   const handleNext = () => {
     if (currentStep < totalSteps) {
       setDirection(1)
@@ -3025,6 +3139,288 @@ function LeaderNoTeam({
         </Button>
       </motion.div>
 
+      {/* Phase: Question */}
+      {phase === "question" && (
+        <motion.div {...slide(0.1)} className="flex flex-col items-center gap-8 py-8">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Lightbulb className="h-8 w-8" />
+          </div>
+          <div className="space-y-2 text-center">
+            <h2 className="text-2xl font-bold">Do you have a project idea?</h2>
+            <p className="text-muted-foreground">Start with your own idea, or let AI help you discover one.</p>
+          </div>
+          <div className="grid w-full max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setPhase("wizard")}
+              className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-border/60 bg-transparent p-7 text-center transition-all hover:border-primary/40 hover:bg-primary/5"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-all group-hover:bg-primary/10 group-hover:text-primary">
+                <Crown className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-bold">Yes, I have an idea</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">I'll set up my team and fill in the details myself.</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhase("ai-form")}
+              className="group flex flex-col items-center gap-4 rounded-2xl border-2 border-primary/30 bg-primary/[0.03] p-7 text-center transition-all hover:border-primary/60 hover:bg-primary/5"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all group-hover:bg-primary/20">
+                <Wand2 className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="font-bold">No, help me with AI</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">Get 3 tailored project ideas based on my team's profile.</p>
+              </div>
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Phase: AI Form */}
+      {phase === "ai-form" && (
+        <motion.div {...slide(0.1)} className="rounded-2xl border border-border/60 bg-card shadow-sm overflow-hidden">
+          {/* Form Header */}
+          <div className="border-b border-border/60 bg-muted/20 px-8 py-5 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Wand2 className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold">Tell us about your team</h2>
+              <p className="text-xs text-muted-foreground">We'll use this to suggest the best project ideas for you.</p>
+            </div>
+          </div>
+
+          <div className="p-8 space-y-6">
+            {/* Row 1: Team Size + Domain */}
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-[3fr_1fr]">
+              {/* Team Size */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">Team Size</Label>
+                <div className="grid grid-cols-4 gap-2">
+                  {["3", "4", "5", "6"].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setAiForm((s) => ({ ...s, teamSize: v }))}
+                      className={`flex flex-col items-center justify-center rounded-xl border-2 py-3 transition-all ${
+                        aiForm.teamSize === v
+                          ? "border-primary bg-primary/5 text-primary shadow-sm shadow-primary/10"
+                          : "border-border/60 text-muted-foreground hover:border-border hover:bg-muted/30"
+                      }`}
+                    >
+                      <span className="text-base font-bold">{v}</span>
+                      <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Members</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Includes you as the team leader.</p>
+              </div>
+
+              {/* Domain of Interest */}
+              <div className="space-y-3">
+                <Label className="text-sm font-semibold">Domain of interest</Label>
+                <Select
+                  value={aiForm.domains[0] ?? ""}
+                  onValueChange={(val) => setAiForm((s) => ({ ...s, domains: val ? [val] : [] }))}
+                >
+                  <SelectTrigger className="h-12 rounded-xl border-border/60 bg-muted/30 focus:ring-primary/20">
+                    <SelectValue placeholder="Select a domain..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOMAINS.map((domain) => (
+                      <SelectItem key={domain} value={domain}>
+                        {domain}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">Helps AI tailor ideas to your field.</p>
+              </div>
+            </div>
+
+            {/* Row 2: Technologies */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">
+                Technologies you know{" "}
+                <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Input
+                value={aiForm.stack}
+                placeholder="e.g. React, Python, Node.js..."
+                className="h-12 rounded-xl border-border/60 bg-muted/30 focus-visible:ring-primary/20"
+                onChange={(e) => setAiForm((s) => ({ ...s, stack: e.target.value }))}
+              />
+              <div className="flex flex-wrap gap-2 pt-1">
+                {STACK_SUGGESTIONS.map((s) => {
+                  const isAdded = aiStackItems.some((item) => item.toLowerCase() === s.toLowerCase())
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => addAiStack(s)}
+                      disabled={isAdded}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all ${
+                        isAdded
+                          ? "border-primary/40 bg-primary/10 text-primary cursor-default"
+                          : "border-border/60 text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                      }`}
+                    >
+                      {isAdded && <Check className="h-3 w-3" />}
+                      {s}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Row 3: Free text */}
+            <div className="space-y-3">
+              <Label className="text-sm font-semibold">
+                What&apos;s on your mind?{" "}
+                <span className="text-xs font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <Textarea
+                rows={3}
+                value={aiForm.description}
+                placeholder="e.g. We want to build something impactful for our local community, ideally using mobile..."
+                className="resize-none rounded-xl border-border/60 bg-muted/30 focus-visible:ring-primary/20"
+                onChange={(e) => setAiForm((s) => ({ ...s, description: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-border/60 bg-muted/10 px-8 py-5 flex items-center justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setPhase("question")}
+              className="h-10 rounded-xl border-border/60 px-5 text-sm font-semibold"
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              onClick={() => void generateIdeas()}
+              disabled={aiLoading}
+              className="h-10 rounded-xl px-8 text-sm font-bold shadow-sm shadow-primary/20"
+            >
+              {aiLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate Ideas
+                </>
+              )}
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Phase: AI Results */}
+      {phase === "ai-results" && (
+        <motion.div {...slide(0.1)} className="space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-xl font-bold">Here are 3 ideas for your team</h2>
+            <p className="text-sm text-muted-foreground">Pick the one that resonates most — you can edit the details after.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {aiIdeas.map((idea, idx) => (
+              <div
+                key={idx}
+                className="flex flex-col rounded-2xl border border-border/60 bg-card p-6 shadow-sm transition-all cursor-pointer hover:border-primary/30 hover:shadow-md"
+                onClick={() => setExpandedIdea(idx)}
+              >
+                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                  {idx + 1}
+                </div>
+                <h3 className="mb-2 text-base font-bold leading-snug">{idea.title}</h3>
+                <p className="flex-1 line-clamp-4 text-xs leading-relaxed text-muted-foreground">{idea.description}</p>
+                <Button
+                  className="mt-4 h-9 w-full rounded-xl text-xs font-bold"
+                  onClick={(e) => { e.stopPropagation(); selectIdea(idea) }}
+                >
+                  Use this idea
+                  <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+
+            {/* Idea detail modal */}
+            <AnimatePresence>
+              {expandedIdea !== null && aiIdeas[expandedIdea] && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+                  onClick={() => setExpandedIdea(null)}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                    className="relative w-full max-w-lg rounded-2xl border border-border/60 bg-card p-8 shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedIdea(null)}
+                      className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                    <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                      {expandedIdea + 1}
+                    </div>
+                    <h3 className="mb-4 text-xl font-bold leading-snug">{aiIdeas[expandedIdea].title}</h3>
+                    <p className="max-h-60 overflow-y-auto text-sm leading-relaxed text-muted-foreground">
+                      {aiIdeas[expandedIdea].description}
+                    </p>
+                    <Button
+                      className="mt-6 h-10 w-full rounded-xl font-bold"
+                      onClick={() => selectIdea(aiIdeas[expandedIdea]!)}
+                    >
+                      Use this idea
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setPhase("ai-form")}
+              className="h-10 rounded-xl border-border/60 px-5 text-sm font-semibold"
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void generateIdeas()}
+              disabled={aiLoading}
+              className="h-10 rounded-xl border-border/60 px-5 text-sm font-semibold"
+            >
+              {aiLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              Regenerate
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Phase: Wizard (Progress + Steps) */}
+      {phase === "wizard" && (<>
       {/* Progress Indicator */}
       <motion.div {...slide(0.05)} className="relative px-4 sm:px-16">
         <div className="flex justify-between">
@@ -3149,6 +3545,7 @@ function LeaderNoTeam({
                       <Textarea
                         id="team-bio"
                         rows={10}
+                        maxLength={2000}
                         value={form.bio}
                         autoFocus
                         className="resize-none rounded-xl border-border/60 bg-muted/30 p-5 text-base leading-relaxed focus-visible:ring-primary/20"
@@ -3164,7 +3561,7 @@ function LeaderNoTeam({
                           {bioLength < 10 ? "Min 10 characters required" : "Looks good!"}
                         </span>
                         <span className="text-xs font-bold tabular-nums text-muted-foreground">
-                          {bioLength}/1000
+                          {bioLength}/2000
                         </span>
                       </div>
                     </div>
@@ -3380,6 +3777,7 @@ function LeaderNoTeam({
         {currentStep === 3 && "You can always update your stack later."}
         {currentStep === 4 && "Finalize your team's accessibility settings."}
       </motion.p>
+      </>)}
     </div>
   )
 }
