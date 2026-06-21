@@ -30,6 +30,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Coordinator / Admin",
   doctor: "Doctor",
   ta: "Teaching Assistant",
+  support: "Support",
   leader: "Team Leader",
   member: "Student",
 }
@@ -38,6 +39,7 @@ const ROLE_TONES: Record<UserRole, "primary" | "blue" | "emerald" | "amber" | "r
   admin: "rose",
   doctor: "blue",
   ta: "emerald",
+  support: "slate",
   leader: "violet",
   member: "primary",
 }

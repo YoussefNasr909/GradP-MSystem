@@ -38,7 +38,7 @@ import {
   Users,
   Video,
 } from "lucide-react"
-import { motion, useReducedMotion } from "framer-motion"
+import { motion, useReducedMotion, type Variants } from "framer-motion"
 import { useSearchParams } from "next/navigation"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
 import {
@@ -947,7 +947,7 @@ function CalendarGrid({
   // Use month string as key for animations so they only run when changing months
   const monthKey = format(month, "yyyy-MM")
 
-  const container = {
+  const container: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
@@ -957,7 +957,7 @@ function CalendarGrid({
     }
   }
 
-  const item = {
+  const item: Variants = {
     hidden: { opacity: 0, scale: 0.98, y: 5 },
     show: { opacity: 1, scale: 1, y: 0, transition: { duration: 0.3, ease: "easeOut" } }
   }
