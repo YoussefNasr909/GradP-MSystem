@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   FileText, ArrowLeft, Clock, CheckCircle2, XCircle, RotateCcw, FileEdit,
   Send, Trash2, MessageSquare, Users, Calendar, AlertCircle, Sparkles, Award,
-  Pencil, Target, Wrench, ListChecks, BookOpen,
+  Pencil, Target, Wrench, ListChecks, BookOpen, Loader2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -214,6 +214,8 @@ export default function ProposalDetailPage() {
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewDecision, setReviewDecision] = useState<"APPROVED" | "REJECTED" | "REVISION_REQUESTED">("APPROVED")
   const [reviewFeedback, setReviewFeedback] = useState("")
+  const [aiEvaluation, setAiEvaluation] = useState<any>(null)
+  const [isEvaluating, setIsEvaluating] = useState(false)
 
   const fetchData = useCallback(async () => {
     setError(false)
@@ -242,7 +244,7 @@ export default function ProposalDetailPage() {
   const canSubmit     = (isAuthor || isAdmin) && proposal &&
                         (proposal.status === "DRAFT" || proposal.status === "REVISION_REQUESTED" || proposal.status === "REJECTED")
   const canReview     = (isMyTeamDoctor || isAdmin) && proposal &&
-                        (proposal.status === "SUBMITTED" || proposal.status === "UNDER_REVIEW")
+                        (proposal.status === "SUBMITTED" || proposal.status === "UNDER_REVIEW" || proposal.status === "REVISION_REQUESTED" || proposal.status === "REJECTED")
   const canDelete     = (isAuthor || isAdmin) && proposal?.status === "DRAFT"
 
   async function handleSubmit() {
@@ -288,11 +290,36 @@ export default function ProposalDetailPage() {
       setProposal(updated)
       setReviewOpen(false)
       setReviewFeedback("")
+      setAiEvaluation(null)
       toast.success(`Proposal ${reviewDecision.toLowerCase().replace("_", " ")}`)
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to review")
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function evaluateWithAI() {
+    if (!proposal) return;
+    setIsEvaluating(true);
+    setAiEvaluation(null);
+    try {
+      const res = await fetch('/api/evaluate-proposal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ proposal })
+      });
+      if (!res.ok) throw new Error("Failed to evaluate proposal");
+      const data = await res.json();
+      
+      setAiEvaluation(data);
+      setReviewDecision(data.decision);
+      setReviewFeedback(data.feedback);
+      toast.success("AI Evaluation complete!");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to run AI evaluation");
+    } finally {
+      setIsEvaluating(false);
     }
   }
 
@@ -513,7 +540,7 @@ export default function ProposalDetailPage() {
 
       {/* Review Dialog */}
       <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Award className="h-5 w-5 text-amber-500" />
@@ -521,6 +548,44 @@ export default function ProposalDetailPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-2">
+            
+            <Button 
+              onClick={evaluateWithAI} 
+              disabled={isEvaluating} 
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+            >
+              {isEvaluating ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing Proposal...</>
+              ) : (
+                <><Sparkles className="mr-2 h-4 w-4" /> ✨ AI Evaluate Proposal</>
+              )}
+            </Button>
+
+            {aiEvaluation && (
+              <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900 rounded-xl p-4 text-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-indigo-900 dark:text-indigo-300">AI Analysis</h4>
+                  <Badge variant={aiEvaluation.score >= 80 ? "default" : "secondary"}>Score: {aiEvaluation.score}/100</Badge>
+                </div>
+                {aiEvaluation.strengths?.length > 0 && (
+                  <div>
+                    <span className="font-medium text-green-700 dark:text-green-400">Strengths:</span>
+                    <ul className="list-disc pl-5 mt-1 text-muted-foreground">
+                      {aiEvaluation.strengths.map((s: string, i: number) => <li key={i}>{s}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {aiEvaluation.weaknesses?.length > 0 && (
+                  <div>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">Weaknesses:</span>
+                    <ul className="list-disc pl-5 mt-1 text-muted-foreground">
+                      {aiEvaluation.weaknesses.map((w: string, i: number) => <li key={i}>{w}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            
             <div>
               <Label>Decision</Label>
               <div className="grid grid-cols-3 gap-2 mt-2">

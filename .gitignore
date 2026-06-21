@@ -8,13 +8,14 @@ GAMIFICATION_IMPLEMENTATION_PLAN.md
 .idea/
 *.swp
 *.swo
+.claude/
 
 # Documentation (generated/local)
 docs/
 
 # Logs
 *.log
-
+.continue/
 # Environment files
 .env
 .env.*

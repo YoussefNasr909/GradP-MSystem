@@ -35,6 +35,7 @@ import {
   reviewAdminAdjustmentSchema,
   getAdminAuditLogsSchema,
   generateLeaderboardSnapshotsSchema,
+  processEventsSchema,
 } from "./gamification.schema.js";
 
 const router = Router();
@@ -111,6 +112,7 @@ router.post(
 router.post(
   "/admin/process-events",
   allowRoles(ROLES.ADMIN),
+  validate(processEventsSchema),
   processEvents,
 );
 

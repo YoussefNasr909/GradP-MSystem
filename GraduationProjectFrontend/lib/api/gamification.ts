@@ -170,6 +170,15 @@ export type PaginatedAdjustments = {
   totalPages: number
 }
 
+export type ProcessEventsResult = {
+  processed: number
+  failed: number
+  skipped: number
+  retried?: number
+  disabled?: boolean
+  reason?: string
+}
+
 // ─── API Client ──────────────────────────────────────────────
 
 function qs(params: Record<string, string | number | undefined>) {
@@ -208,8 +217,8 @@ export const gamificationApi = {
     apiRequest<GamificationRule[]>(`/gamification/rules${qs(params ?? {})}`),
 
   // ─── Admin ───────────────────────────────────────────────
-  processEvents: () =>
-    apiRequest<{ processed: number; failed: number; skipped: number }>("/gamification/admin/process-events", { method: "POST" }),
+  processEvents: (body?: { retryFailed?: boolean; eventIds?: string[] }) =>
+    apiRequest<ProcessEventsResult>("/gamification/admin/process-events", { method: "POST", body: body ?? {} }),
 
   getCases: (params?: { page?: number; limit?: number; status?: string; teamId?: string; userId?: string }) =>
     apiRequest<PaginatedCases>(`/gamification/admin/cases${qs(params ?? {})}`),

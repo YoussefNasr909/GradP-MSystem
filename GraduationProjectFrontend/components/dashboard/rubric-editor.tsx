@@ -163,6 +163,7 @@ export function RubricEditor({ value, onChange, onTotalChange, defaultRubricType
                 value={it.name}
                 onChange={(e) => update(i, { name: e.target.value })}
                 className="h-8 text-sm"
+                readOnly={compact}
               />
               <Input
                 type="number"
@@ -179,6 +180,7 @@ export function RubricEditor({ value, onChange, onTotalChange, defaultRubricType
                 value={it.maxScore}
                 onChange={(e) => update(i, { maxScore: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })}
                 className="h-8 text-sm text-center tabular-nums"
+                readOnly={compact}
               />
               {!compact && (
                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => remove(i)}>

@@ -163,7 +163,9 @@ function profileCompletionBadgeClass(isIncomplete: boolean) {
     : "border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400";
 }
 
-function displayAcademicId(user: Pick<ApiUser, "academicId">) {
+function displayAcademicId(user: Pick<ApiUser, "academicId" | "role">) {
+  if (user.role === "SUPPORT") return "-";
+
   const academicId = String(user.academicId ?? "").trim();
 
   if (!academicId) return "Not assigned";
@@ -177,9 +179,9 @@ function validateForm(form: AdminUserFormState, requirePassword: boolean) {
     !form.firstName.trim() ||
     !form.lastName.trim() ||
     !form.email.trim() ||
-    !form.academicId.trim()
+    (form.role !== "SUPPORT" && !form.academicId.trim())
   ) {
-    return `First name, last name, email, and ${form.role === "SUPPORT" ? "staff ID" : "academic ID"} are required.`;
+    return "First name, last name, email, and academic ID are required.";
   }
   if (requirePassword && form.password.trim().length < 6) {
     return "Password must be at least 6 characters.";
@@ -380,12 +382,12 @@ export default function AdminPage() {
         email: form.email.trim(),
         password: form.password,
         role: form.role,
-        academicId: form.academicId.trim(),
+        academicId: form.role === "SUPPORT" && !form.academicId.trim() ? `SUPPORT-${Date.now()}` : form.academicId.trim(),
         accountStatus: form.accountStatus,
         phone: normalizeOptionalText(form.phone),
-        department: normalizeOptionalSelect(form.department),
-        academicYear: normalizeOptionalSelect(form.academicYear),
-        preferredTrack: normalizeOptionalSelect(form.preferredTrack),
+        department: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.department),
+        academicYear: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.academicYear),
+        preferredTrack: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.preferredTrack),
       });
 
       setPage(1);
@@ -414,12 +416,12 @@ export default function AdminPage() {
         lastName: form.lastName.trim(),
         email: form.email.trim(),
         role: form.role,
-        academicId: form.academicId.trim(),
+        academicId: form.role === "SUPPORT" && !form.academicId.trim() ? `SUPPORT-${Date.now()}` : form.academicId.trim(),
         accountStatus: form.accountStatus,
         phone: normalizeOptionalText(form.phone),
-        department: normalizeOptionalSelect(form.department),
-        academicYear: normalizeOptionalSelect(form.academicYear),
-        preferredTrack: normalizeOptionalSelect(form.preferredTrack),
+        department: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.department),
+        academicYear: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.academicYear),
+        preferredTrack: form.role === "SUPPORT" ? null : normalizeOptionalSelect(form.preferredTrack),
         ...(form.password.trim() ? { password: form.password } : {}),
       });
 
@@ -748,9 +750,11 @@ export default function AdminPage() {
                             {displayAcademicId(user)}
                           </TableCell>
                           <TableCell>
-                            {departmentOptions.find(
-                              (option) => option.value === user.department,
-                            )?.label ?? "Not assigned"}
+                            {user.role === "SUPPORT"
+                              ? "-"
+                              : departmentOptions.find(
+                                  (option) => option.value === user.department,
+                                )?.label ?? "Not assigned"}
                           </TableCell>
                           <TableCell>
                             <UserStatusBadge status={user.accountStatus} />
@@ -1114,9 +1118,10 @@ function MobileUserCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const departmentLabel =
-    departmentOptions.find((option) => option.value === user.department)
-      ?.label ?? "Not assigned";
+  const departmentLabel = user.role === "SUPPORT"
+    ? "-"
+    : departmentOptions.find((option) => option.value === user.department)
+        ?.label ?? "Not assigned";
   const isProfileIncomplete = isUserProfileIncomplete(user);
 
   return (

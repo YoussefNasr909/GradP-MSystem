@@ -64,4 +64,3 @@ router.use("/economy", economyRouter);
 router.use("/weekly-reports", weeklyReportsRouter);
 router.use("/support", supportRouter);
 export default router;
-

@@ -165,9 +165,9 @@ export default function HelpPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="rounded-xl border border-dashed border-primary/25 bg-primary/5 p-4">
-                        <p className="text-sm text-muted-foreground">Download the full PDF guide for this topic.</p>
+                        <p className="text-sm text-muted-foreground">{guide?.summary ?? "Download the full PDF guide for this topic."}</p>
                         <a
-                          href={guide ? `/help-guides/${guide.filename}` : `/help-guides/${category.id}`}
+                          href={`/help-guides/${category.id}`}
                           download={guide?.filename || `${category.id}-guide.pdf`}
                           className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
                         >

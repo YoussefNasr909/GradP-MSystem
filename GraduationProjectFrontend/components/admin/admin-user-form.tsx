@@ -221,53 +221,60 @@ export function AdminUserForm({
           disabled={disableStatusChange}
           helperText="Inactive is a temporary disable. Suspended is an admin block for security or policy issues."
         />
-        <FormInput
-          id="academicId"
-          label={form.role === "SUPPORT" ? "Staff ID *" : "Academic ID *"}
-          value={form.academicId}
-          onChange={(value) => onChange("academicId", value)}
-          placeholder={form.role === "SUPPORT" ? "e.g. SUPPORT-0001" : "e.g. CS2021010 or ADMIN-0001"}
-        />
+        {form.role !== "SUPPORT" ? (
+          <FormInput
+            id="academicId"
+            label="Academic ID *"
+            value={form.academicId}
+            onChange={(value) => onChange("academicId", value)}
+            placeholder="e.g. CS2021010 or ADMIN-0001"
+          />
+        ) : null}
         <FormInput
           id="phone"
           label="Phone"
           value={form.phone}
           onChange={(value) => onChange("phone", value)}
+          className={form.role === "SUPPORT" ? "sm:col-span-2" : ""}
         />
-        <FormSelect
-          label="Department"
-          value={form.department}
-          onChange={(value) =>
-            onChange("department", value as AdminUserFormState["department"])
-          }
-          options={departmentOptions}
-          allowNone
-        />
-        <FormSelect
-          label="Academic Year"
-          value={form.academicYear}
-          onChange={(value) =>
-            onChange(
-              "academicYear",
-              value as AdminUserFormState["academicYear"],
-            )
-          }
-          options={academicYearOptions}
-          allowNone
-        />
-        <FormSelect
-          label="Preferred Track"
-          value={form.preferredTrack}
-          onChange={(value) =>
-            onChange(
-              "preferredTrack",
-              value as AdminUserFormState["preferredTrack"],
-            )
-          }
-          options={trackOptions}
-          allowNone
-          className="sm:col-span-2"
-        />
+        {form.role !== "SUPPORT" ? (
+          <>
+            <FormSelect
+              label="Department"
+              value={form.department}
+              onChange={(value) =>
+                onChange("department", value as AdminUserFormState["department"])
+              }
+              options={departmentOptions}
+              allowNone
+            />
+            <FormSelect
+              label="Academic Year"
+              value={form.academicYear}
+              onChange={(value) =>
+                onChange(
+                  "academicYear",
+                  value as AdminUserFormState["academicYear"],
+                )
+              }
+              options={academicYearOptions}
+              allowNone
+            />
+            <FormSelect
+              label="Preferred Track"
+              value={form.preferredTrack}
+              onChange={(value) =>
+                onChange(
+                  "preferredTrack",
+                  value as AdminUserFormState["preferredTrack"],
+                )
+              }
+              options={trackOptions}
+              allowNone
+              className="sm:col-span-2"
+            />
+          </>
+        ) : null}
       </div>
 
       {actionError ? (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   HelpCircle,
@@ -350,7 +350,7 @@ export default function FAQPage() {
     [],
   )
 
-  const getHelpfulCount = (faqId: string, baseHelpful = 0) => baseHelpful + (helpfulUsersByFaq[faqId]?.length || 0)
+  const getHelpfulCount = (faqId: string) => helpfulUsersByFaq[faqId]?.length || 0
   const getVoteState = (faqId: string) => (currentUser?.id && helpfulUsersByFaq[faqId]?.includes(currentUser.id) ? "up" : null)
 
   const filteredFAQs: Array<{ id: string; question: string; answer: string; helpful?: number; category?: string }> = searchQuery
@@ -425,7 +425,7 @@ export default function FAQPage() {
                   key={faq.id}
                   question={faq.question}
                   answer={faq.answer}
-                  helpfulCount={getHelpfulCount(faq.id, faq.helpful)}
+                  helpfulCount={getHelpfulCount(faq.id)}
                   isExpanded={expandedQuestions.includes(faq.question)}
                   onToggle={() => toggleQuestion(faq.question)}
                   vote={getVoteState(faq.id)}
@@ -501,7 +501,7 @@ export default function FAQPage() {
                     <FAQItem
                       question={faq.question}
                       answer={faq.answer}
-                      helpfulCount={getHelpfulCount(faqId, faq.helpful)}
+                      helpfulCount={getHelpfulCount(faqId)}
                       isExpanded={expandedQuestions.includes(faq.question)}
                       onToggle={() => toggleQuestion(faq.question)}
                       vote={getVoteState(faqId)}
@@ -572,6 +572,15 @@ function FAQItem({
   showCategory?: boolean
   category?: string
 }) {
+  const timerRef = useRef<number | null>(null)
+  const [showCounted, setShowCounted] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current)
+    }
+  }, [])
+
   return (
     <Card className={`transition-all duration-200 ${isExpanded ? "ring-2 ring-primary/20" : ""}`}>
       <button onClick={onToggle} className="w-full p-4 text-left flex items-start justify-between gap-4">
@@ -599,25 +608,33 @@ function FAQItem({
             <div className="px-4 pb-4 pt-0 border-t">
               <p className="text-muted-foreground mt-4 leading-relaxed">{answer}</p>
               <div className="mt-4 pt-4 border-t space-y-3">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <span>Was this helpful?</span>
-                  <Button
-                    variant={vote === "up" ? "default" : "ghost"}
-                    size="sm"
-                    className="h-8 px-2"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onVote()
-                    }}
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                  </Button>
-                  <span className="font-medium text-foreground">
-                    {helpfulCount} {helpfulCount === 1 ? "user finds" : "users found"} this helpful
-                  </span>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-sm text-muted-foreground">Was this helpful?</div>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <Button
+                      variant={vote === "up" ? "default" : "ghost"}
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const isAddingVote = vote !== "up"
+                        onVote()
+                        if (isAddingVote) {
+                          setShowCounted(true)
+                          if (timerRef.current) window.clearTimeout(timerRef.current)
+                          timerRef.current = window.setTimeout(() => setShowCounted(false), 3000)
+                        }
+                      }}
+                    >
+                      <ThumbsUp className="h-4 w-4" />
+                    </Button>
+                    <span className="font-medium text-foreground">
+                      {helpfulCount} {helpfulCount === 1 ? "user finds" : "users found"} this helpful
+                    </span>
+                  </div>
                 </div>
-                {vote === "up" && (
-                  <p className="text-sm text-primary">
+                {showCounted && (
+                  <p className="text-sm text-primary mt-1 text-left">
                     Your helpful vote has been counted for this FAQ card.
                   </p>
                 )}

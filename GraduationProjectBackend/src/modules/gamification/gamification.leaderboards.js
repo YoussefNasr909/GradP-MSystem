@@ -1,4 +1,5 @@
 import { prisma } from "../../loaders/dbLoader.js";
+import { GAMIFICATION_TRANSACTION_OPTIONS } from "./gamification.transactions.js";
 
 export const LEADERBOARD_TYPES = [
   "INDIVIDUAL_WEEKLY",
@@ -43,7 +44,7 @@ export async function generateLeaderboardSnapshot(type, now = new Date()) {
     if (data.length > 0) {
       await tx.leaderboardSnapshot.createMany({ data });
     }
-  });
+  }, GAMIFICATION_TRANSACTION_OPTIONS);
 
   return {
     type,

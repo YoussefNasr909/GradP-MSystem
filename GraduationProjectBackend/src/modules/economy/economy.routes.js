@@ -46,7 +46,7 @@ router.get("/transactions", validate(getCoinTransactionsSchema), getCoinTransact
 
 router.get(
   "/admin/quests",
-  allowRoles(ROLES.ADMIN, ROLES.DOCTOR),
+  allowRoles(ROLES.ADMIN, ROLES.DOCTOR, ROLES.TA),
   validate(getAdminQuestsSchema),
   getAdminQuests,
 );
@@ -64,7 +64,7 @@ router.patch(
 );
 router.get(
   "/admin/rewards",
-  allowRoles(ROLES.ADMIN, ROLES.DOCTOR),
+  allowRoles(ROLES.ADMIN, ROLES.DOCTOR, ROLES.TA),
   validate(getAdminRewardsSchema),
   getAdminRewards,
 );

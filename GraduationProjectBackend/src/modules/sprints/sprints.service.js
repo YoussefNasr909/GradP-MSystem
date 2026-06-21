@@ -659,7 +659,7 @@ function emitSprintCompletedGamificationEvent(sprint, actor) {
 
 function canSeeEvaluation(actor, teamRole, evaluation) {
   if (actor.role === ROLES.ADMIN || teamRole === ROLES.DOCTOR || teamRole === ROLES.TA) return true;
-  return [EVALUATION_STATUS.SUBMITTED, EVALUATION_STATUS.APPROVED].includes(evaluation.status);
+  return evaluation.status === EVALUATION_STATUS.APPROVED;
 }
 
 function canEditEvaluation(actor, teamRole, evaluation) {
@@ -1306,12 +1306,33 @@ export async function assignTaskToSprintService(actor, sprintId, taskId, payload
   if (task.teamId !== sprint.teamId) {
     throw new AppError("This task belongs to another team.", 403, "SPRINT_TASK_TEAM_MISMATCH");
   }
+
+  let startDateToSet = undefined;
+  let dueDateToSet = undefined;
+
+  const tStart = task.startDate ? startOfDay(task.startDate).getTime() : null;
+  const tEnd = task.dueDate ? endOfDay(task.dueDate).getTime() : null;
+  const sStart = startOfDay(sprint.startDate).getTime();
+  const sEnd = endOfDay(sprint.endDate).getTime();
+
+  if (!task.startDate || tStart < sStart || tStart > sEnd) {
+    startDateToSet = sprint.startDate;
+    task.startDate = startDateToSet;
+  }
+
+  if (!task.dueDate || tEnd > sEnd || tEnd < sStart) {
+    dueDateToSet = sprint.endDate;
+    task.dueDate = dueDateToSet;
+  }
+
   assertTaskFitsSprintWindow(task, sprint);
 
   const updated = await prisma.task.update({
     where: { id: task.id },
     data: {
       sprintId: sprint.id,
+      ...(startDateToSet !== undefined ? { startDate: startDateToSet } : {}),
+      ...(dueDateToSet !== undefined ? { dueDate: dueDateToSet } : {}),
       ...(payload.storyPoints !== undefined ? { storyPoints: normalizePoints(payload.storyPoints, task.storyPoints) } : {}),
       ...(payload.actualPoints !== undefined
         ? { actualPoints: payload.actualPoints === null ? null : normalizePoints(payload.actualPoints, task.actualPoints ?? task.storyPoints) }

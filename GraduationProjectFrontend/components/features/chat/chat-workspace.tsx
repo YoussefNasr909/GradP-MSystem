@@ -521,15 +521,20 @@ function buildGroupItem(
   }
 }
 
-export function ChatWorkspace({
-  variant,
-  className,
-  onClose,
-}: {
-  variant: ChatWorkspaceVariant
+type ChatWorkspaceProps = {
+  selectedItemKey?: string
   className?: string
+  variant: ChatWorkspaceVariant
   onClose?: () => void
-}) {
+  hideHeader?: boolean
+}
+
+export function ChatWorkspace({
+  className,
+  variant,
+  onClose,
+  hideHeader,
+}: ChatWorkspaceProps) {
   const searchParams = useSearchParams()
   const { currentUser } = useAuthStore()
   const { socket, connected, refreshUnreadCount, setUnreadCount } = useChat()
@@ -1546,7 +1551,7 @@ export function ChatWorkspace({
         className,
       )}
     >
-      {variant === "launcher" && (
+      {variant === "launcher" && !hideHeader && (
         <div className="flex items-center justify-end gap-3 border-b border-border/70 bg-card/90 px-5 py-3 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-zinc-900/80">
           <div className="flex items-center gap-1.5">
             <Button

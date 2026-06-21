@@ -395,6 +395,33 @@ GPMS features a deep GitHub integration powered by a **GitHub App**:
 > npx smee-client --url https://smee.io/<your-channel> --path /api/v1/github/webhooks/receive --port 4000
 > ```
 
+## Gamification Activation & Deployment
+
+The gamification feature uses an asynchronous worker pattern and database-backed ledger models. When deploying gamification updates:
+
+1. **Run Prisma Migrations:**
+   Ensure you apply the new gamification schemas to the database.
+   ```bash
+   npm run prisma:migrate
+   ```
+2. **Regenerate Prisma Client:**
+   If deploying to an environment that caches the Prisma client, regenerate it:
+   ```bash
+   npx prisma generate
+   ```
+3. **Environment Variables:**
+   Production XP processing requires both feature flags to be enabled in the backend environment:
+   ```env
+   GAMIFICATION_ENABLED=true
+   GAMIFICATION_WORKER_ENABLED=true
+   ```
+   The sample `.env.example` may keep `GAMIFICATION_WORKER_ENABLED=false` for safer local development. The backend config also has fallback defaults when these variables are absent, so set the values explicitly in deployed environments instead of relying on defaults.
+4. **Ledger Integrity Checks:**
+   If XP balances drift from transaction logs, admins can run the offline repair script to recalculate all user and team balances based on raw `XpTransaction` entries:
+   ```bash
+   node scripts/recalculate-gamification.js
+   ```
+
 ---
 
 ## 📄 License

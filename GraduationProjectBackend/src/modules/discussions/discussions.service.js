@@ -115,16 +115,10 @@ export async function deleteDiscussionCommentService(actor, discussionId, commen
     throw new AppError("Comment not found.", 404, "DISCUSSION_COMMENT_NOT_FOUND");
   }
 
-  if (comment.authorId !== actor.id) {
-    throw new AppError("Only the comment author can delete this comment.", 403, "FORBIDDEN_DISCUSSION_COMMENT_DELETE");
-  }
+  const isPrivileged = ["ADMIN", "TA", "DOCTOR"].includes(actor.role?.toUpperCase());
 
-  if ((comment._count?.replies ?? 0) > 0) {
-    throw new AppError(
-      "Delete the replies under this comment first, then delete the parent comment.",
-      409,
-      "DISCUSSION_COMMENT_HAS_REPLIES"
-    );
+  if (comment.authorId !== actor.id && !isPrivileged) {
+    throw new AppError("Only the comment author can delete this comment.", 403, "FORBIDDEN_DISCUSSION_COMMENT_DELETE");
   }
 
   await deleteDiscussionCommentRecord(commentId);

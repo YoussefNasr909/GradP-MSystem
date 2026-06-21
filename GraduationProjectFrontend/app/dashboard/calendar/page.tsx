@@ -592,13 +592,15 @@ export default function CalendarPage() {
           </div>
         </motion.div>
 
-        {/* ── FILTER BAR ──────────────────────────────────────────── */}
-        <motion.div 
+        {/* ── WORKSPACE CARD ───────────────────────────────────────── */}
+        <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-md sm:flex-row sm:items-center"
+          className="flex flex-col gap-6 rounded-[32px] border border-border/40 bg-background/50 p-2 sm:p-4 backdrop-blur-md shadow-2xl"
         >
+          {/* ── FILTER BAR ──────────────────────────────────────────── */}
+          <div className="flex flex-col gap-4 p-2 sm:p-4 sm:flex-row sm:items-center">
           <div className="relative flex-1 min-w-[240px]">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
             <Input
@@ -663,8 +665,8 @@ export default function CalendarPage() {
               {filteredEvents.length} Results
             </span>
           </div>
-        </motion.div>
-
+        </div>
+        {/* END FILTER BAR */}
         {/* ── MAIN CONTENT ─────────────────────────────────────────── */}
         {error ? (
           <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/30 bg-destructive/5 py-12 text-center">
@@ -683,7 +685,7 @@ export default function CalendarPage() {
             <div className="space-y-0 min-w-0">
               <Tabs value={view} onValueChange={(v) => setView(v as CalendarView)} className="w-full">
                 {/* View header + tab switcher */}
-                <div className="flex flex-col gap-4 rounded-t-3xl border border-border/40 bg-background/40 px-6 py-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-4 px-2 sm:px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-0.5">
                     <h2 className="text-lg font-bold tracking-tight text-foreground/80">
                       {view === "month" || view === "agenda"
@@ -694,12 +696,12 @@ export default function CalendarPage() {
                       {format(visibleRange.start, "MMM d")} – {format(visibleRange.end, "MMM d, yyyy")}
                     </p>
                   </div>
-                  <TabsList className="h-9 w-full grid grid-cols-4 rounded-xl bg-muted/20 p-1 sm:w-fit">
+                  <TabsList className="h-11 p-1 bg-muted/10 rounded-xl flex sm:w-fit overflow-x-auto custom-scrollbar">
                     {Object.entries(viewLabels).map(([key, label]) => (
                       <TabsTrigger 
                         key={key} 
                         value={key} 
-                        className="h-7 rounded-lg px-3 text-[10px] font-bold uppercase tracking-wider transition-all data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                        className="h-9 px-3 sm:px-6 rounded-lg text-xs font-bold uppercase tracking-wider shrink-0 transition-all data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
                       >
                         {label}
                       </TabsTrigger>
@@ -707,7 +709,7 @@ export default function CalendarPage() {
                   </TabsList>
                 </div>
 
-                <div className="rounded-b-3xl border border-t-0 border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+                <div className="overflow-hidden">
                   <TabsContent value="month" className="mt-0 outline-none focus-visible:ring-0">
                     <CalendarGrid
                       month={month}
@@ -777,7 +779,7 @@ export default function CalendarPage() {
             {/* ── RIGHT: Sidebar ──────────────────────────────────── */}
             <div className="space-y-4">
               {/* Provider connections */}
-              <div className="rounded-3xl border border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+              <div className="rounded-3xl bg-white/5 overflow-hidden transition-all duration-500 hover:bg-white/10">
                 <div className="border-b border-border/40 px-5 py-4">
                   <h3 className="text-xs font-bold tracking-tight text-foreground/70">Calendar Sync</h3>
                   <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/30">{connectedCount}/2 Active</p>
@@ -789,7 +791,7 @@ export default function CalendarPage() {
               </div>
 
               {/* Action center */}
-              <div className="rounded-3xl border border-border/40 bg-background/20 backdrop-blur-md overflow-hidden">
+              <div className="rounded-3xl bg-white/5 overflow-hidden transition-all duration-500 hover:bg-white/10">
                 <div className="border-b border-border/40 px-5 py-4">
                   <h3 className="text-xs font-bold tracking-tight text-foreground/70">Action Center</h3>
                   <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/30">Alerts & Status</p>
@@ -826,6 +828,7 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+        </motion.div>
       </motion.div>
 
       {/* ── EVENT DETAIL SHEET ─────────────────────────────────────── */}
@@ -892,7 +895,7 @@ function QuickStat({
     <motion.div 
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
-      className="group flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-primary/20 hover:bg-white/10"
+      className="group flex items-center gap-3 rounded-2xl border border-white/5 bg-white/5 p-3 shadow-sm backdrop-blur-md transition-all duration-300 hover:border-primary/20 hover:bg-white/10"
     >
       <div className={cn(
         "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all duration-500 shadow-inner",
@@ -965,7 +968,7 @@ function CalendarGrid({
   return (
     <div className="overflow-hidden">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-border/40 bg-muted/10 text-center">
+      <div className="grid grid-cols-7 border-b border-white/5 bg-muted/10 text-center">
         {[["S","Sat"],["S","Sun"],["M","Mon"],["T","Tue"],["W","Wed"],["T","Thu"],["F","Fri"]].map(([short, full], i) => (
           <div key={i} className="py-2.5 text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
             <span className="sm:hidden">{short}</span>
@@ -980,7 +983,7 @@ function CalendarGrid({
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-7 border-border/40"
+        className="grid grid-cols-7 border-white/5"
       >
         {days.map((day) => {
           const key = format(day, "yyyy-MM-dd")
@@ -995,7 +998,7 @@ function CalendarGrid({
               variants={item}
               onClick={() => onSelectDay(day)}
               className={cn(
-                "group relative cursor-pointer border-b border-r border-border/40 p-1.5 transition-all duration-300",
+                "group relative cursor-pointer border-b border-r border-white/5 p-1.5 transition-all duration-300",
                 "min-h-[90px] sm:min-h-[120px] lg:min-h-[140px]",
                 !inMonth && "bg-muted/[0.01] opacity-30",
                 today && !isSelected && "bg-primary/[0.02]",
@@ -1249,7 +1252,7 @@ function EventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onOpenEven
       whileHover={{ y: -2, scale: 1.005 }}
       whileTap={{ scale: 0.995 }}
       className={cn(
-        "group w-full rounded-2xl border border-white/10 bg-white/5 p-4 text-left transition-all backdrop-blur-md hover:border-primary/20 hover:bg-white/10 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+        "group w-full rounded-2xl bg-background/40 p-4 text-left transition-all hover:bg-background hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
         borderCls,
         "border-l-4"
       )}
@@ -1321,7 +1324,7 @@ function CompactEventCard({ event, onOpenEvent }: { event: ApiCalendarEvent; onO
       onClick={() => onOpenEvent(event)}
       whileHover={{ x: 2, backgroundColor: "rgba(var(--primary), 0.03)" }}
       className={cn(
-        "group flex w-full items-center gap-3 rounded-xl border border-white/5 bg-white/[0.01] p-2.5 text-left transition-all hover:border-primary/10 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+        "group flex w-full items-center gap-3 rounded-xl bg-background/20 p-2.5 text-left transition-all hover:bg-background/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
         borderCls,
         "border-l-4"
       )}

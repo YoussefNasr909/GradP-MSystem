@@ -8,6 +8,7 @@ import {
   processRuleForEvent,
   processTaskReopenedEvent,
 } from "./gamification.processor.js";
+import { GAMIFICATION_TRANSACTION_OPTIONS } from "./gamification.transactions.js";
 
 function overridePrismaProperty(t, key, value) {
   const descriptor = Object.getOwnPropertyDescriptor(prisma, key);
@@ -122,8 +123,11 @@ function createProcessorTx() {
   return { tx, calls };
 }
 
-function mockTransaction(t, tx) {
-  overridePrismaProperty(t, "$transaction", async (callback) => callback(tx));
+function mockTransaction(t, tx, onOptions = () => {}) {
+  overridePrismaProperty(t, "$transaction", async (callback, options) => {
+    onOptions(options);
+    return callback(tx);
+  });
 }
 
 const userRule = {
@@ -152,6 +156,48 @@ test("processPendingEvents does not award XP when worker flag is disabled", asyn
     assert.equal(result.skipped, 0);
     assert.equal(result.disabled, true);
     assert.match(result.reason, /GAMIFICATION_WORKER_ENABLED=true/);
+  } finally {
+    env.gamificationEnabled = previousEnabled;
+    env.gamificationWorkerEnabled = previousWorkerEnabled;
+  }
+});
+
+test("processPendingEvents can reset failed events for an admin retry", async (t) => {
+  const previousEnabled = env.gamificationEnabled;
+  const previousWorkerEnabled = env.gamificationWorkerEnabled;
+  env.gamificationEnabled = true;
+  env.gamificationWorkerEnabled = true;
+
+  const calls = [];
+  overridePrismaProperty(t, "gamificationEvent", {
+    updateMany: async (args) => {
+      calls.push({ model: "gamificationEvent", method: "updateMany", args });
+      return { count: 1 };
+    },
+    findMany: async (args) => {
+      calls.push({ model: "gamificationEvent", method: "findMany", args });
+      return [];
+    },
+  });
+
+  try {
+    const result = await processPendingEvents({
+      retryFailed: true,
+      eventIds: ["event-failed-1"],
+    });
+
+    assert.equal(result.retried, 1);
+    const retryUpdate = calls.find((call) => call.model === "gamificationEvent" && call.method === "updateMany");
+    assert.deepEqual(retryUpdate.args.where, {
+      status: "FAILED",
+      id: { in: ["event-failed-1"] },
+    });
+    assert.deepEqual(retryUpdate.args.data, {
+      status: "PENDING",
+      attempts: 0,
+      lastError: null,
+      processedAt: null,
+    });
   } finally {
     env.gamificationEnabled = previousEnabled;
     env.gamificationWorkerEnabled = previousWorkerEnabled;
@@ -554,6 +600,48 @@ test("processRuleForEvent awards sprint completion XP to the team", async (t) =>
   assert.equal(transactionCreate.args.data.amount, 150);
 });
 
+test("processRuleForEvent skips duplicate sprint completion XP when maxPerSprint is reached", async (t) => {
+  const { tx, calls } = createProcessorTx();
+  const countQueries = [];
+  tx.xpTransaction.count = async (args) => {
+    countQueries.push(args);
+    return 1;
+  };
+  mockTransaction(t, tx);
+
+  await processRuleForEvent(
+    {
+      id: "event-sprint-duplicate",
+      eventType: "SPRINT_COMPLETED",
+      sourceType: "Sprint",
+      sourceId: "sprint-1",
+      actorUserId: "leader-1",
+      teamId: "team-1",
+      payload: { grade: 95, completionPercent: 95 },
+    },
+    {
+      code: "SPRINT_COMPLETED_TEAM",
+      name: "Sprint completed",
+      eventType: "SPRINT_COMPLETED",
+      targetType: "TEAM",
+      baseXp: 120,
+      version: 1,
+      conditions: {},
+      caps: { maxPerSprint: 1 },
+      multipliers: {
+        quality: { "90-100": 1.25, "80-89": 1.0, "70-79": 0.7, "60-69": 0.4, below60: 0 },
+      },
+    },
+  );
+
+  assert.equal(countQueries.length, 1);
+  assert.equal(countQueries[0].where.sourceType, "Sprint");
+  assert.equal(countQueries[0].where.sourceId, "sprint-1");
+  assert.equal(countQueries[0].where.teamId, "team-1");
+  assert.equal(calls.some((call) => call.model === "xpTransaction" && call.method === "create"), false);
+  assert.equal(calls.some((call) => call.model === "teamXpBalance"), false);
+});
+
 test("processRuleForEvent awards approved weekly report XP once per report", async (t) => {
   const { tx, calls } = createProcessorTx();
   const countQueries = [];
@@ -848,6 +936,34 @@ test("processRuleForEvent retries serialization failures (P2034)", async (t) => 
   assert.equal(attemptCount, 2);
   const transactionCreate = calls.find((call) => call.model === "xpTransaction");
   assert.equal(transactionCreate.args.data.status, "AWARDED");
+});
+
+test("processRuleForEvent uses extended gamification transaction options", async (t) => {
+  const { tx } = createProcessorTx();
+  let receivedOptions = null;
+  mockTransaction(t, tx, (options) => {
+    receivedOptions = options;
+  });
+
+  await processRuleForEvent(
+    {
+      id: "event-transaction-options",
+      eventType: "TASK_APPROVED",
+      sourceType: "Task",
+      sourceId: "task-1",
+      actorUserId: "doctor-1",
+      teamId: "team-1",
+      payload: { assigneeUserId: "student-1", storyPoints: 3 },
+    },
+    {
+      ...userRule,
+      code: "TASK_APPROVED_XP",
+      name: "Task approved",
+      eventType: "TASK_APPROVED",
+    },
+  );
+
+  assert.deepEqual(receivedOptions, GAMIFICATION_TRANSACTION_OPTIONS);
 });
 
 test("buildXpTransactionNotification targets team leaders with team-safe copy", () => {

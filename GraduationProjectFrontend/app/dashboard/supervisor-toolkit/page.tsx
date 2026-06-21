@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Lock,
   Users,
@@ -31,6 +33,9 @@ import {
   Wand2,
   Save,
   RotateCcw,
+  Search,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
@@ -48,6 +53,7 @@ import {
 import { getDefaultRubric } from "@/components/dashboard/rubric-editor"
 import type { RubricItem } from "@/lib/api/submissions"
 import { teamsApi } from "@/lib/api/teams"
+import { proposalsApi } from "@/lib/api/proposals"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
@@ -91,7 +97,26 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
   const [loading, setLoading] = useState(true)
   const [newNote, setNewNote] = useState("")
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const pageSize = 8
   const { currentUser } = useAuthStore()
+
+  const filteredNotes = useMemo(() => {
+    if (!searchQuery.trim()) return notes;
+    const lower = searchQuery.toLowerCase();
+    return notes.filter(n => 
+      n.content.toLowerCase().includes(lower) || 
+      (n.author?.fullName ?? "").toLowerCase().includes(lower)
+    );
+  }, [notes, searchQuery]);
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery])
+
+  const totalPages = Math.max(1, Math.ceil(filteredNotes.length / pageSize))
+  const paginatedNotes = filteredNotes.slice((page - 1) * pageSize, page * pageSize)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -162,6 +187,7 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
         <Card className="p-4 border-border/50">
           <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">Add a new note</Label>
           <Textarea
+            id="new-note-input"
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
             placeholder="e.g. Team seems to be falling behind on testing — need to check in next meeting…"
@@ -169,12 +195,26 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
             rows={3}
           />
           <div className="flex justify-end">
-            <Button size="sm" onClick={handleAdd} disabled={saving || newNote.trim().length === 0}>
+            <Button size="sm" onClick={handleAdd} disabled={saving || newNote.trim().length === 0} className="hover:scale-105 active:scale-95 transition-all">
               <Plus className="h-3.5 w-3.5 mr-1.5" />
               {saving ? "Saving…" : "Add note"}
             </Button>
           </div>
         </Card>
+      )}
+
+      {notes.length > 0 && (
+        <div className="relative mb-4">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <Search className="h-4 w-4" />
+          </div>
+          <Input 
+            placeholder="Search notes by keyword or author..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 bg-background/50 backdrop-blur-sm border-border/60 hover:border-border/80 focus:bg-background transition-colors rounded-xl h-11"
+          />
+        </div>
       )}
 
       {loading ? (
@@ -184,14 +224,33 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
           ))}
         </div>
       ) : notes.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground border-dashed">
-          <StickyNote className="h-8 w-8 mx-auto mb-2 opacity-50" />
-          No notes yet. {teamId !== "all" && "Use the box above to start tracking observations."}
+        <Card className="p-8 text-center border-dashed border-2 bg-gradient-to-br from-background to-muted/20 hover:border-primary/30 transition-all duration-300">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+            <StickyNote className="h-8 w-8 text-primary/70" />
+          </div>
+          <h3 className="font-semibold text-lg mb-1">No notes yet</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-6">
+            {teamId !== "all" 
+              ? "Start tracking your observations and private feedback for this team."
+              : "There are no shared notes across your supervised teams."}
+          </p>
+          {teamId !== "all" && (
+            <Button variant="outline" className="rounded-xl border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 transition-all" onClick={() => {
+              document.getElementById("new-note-input")?.focus()
+            }}>
+              Write your first note
+            </Button>
+          )}
+        </Card>
+      ) : filteredNotes.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground border-dashed border-2">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          No notes match your search.
         </Card>
       ) : (
         <AnimatePresence mode="popLayout">
           <div className="space-y-3">
-            {notes.map((n, i) => (
+            {paginatedNotes.map((n, i) => (
               <motion.div
                 key={n.id}
                 layout
@@ -200,7 +259,7 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ delay: Math.min(i * 0.03, 0.2) }}
               >
-                <Card className="p-4 border-border/50 hover:border-border transition-colors">
+                <Card className="p-5 border-border/40 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 transition-all duration-300">
                   <div className="flex items-start gap-3">
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={n.author?.avatarUrl ?? undefined} />
@@ -211,9 +270,9 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
                         <span className="font-semibold text-sm">{n.author?.fullName ?? "Unknown"}</span>
                         <Badge variant="outline" className="text-[10px] capitalize">{n.authorRole.toLowerCase()}</Badge>
                         {teamId === "all" && n.teamId && (
-                           <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-medium border-muted-foreground/20">
-                             {teamOptions.find(t => t.id === n.teamId)?.name ?? "Shared Team"}
-                           </Badge>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-medium border-muted-foreground/20 max-w-[120px] sm:max-w-none truncate block leading-[14px]">
+                              {teamOptions.find(t => t.id === n.teamId)?.name ?? "Shared Team"}
+                            </Badge>
                         )}
                         <span className="text-xs text-muted-foreground">
                           {new Date(n.createdAt).toLocaleString()}
@@ -225,7 +284,7 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-destructive shrink-0"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 transition-colors"
                         onClick={() => setDeleteId(n.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -237,6 +296,62 @@ function NotesPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; allTe
             ))}
           </div>
         </AnimatePresence>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border/40 mt-4">
+          <p className="text-xs text-muted-foreground font-medium hidden sm:block">
+            Showing <span className="text-foreground">{(page - 1) * pageSize + 1}</span> to <span className="text-foreground">{Math.min(page * pageSize, filteredNotes.length)}</span> of <span className="text-foreground">{filteredNotes.length}</span> notes
+          </p>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+              let p = page;
+              if (totalPages <= 5) p = i + 1;
+              else if (page < 3) p = i + 1;
+              else if (page > totalPages - 2) p = totalPages - 4 + i;
+              else p = page - 2 + i;
+              
+              if (p < 1 || p > totalPages) return null;
+              
+              return (
+                <Button
+                  key={p}
+                  variant={page === p ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 w-8 p-0 rounded-lg transition-colors font-semibold text-xs",
+                    page === p 
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "border-border/40 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                  )}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              )
+            })}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
+              disabled={page === totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -254,6 +369,7 @@ function formatRelativeTime(dueDate: string) {
   const days = Math.floor(absDiff / (1000 * 60 * 60 * 24))
 
   if (overdue) {
+    if (minutes < 1) return "Just now"
     if (minutes < 60) return `${minutes}m overdue`
     if (hours < 24) return `${hours}h overdue`
     return `${days}d overdue`
@@ -272,6 +388,27 @@ function DeadlinesPanel({ teamId, allTeamIds, userRole }: { teamId: string; allT
   const [date, setDate] = useState("")
   const [note, setNote] = useState("")
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
+  const pageSize = 8
+  const [filter, setFilter] = useState<"all" | "upcoming" | "overdue">("all")
+
+  const filteredDeadlines = useMemo(() => {
+    return deadlines.filter(d => {
+      const isOverdue = new Date(d.dueDate).getTime() < Date.now();
+      if (filter === "upcoming" && isOverdue) return false;
+      if (filter === "overdue" && !isOverdue) return false;
+      return true;
+    })
+  }, [deadlines, filter])
+
+  useEffect(() => { setPage(1) }, [filter])
+
+  const totalPages = Math.max(1, Math.ceil(filteredDeadlines.length / pageSize))
+  const paginatedDeadlines = filteredDeadlines.slice((page - 1) * pageSize, page * pageSize)
+  
+  const totalDeadlinesCount = deadlines.length;
+  const passedDeadlinesCount = deadlines.filter(d => new Date(d.dueDate).getTime() < Date.now()).length;
+  const progressPercentage = totalDeadlinesCount === 0 ? 0 : (passedDeadlinesCount / totalDeadlinesCount) * 100;
 
   const isDoctorOrAdmin = userRole === "DOCTOR" || userRole === "ADMIN"
 
@@ -369,31 +506,30 @@ function DeadlinesPanel({ teamId, allTeamIds, userRole }: { teamId: string; allT
       />
 
       {/* Enhanced Creation Form */}
-      <Card className="overflow-hidden border-none shadow-xl bg-white dark:bg-zinc-950 ring-1 ring-border/50">
-        <div className="p-0">
-          <div className="bg-primary/5 px-6 py-4 border-b border-border/40 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                <CalendarPlus className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm tracking-tight">
-                  {teamId === "all" ? "Global Deadline Broadcast" : "New Team Deadline"}
-                </h3>
-                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                  {teamId === "all" ? "Affects all supervised teams" : "Schedule deliverable due date"}
-                </p>
-              </div>
+      <Card className="p-6 border-border/40 shadow-sm bg-card rounded-2xl mb-8 relative overflow-hidden">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <CalendarPlus className="h-5 w-5" />
             </div>
-            {saving && (
-              <Badge variant="outline" className="animate-pulse bg-primary/5 text-primary border-primary/20">
-                <RotateCcw className="h-3 w-3 animate-spin mr-1.5" />
-                Processing...
-              </Badge>
-            )}
+            <div>
+              <h3 className="font-bold tracking-tight">
+                {teamId === "all" ? "Global Deadline Broadcast" : "New Team Deadline"}
+              </h3>
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                {teamId === "all" ? "Affects all supervised teams" : "Schedule deliverable due date"}
+              </p>
+            </div>
           </div>
-          
-          <div className="p-6 space-y-5">
+          {saving && (
+            <Badge variant="secondary" className="animate-pulse">
+              <RotateCcw className="h-3 w-3 animate-spin mr-1.5" />
+              Processing
+            </Badge>
+          )}
+        </div>
+        
+        <div className="space-y-5">
             <div className="grid gap-5 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold text-foreground/70 flex items-center gap-2">
@@ -455,18 +591,44 @@ function DeadlinesPanel({ teamId, allTeamIds, userRole }: { teamId: string; allT
               {saving ? "Creating Deadlines..." : "Set Deliverable Deadline"}
             </Button>
           </div>
-        </div>
       </Card>
 
       {/* Deadline List Section */}
       <div className="space-y-4 pt-2">
-        <div className="flex items-center justify-between px-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-bold tracking-tight text-foreground/80">Active Deadlines</h4>
             <span className="h-1 w-1 rounded-full bg-border" />
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{deadlines.length} scheduled</span>
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{filteredDeadlines.length} results</span>
+          </div>
+
+          <div className="flex bg-muted/50 p-1 rounded-lg border border-border/40 shrink-0">
+            <button
+              onClick={() => setFilter("all")}
+              className={cn("px-3 py-1 text-xs font-semibold rounded-md transition-all", filter === "all" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >All</button>
+            <button
+              onClick={() => setFilter("upcoming")}
+              className={cn("px-3 py-1 text-xs font-semibold rounded-md transition-all", filter === "upcoming" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+            >Upcoming</button>
+            <button
+              onClick={() => setFilter("overdue")}
+              className={cn("px-3 py-1 text-xs font-semibold rounded-md transition-all", filter === "overdue" ? "bg-background shadow-sm text-red-600" : "text-muted-foreground hover:text-red-500")}
+            >Overdue</button>
           </div>
         </div>
+
+        {totalDeadlinesCount > 0 && (
+          <div className="px-2 pb-2">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-semibold text-muted-foreground">Semester Progress</span>
+              <span className="font-bold tracking-tight">{passedDeadlinesCount} of {totalDeadlinesCount} Completed</span>
+            </div>
+            <div className="h-2.5 w-full bg-muted/50 rounded-full overflow-hidden border border-border/40">
+              <div className="h-full bg-primary/80 transition-all duration-1000 ease-out rounded-full" style={{ width: `${progressPercentage}%` }} />
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="space-y-3">
@@ -482,22 +644,27 @@ function DeadlinesPanel({ teamId, allTeamIds, userRole }: { teamId: string; allT
               </Card>
             ))}
           </div>
-        ) : deadlines.length === 0 ? (
+        ) : filteredDeadlines.length === 0 ? (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="py-16 flex flex-col items-center justify-center border-2 border-dashed border-border/40 rounded-[2rem] bg-muted/5"
+            className="py-16 flex flex-col items-center justify-center border-2 border-dashed border-border/40 rounded-[2rem] bg-gradient-to-br from-background to-muted/20 hover:border-primary/30 transition-all duration-300"
           >
-            <div className="h-14 w-14 rounded-2xl bg-muted/50 flex items-center justify-center mb-5 ring-8 ring-muted/20">
-              <CalendarClock className="h-7 w-7 text-muted-foreground/40" />
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5 ring-8 ring-muted/20">
+              <CalendarClock className="h-8 w-8 text-primary/70" />
             </div>
-            <p className="text-base font-bold text-foreground/60">No deadlines scheduled</p>
-            <p className="text-sm text-muted-foreground/50 mt-1 max-w-[240px] text-center">Your teams have a clear schedule. Set a new deadline above to get started.</p>
+            <p className="text-xl font-bold text-foreground">No deadlines scheduled</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-[300px] text-center mb-6">Your teams have a clear schedule. Set a new deadline above to get started.</p>
+            <Button variant="outline" className="rounded-xl border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 transition-all" onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}>
+              Create your first deadline
+            </Button>
           </motion.div>
         ) : (
           <div className="grid gap-3.5">
             <AnimatePresence mode="popLayout">
-              {deadlines.map((d, idx) => {
+              {paginatedDeadlines.map((d, idx) => {
                 const due = new Date(d.dueDate)
                 const now = new Date()
                 const diffMs = due.getTime() - now.getTime()
@@ -515,102 +682,148 @@ function DeadlinesPanel({ teamId, allTeamIds, userRole }: { teamId: string; allT
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.04, type: "spring", stiffness: 100 }}
                   >
-                    <Card className={cn(
-                      "group relative overflow-hidden border-border/40 hover:border-primary/40 transition-all duration-300 hover:shadow-xl rounded-[1.25rem] bg-card",
-                      overdue && "bg-red-500/[0.01] border-red-500/20 hover:border-red-500/40",
-                      !overdue && days <= 3 && "bg-amber-500/[0.01] border-amber-500/20 hover:border-amber-500/40"
-                    )}>
-                      {/* Accent highlight */}
+                    <div className="group relative flex items-start gap-4 py-4 px-2 hover:bg-muted/30 transition-colors rounded-xl">
                       <div className={cn(
-                        "absolute left-0 top-0 bottom-0 w-1.5 transition-colors duration-300",
-                        overdue ? "bg-red-500" : days <= 3 ? "bg-amber-500" : "bg-primary"
-                      )} />
-
-                      <div className="p-5 flex items-center gap-5">
-                        <div className={cn(
-                          "h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:scale-105 duration-300",
-                          overdue ? "bg-red-500/10 text-red-600" : days <= 3 ? "bg-amber-500/10 text-amber-600" : "bg-primary/10 text-primary"
-                        )}>
-                          <FileText className="h-7 w-7" />
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h5 className="font-extrabold text-base tracking-tight">{d.deliverableType}</h5>
-                            <Badge 
-                              variant={overdue ? "destructive" : "secondary"} 
-                              className={cn(
-                                "text-[10px] h-5 px-2 uppercase tracking-tighter font-bold rounded-lg border-none",
-                                !overdue && days <= 3 && "bg-amber-500 text-white hover:bg-amber-600",
-                                !overdue && days > 3 && "bg-primary/10 text-primary hover:bg-primary/20"
-                              )}
-                            >
-                              {relativeText}
-                            </Badge>
-                            {isDoctorSet && (
-                              <Badge variant="outline" className="text-[10px] h-5 px-2 border-indigo-500/20 text-indigo-600 bg-indigo-500/5 font-bold uppercase tracking-tighter rounded-lg">
-                                <Lock className="h-2.5 w-2.5 mr-1.5" /> Protected
-                              </Badge>
-                            )}
-                            {teamId === "all" && d.team && (
-                              <Badge variant="outline" className="text-[10px] h-5 px-2 font-bold text-muted-foreground/70 border-muted-foreground/10 bg-muted/30 rounded-lg">
-                                {d.team.name}
-                              </Badge>
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
-                            <div className="flex items-center gap-2 bg-muted/30 px-2 py-1 rounded-md">
-                              <CalendarClock className="h-3.5 w-3.5 text-primary/60" />
-                              <span className="text-foreground/80">{due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                              <span className="opacity-30">|</span>
-                              <span className="text-foreground/80">{due.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                            {d.setBy && (
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-5 w-5 ring-2 ring-background shadow-sm">
-                                  <AvatarImage src={d.setBy.avatarUrl ?? undefined} />
-                                  <AvatarFallback className="text-[8px] font-bold">{getInitials(d.setBy.fullName)}</AvatarFallback>
-                                </Avatar>
-                                <span className="hover:text-foreground transition-colors cursor-default">{d.setBy.fullName}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {d.note && (
-                            <div className="mt-3 relative">
-                              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-border/60 rounded-full" />
-                              <p className="pl-3 text-xs text-muted-foreground/90 italic leading-relaxed">
-                                &quot;{d.note}&quot;
-                              </p>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {deletable ? (
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-10 w-10 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-xl transition-all opacity-0 group-hover:opacity-100" 
-                              onClick={() => setDeleteId(d.id)}
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </Button>
-                          ) : (
-                            <div className="p-2 text-muted-foreground/30" title="Protected by Doctor Authority">
-                              <Lock className="h-5 w-5" />
-                            </div>
-                          )}
-                        </div>
+                        "h-10 w-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-colors",
+                        overdue ? "bg-red-500/10 text-red-600" : days <= 3 ? "bg-amber-500/10 text-amber-600" : "bg-primary/10 text-primary"
+                      )}>
+                        <FileText className="h-4 w-4" />
                       </div>
-                    </Card>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h5 className="font-semibold text-sm tracking-tight text-foreground/90">{d.deliverableType}</h5>
+                          <Badge 
+                            variant="secondary"
+                            className={cn(
+                              "text-[11px] h-5 px-2 font-bold rounded-md border-none",
+                              overdue ? "bg-red-500/10 text-red-600" : days <= 3 ? "bg-amber-500/10 text-amber-600" : "bg-primary/10 text-primary"
+                            )}
+                          >
+                            {relativeText}
+                          </Badge>
+                          {isDoctorSet && (
+                            <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-indigo-500/20 text-indigo-600 bg-indigo-500/5 font-bold uppercase tracking-tighter rounded-md">
+                              <Lock className="h-3 w-3 mr-1" /> Protected
+                            </Badge>
+                          )}
+                          {teamId === "all" && d.team && (
+                            <Badge variant="outline" className="text-[10px] h-5 px-2 font-medium text-muted-foreground/70 border-muted-foreground/20 rounded-md max-w-[150px] sm:max-w-none truncate block leading-[18px]">
+                              {d.team.name}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-3 text-[11px] font-medium text-muted-foreground mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <CalendarClock className="h-3.5 w-3.5 text-muted-foreground/60" />
+                            <span>{due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at {due.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                          {d.setBy && (
+                            <>
+                              <span className="opacity-30">•</span>
+                              <div className="flex items-center gap-1.5">
+                                <Avatar className="h-4 w-4">
+                                  <AvatarImage src={d.setBy.avatarUrl ?? undefined} />
+                                  <AvatarFallback className="text-[8px]">{getInitials(d.setBy.fullName)}</AvatarFallback>
+                                </Avatar>
+                                <span>{d.setBy.fullName}</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {d.note && (
+                          <p className="text-[13px] text-muted-foreground/80 leading-relaxed">
+                            {d.note}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {deletable ? (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg" 
+                            onClick={() => setDeleteId(d.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <div className="p-2 text-muted-foreground/30" title="Protected by Doctor Authority">
+                            <Lock className="h-4 w-4" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Modern blur gradient line separator */}
+                      {idx < deadlines.length - 1 && (
+                        <div className="absolute bottom-0 left-[2%] right-[2%] h-[1px] bg-gradient-to-r from-transparent via-border/60 to-transparent" />
+                      )}
+                    </div>
                   </motion.div>
                 )
               })}
             </AnimatePresence>
           </div>
         )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border/40 mt-4 px-2">
+          <p className="text-xs text-muted-foreground font-medium hidden sm:block">
+            Showing <span className="text-foreground">{(page - 1) * pageSize + 1}</span> to <span className="text-foreground">{Math.min(page * pageSize, filteredDeadlines.length)}</span> of <span className="text-foreground">{filteredDeadlines.length}</span> deadlines
+          </p>
+          <div className="flex items-center gap-1.5 ml-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
+              disabled={page === 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+              let p = page;
+              if (totalPages <= 5) p = i + 1;
+              else if (page < 3) p = i + 1;
+              else if (page > totalPages - 2) p = totalPages - 4 + i;
+              else p = page - 2 + i;
+              
+              if (p < 1 || p > totalPages) return null;
+              
+              return (
+                <Button
+                  key={p}
+                  variant={page === p ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 w-8 p-0 rounded-lg transition-colors font-semibold text-xs",
+                    page === p 
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "border-border/40 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                  )}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              )
+            })}
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
+              disabled={page === totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   )
@@ -620,7 +833,22 @@ function ActivityPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; al
   const [events, setEvents] = useState<ActivityEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState("")
   const pageSize = 8
+
+  const filteredEvents = useMemo(() => {
+    if (!searchQuery.trim()) return events;
+    const lower = searchQuery.toLowerCase();
+    return events.filter(e => 
+      e.title.toLowerCase().includes(lower) || 
+      (e.detail ?? "").toLowerCase().includes(lower) || 
+      (e.actor?.name ?? "").toLowerCase().includes(lower)
+    );
+  }, [events, searchQuery]);
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -646,35 +874,52 @@ function ActivityPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; al
     setPage(1) // reset page when team changes
   }, [load])
 
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i} className="p-4"><Skeleton className="h-12 w-full" /></Card>
-        ))}
-      </div>
-    )
-  }
-
-  if (events.length === 0) {
-    return (
-      <Card className="p-8 text-center text-sm text-muted-foreground border-dashed">
-        <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        No activity yet.
-      </Card>
-    )
-  }
-
-  const totalPages = Math.ceil(events.length / pageSize)
-  const paginatedEvents = events.slice((page - 1) * pageSize, page * pageSize)
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / pageSize))
+  const paginatedEvents = filteredEvents.slice((page - 1) * pageSize, page * pageSize)
 
   return (
     <div className="space-y-6">
-      <div className="relative">
-        <div className="absolute left-[20px] top-2 bottom-2 w-px bg-border/60" />
-        <div className="space-y-4">
-          <AnimatePresence mode="popLayout">
-            {paginatedEvents.map((e, i) => {
+      {events.length > 0 && (
+        <div className="relative">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <Search className="h-4 w-4" />
+          </div>
+          <Input 
+            placeholder="Search activity by title, description, or author..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 bg-background/50 backdrop-blur-sm border-border/60 hover:border-border/80 focus:bg-background transition-colors rounded-xl h-11"
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Card key={i} className="p-4"><Skeleton className="h-12 w-full" /></Card>
+          ))}
+        </div>
+      ) : events.length === 0 ? (
+        <Card className="p-8 text-center border-dashed border-2 bg-gradient-to-br from-background to-muted/20 hover:border-primary/30 transition-all duration-300">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+            <Activity className="h-8 w-8 text-primary/70" />
+          </div>
+          <h3 className="font-semibold text-lg mb-1">No activity recorded</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            Once teams submit deliverables, request reviews, or update tasks, the activity feed will populate here.
+          </p>
+        </Card>
+      ) : filteredEvents.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground border-dashed border-2">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          No activities match your search.
+        </Card>
+      ) : (
+        <div className="relative">
+          <div className="absolute left-[20px] top-2 bottom-2 w-px bg-border/60" />
+          <div className="space-y-4">
+            <AnimatePresence mode="popLayout">
+              {paginatedEvents.map((e, i) => {
               const Icon = ACTIVITY_ICON[e.type]
               return (
                 <motion.div
@@ -691,21 +936,22 @@ function ActivityPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; al
                   )}>
                     <Icon className="h-4 w-4" />
                   </div>
-                  <Card className="p-3 border-border/50 hover:shadow-md transition-shadow cursor-default">
+                  <Card className="p-4 border-border/40 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/30 transition-all duration-300 cursor-default">
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <p className="text-sm font-bold tracking-tight">{e.title}</p>
                           <Badge variant="outline" className="text-[9px] uppercase tracking-tighter h-4 px-1 opacity-70">
                             {e.category}
                           </Badge>
                           {teamId === "all" && (
-                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-medium border-muted-foreground/20">
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-medium border-muted-foreground/20 max-w-[120px] sm:max-w-none truncate block leading-[14px]">
                               {teamOptions.find(t => t.id === (e as any).teamId)?.name ?? "Shared Team"}
                             </Badge>
                           )}
                         </div>
                         {e.detail && <p className="text-xs text-muted-foreground line-clamp-2">{e.detail}</p>}
+```
                         <div className="flex items-center gap-1.5 mt-2">
                           {e.actor?.name && (
                             <span className="text-[10px] font-medium text-foreground/70">{e.actor.name}</span>
@@ -720,33 +966,57 @@ function ActivityPanel({ teamId, allTeamIds, teamOptions }: { teamId: string; al
               )
             })}
           </AnimatePresence>
+          </div>
         </div>
-      </div>
+      )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2 border-t border-border/40">
-          <p className="text-xs text-muted-foreground font-medium">
-            Showing <span className="text-foreground">{(page - 1) * pageSize + 1}</span> to <span className="text-foreground">{Math.min(page * pageSize, events.length)}</span> of <span className="text-foreground">{events.length}</span> activities
+        <div className="flex items-center justify-between pt-4 border-t border-border/40">
+          <p className="text-xs text-muted-foreground font-medium hidden sm:block">
+            Showing <span className="text-foreground">{(page - 1) * pageSize + 1}</span> to <span className="text-foreground">{Math.min(page * pageSize, filteredEvents.length)}</span> of <span className="text-foreground">{filteredEvents.length}</span> results
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 ml-auto">
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
               disabled={page === 1}
               onClick={() => setPage(p => Math.max(1, p - 1))}
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex items-center gap-1 text-xs font-bold px-2">
-              <span className="text-primary">{page}</span>
-              <span className="text-muted-foreground opacity-40">/</span>
-              <span>{totalPages}</span>
-            </div>
+            
+            {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
+              let p = page;
+              if (totalPages <= 5) p = i + 1;
+              else if (page < 3) p = i + 1;
+              else if (page > totalPages - 2) p = totalPages - 4 + i;
+              else p = page - 2 + i;
+              
+              if (p < 1 || p > totalPages) return null;
+              
+              return (
+                <Button
+                  key={p}
+                  variant={page === p ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 w-8 p-0 rounded-lg transition-colors font-semibold text-xs",
+                    page === p 
+                      ? "bg-primary text-primary-foreground shadow-sm" 
+                      : "border-border/40 hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                  )}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </Button>
+              )
+            })}
+
             <Button
               variant="outline"
               size="sm"
-              className="h-8 w-8 p-0 rounded-lg"
+              className="h-8 w-8 p-0 rounded-lg transition-colors border-border/40 hover:border-primary/30"
               disabled={page === totalPages}
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             >
@@ -867,43 +1137,43 @@ function TeamPulse({ teamId, allTeamIds }: { teamId: string; allTeamIds: string[
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
     >
-      <Card className="p-4 border-border/50">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Card className="p-3 sm:p-5 border-border/40 shadow-sm rounded-2xl bg-muted/20 sm:bg-card">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-6 lg:gap-8">
           {/* Stage */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-background sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-none shadow-sm sm:shadow-none border-border/40 hover:shadow-md transition-shadow">
             <div className="p-2 rounded-lg bg-muted/50 shrink-0">
               <ListChecks className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">SDLC Stage</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 sm:mb-0">SDLC Stage</p>
               {counts.stage ? (
-                <Badge variant="outline" className={cn("text-[11px] mt-0.5", STAGE_COLORS[counts.stage] ?? "")}>
+                <Badge variant="outline" className={cn("text-[10px] sm:text-[11px] mt-0.5", STAGE_COLORS[counts.stage] ?? "")}>
                   {counts.stage}
                 </Badge>
               ) : (
-                <p className="text-sm text-muted-foreground">—</p>
+                <p className="text-sm font-medium text-muted-foreground">—</p>
               )}
             </div>
           </div>
 
           {/* Activity */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-background sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-none shadow-sm sm:shadow-none border-border/40 hover:shadow-md transition-shadow">
             <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
               <Activity className="h-4 w-4 text-blue-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Last 7 days</p>
-              <p className="text-sm font-semibold">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 sm:mb-0">Last 7 days</p>
+              <p className="text-sm font-semibold flex flex-col sm:flex-row sm:items-center">
                 {counts.activityLastWeek} event{counts.activityLastWeek === 1 ? "" : "s"}
-                <span className="text-xs text-muted-foreground font-normal ml-1.5">
-                  · {relative(counts.lastActivityAt)}
+                <span className="text-[10px] sm:text-xs text-muted-foreground font-normal sm:ml-1.5 mt-0.5 sm:mt-0">
+                  {relative(counts.lastActivityAt)}
                 </span>
               </p>
             </div>
           </div>
 
           {/* Deadlines */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 bg-background sm:bg-transparent p-3 sm:p-0 rounded-xl sm:rounded-none border sm:border-none shadow-sm sm:shadow-none border-border/40 hover:shadow-md transition-shadow">
             <div className={cn(
               "p-2 rounded-lg shrink-0",
               counts.overdueDeadlines > 0 ? "bg-red-500/10" : "bg-cyan-500/10",
@@ -914,12 +1184,12 @@ function TeamPulse({ teamId, allTeamIds }: { teamId: string; allTeamIds: string[
               )} />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deadlines</p>
-              <p className="text-sm font-semibold">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 sm:mb-0">Deadlines</p>
+              <p className="text-sm font-semibold flex flex-col sm:flex-row sm:items-center">
                 {counts.deadlines} set
                 {counts.overdueDeadlines > 0 && (
-                  <span className="text-red-500 text-xs font-normal ml-1.5">
-                    · {counts.overdueDeadlines} overdue
+                  <span className="text-red-500 text-[10px] sm:text-xs font-normal sm:ml-1.5 mt-0.5 sm:mt-0 bg-red-500/10 sm:bg-transparent px-1.5 py-0.5 sm:p-0 rounded-md sm:rounded-none">
+                    {counts.overdueDeadlines} overdue
                   </span>
                 )}
               </p>
@@ -927,12 +1197,12 @@ function TeamPulse({ teamId, allTeamIds }: { teamId: string; allTeamIds: string[
           </div>
 
           {/* Notes */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-start gap-2 bg-background p-3 rounded-xl border border-border/40 shadow-sm hover:shadow-md transition-shadow sm:flex-row sm:items-center sm:bg-transparent sm:p-0 sm:border-none sm:shadow-none">
             <div className="p-2 rounded-lg bg-amber-500/10 shrink-0">
               <StickyNote className="h-4 w-4 text-amber-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Private notes</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 sm:mb-0">Private Notes</p>
               <p className="text-sm font-semibold">
                 {counts.notes} entr{counts.notes === 1 ? "y" : "ies"}
               </p>
@@ -955,6 +1225,10 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
   const [editingType, setEditingType] = useState<DeliverableType | null>(null)
   const [draft, setDraft] = useState<RubricItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [showBulkAiModal, setShowBulkAiModal] = useState(false)
+  const [bulkAiPrompt, setBulkAiPrompt] = useState("")
+  const [isBulkGenerating, setIsBulkGenerating] = useState(false)
+  const [isFetchingProposal, setIsFetchingProposal] = useState(false)
 
   const canEdit = userRole === "DOCTOR" || userRole === "ADMIN"
 
@@ -972,6 +1246,11 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
   }, [teamId, allTeamIds])
 
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    // Reset the bulk AI prompt so it accurately fetches the new team's proposal
+    setBulkAiPrompt("")
+  }, [teamId])
 
   function startEdit(type: DeliverableType) {
     const existing = templates.find((t) => t.deliverableType === type)
@@ -1032,6 +1311,114 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
   }
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  // AI Rubric States
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+
+  async function generateWithAI() {
+    if (!aiPrompt.trim() || !editingType) return;
+    setIsGenerating(true);
+    try {
+      const res = await fetch('/api/generate-rubric', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt })
+      });
+      if (!res.ok) throw new Error("Failed to generate");
+      const data = await res.json();
+      
+      const newDraft = data.map((c: any) => {
+        const fullText = c.description ? `${c.name} - ${c.description}` : c.name;
+        return {
+          name: fullText.length > 115 ? fullText.substring(0, 115) + "..." : fullText,
+          score: 0,
+          maxScore: c.points
+        };
+      });
+      setDraft(newDraft);
+      setShowAiModal(false);
+      setAiPrompt("");
+      toast.success("AI Rubric generated successfully!");
+    } catch (e) {
+      toast.error("Failed to generate rubric. Make sure your API key is configured.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function generateAllRubrics() {
+    if (!bulkAiPrompt.trim()) return;
+    setIsBulkGenerating(true);
+    try {
+      const res = await fetch('/api/generate-all-rubrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: bulkAiPrompt })
+      });
+      if (!res.ok) throw new Error("Failed to generate");
+      const data = await res.json();
+      
+      const targetIds = teamId === "all" ? allTeamIds : [teamId];
+      const upsertPromises: Promise<any>[] = [];
+      
+      for (const [type, criteria] of Object.entries(data)) {
+        if (!DELIVERABLE_TYPES.includes(type as DeliverableType)) continue;
+        
+        const rubricPayload = (criteria as any[]).map((c: any) => {
+          const fullText = c.description ? `${c.name} - ${c.description}` : c.name;
+          return {
+            name: fullText.length > 115 ? fullText.substring(0, 115) + "..." : fullText,
+            score: 0,
+            maxScore: c.points
+          };
+        });
+        
+        targetIds.forEach(id => {
+          upsertPromises.push(
+            rubricTemplatesApi.upsert({
+              teamId: id,
+              deliverableType: type as DeliverableType,
+              rubric: rubricPayload,
+            })
+          );
+        });
+      }
+      
+      await Promise.all(upsertPromises);
+      await load();
+      setShowBulkAiModal(false);
+      setBulkAiPrompt("");
+      toast.success("Successfully generated and saved rubrics for all phases!");
+    } catch (e) {
+      toast.error("Failed to bulk generate rubrics. Make sure your API key is configured.");
+    } finally {
+      setIsBulkGenerating(false);
+    }
+  }
+
+  async function handleOpenBulkModal() {
+    setShowBulkAiModal(true);
+    if (!bulkAiPrompt.trim() && teamId !== "all") {
+      setIsFetchingProposal(true);
+      try {
+        const res = await proposalsApi.list({ teamId });
+        const proposal = res?.[0];
+        if (proposal && proposal.title) {
+          const text = `${proposal.title}\n\nAbstract: ${proposal.abstract}\n\nProblem: ${proposal.problemStatement}\n\nObjectives: ${(proposal.objectives || []).join(", ")}`;
+          setBulkAiPrompt(text.substring(0, 800));
+          toast.success("Autofilled from team proposal!");
+        }
+      } catch (e) {
+        // ignore silently
+      } finally {
+        setIsFetchingProposal(false);
+      }
+    }
+  }
+
+  const [deleteCriterionIndex, setDeleteCriterionIndex] = useState<number | null>(null)
   const deleteTarget = useMemo(
     () => (deleteId ? templates.find((t) => t.id === deleteId) ?? null : null),
     [deleteId, templates],
@@ -1050,6 +1437,14 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
 
   const draftTotal = draft.reduce((s, c) => s + (Number(c.maxScore) || 0), 0)
 
+  const totalAllRubrics = DELIVERABLE_TYPES.reduce((sum, type) => {
+    const existing = templates.find((t) => t.deliverableType === type)
+    if (existing) {
+      return sum + existing.rubric.reduce((s, c) => s + (c.maxScore || 0), 0)
+    }
+    return sum + 100; // global default is 100 per deliverable
+  }, 0)
+
   return (
     <div className="space-y-6">
       <ConfirmDialog
@@ -1064,6 +1459,19 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
         confirmLabel="Remove"
         onConfirm={async () => { if (deleteId) await performDelete(deleteId) }}
       />
+      <ConfirmDialog
+        open={deleteCriterionIndex !== null}
+        onOpenChange={(o) => { if (!o) setDeleteCriterionIndex(null) }}
+        title="Remove Criterion?"
+        description="Are you sure you want to remove this criterion? This action cannot be undone."
+        confirmLabel="Remove"
+        onConfirm={async () => {
+          if (deleteCriterionIndex !== null) {
+            removeCriterion(deleteCriterionIndex)
+            setDeleteCriterionIndex(null)
+          }
+        }}
+      />
 
       {/* Modern Info Header */}
       <div className="relative overflow-hidden rounded-2xl bg-indigo-500/5 border border-indigo-500/10 p-5">
@@ -1071,13 +1479,41 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
           <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
             <Wand2 className="h-5 w-5 text-indigo-600" />
           </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">Smart Rubric Overrides</h4>
+          <div className="space-y-1 flex-1">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">Smart Rubric Overrides</h4>
+              <Badge variant="outline" className="bg-background/50 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-bold px-3 py-1 text-xs backdrop-blur-sm shadow-sm">
+                Total Course Points: {totalAllRubrics}
+              </Badge>
+            </div>
             <p className="text-xs text-indigo-700/70 dark:text-indigo-400/70 leading-relaxed">
               Define specialized grading criteria for this team. Custom rubrics will automatically load 
               during grading, overriding global system defaults.
               {!canEdit && <span className="block mt-1 font-semibold italic text-red-500/80">Read-only: TAs cannot modify official rubrics.</span>}
             </p>
+            {canEdit && (
+              <div className="pt-2">
+                <Button 
+                  size="sm" 
+                  disabled={teamId === "all"}
+                  onClick={handleOpenBulkModal}
+                  className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Auto-Generate All Phases with AI
+                </Button>
+                {teamId === "all" && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 text-xs text-indigo-700/80 dark:text-indigo-400/80 flex items-center gap-1.5 bg-indigo-500/10 px-3 py-2 rounded-lg border border-indigo-500/20 w-fit"
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Please select a specific team from the top-right dropdown to enable AI Rubric Auto-Generation. The AI requires the team's unique project proposal context to generate accurate grading criteria.
+                  </motion.p>
+                )}
+              </div>
+            )}
           </div>
         </div>
         {/* Background decorative element */}
@@ -1119,7 +1555,7 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-full"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         onClick={() => setDeleteId(existing.id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -1159,9 +1595,11 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
       )}
 
       {/* Redesigned Editor Dialog */}
-      <AnimatePresence>
-        {editingType && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {typeof window !== "undefined" && createPortal(
+        <AnimatePresence>
+          {editingType && (
+            <>
+            <div className="fixed inset-0 z-[49] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1176,10 +1614,10 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
               className="relative w-full max-w-2xl bg-card border border-border/60 shadow-2xl rounded-3xl overflow-hidden"
             >
               {/* Editor Header */}
-              <div className="bg-muted/30 p-6 border-b border-border/40">
-                <div className="flex items-center justify-between">
+              <div className="bg-muted/30 p-4 sm:p-6 border-b border-border/40">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                    <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center shrink-0">
                       <ListChecks className="h-5 w-5 text-indigo-600" />
                     </div>
                     <div>
@@ -1191,46 +1629,66 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
                       </p>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="font-mono text-sm px-3 py-1 rounded-lg">
-                    {draftTotal} / 100 Total
-                  </Badge>
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <Badge variant="secondary" className="font-mono text-sm px-3 py-1 rounded-lg h-8 flex items-center">
+                      {draftTotal} / 100 Total
+                    </Badge>
+                  </div>
                 </div>
               </div>
 
               <div className="p-6 max-h-[60vh] overflow-y-auto">
                 <div className="space-y-3">
-                  <div className="grid grid-cols-[1fr_100px_48px] gap-3 px-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Criterion Description</span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">Max Pts</span>
+                  <div className="grid grid-cols-[1fr_80px_40px] sm:grid-cols-[1fr_100px_48px] gap-2 sm:gap-3 px-1 sm:px-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">Criterion</span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-center">Pts</span>
                     <span />
                   </div>
                   
                   <div className="space-y-2.5">
-                    {draft.map((c, i) => (
+                    {draft.length === 0 ? (
+                      <div className="py-10 text-center border-2 border-dashed border-border/40 rounded-2xl bg-muted/5 flex flex-col items-center justify-center">
+                        <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center mb-4">
+                          <Wand2 className="h-6 w-6 text-indigo-500" />
+                        </div>
+                        <h4 className="text-sm font-bold text-foreground">Start from a Template</h4>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-[250px] mb-4">Don't want to type from scratch? Import a standard CS department rubric.</p>
+                        <Button variant="outline" size="sm" className="rounded-xl border-dashed border-2 border-indigo-200 text-indigo-600 hover:border-indigo-500/50 hover:bg-indigo-50 hover:text-indigo-700 dark:border-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-300 transition-all" onClick={() => {
+                          const existing = templates.find(t => t.deliverableType === editingType)
+                          if (existing && existing.rubric.length > 0) setDraft([...existing.rubric])
+                          else setDraft(getDefaultRubric(editingType))
+                        }}>
+                          Import Standard Template
+                        </Button>
+                      </div>
+                    ) : draft.map((c, i) => (
                       <motion.div
                         key={i}
                         layout
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="grid grid-cols-[1fr_100px_48px] gap-3 items-center group"
+                        className="grid grid-cols-[1fr_80px_40px] sm:grid-cols-[1fr_100px_48px] gap-2 sm:gap-3 items-start group bg-muted/10 p-2 rounded-2xl border border-transparent hover:border-border/50 hover:bg-muted/20 transition-all"
                       >
-                        <Input
+                        <Textarea
                           value={c.name}
                           onChange={(e) => updateCriterion(i, { name: e.target.value })}
                           placeholder="e.g. Technical Implementation"
-                          className="h-11 bg-muted/20 border-border/40 focus:bg-background transition-colors rounded-xl"
+                          className="min-h-[70px] resize-y bg-background shadow-sm border-border/40 focus:bg-background transition-colors rounded-xl text-sm leading-relaxed"
                         />
-                        <Input
-                          type="number"
-                          value={c.maxScore}
-                          onChange={(e) => updateCriterion(i, { maxScore: Number(e.target.value) })}
-                          className="h-11 text-center font-mono font-bold bg-muted/20 border-border/40 focus:bg-background transition-colors rounded-xl"
-                        />
+                        <div className="relative mt-1">
+                          <Input
+                            type="number"
+                            value={c.maxScore}
+                            onChange={(e) => updateCriterion(i, { maxScore: Number(e.target.value) })}
+                            className="h-11 text-center font-mono font-bold bg-background shadow-sm border-border/40 focus:bg-background transition-colors rounded-xl pr-6"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground/50 pointer-events-none">pt</span>
+                        </div>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-10 w-10 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
-                          onClick={() => removeCriterion(i)}
+                          className="h-11 w-11 mt-1 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                          onClick={() => setDeleteCriterionIndex(i)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -1240,43 +1698,52 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
 
                   <Button
                     variant="outline"
-                    className="w-full h-11 border-dashed border-2 hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] rounded-xl transition-all"
+                    className="w-full h-11 border-dashed border-2 text-muted-foreground hover:text-indigo-600 hover:border-indigo-500/40 hover:bg-indigo-500/[0.02] rounded-xl transition-all"
                     onClick={addCriterion}
                   >
-                    <Plus className="h-4 w-4 mr-2 text-indigo-500" />
+                    <Plus className="h-4 w-4 mr-2" />
                     Add New Criterion
                   </Button>
                 </div>
               </div>
 
               {/* Editor Footer */}
-              <div className="p-6 bg-muted/30 border-t border-border/40 flex items-center justify-between gap-4">
+              <div className="p-4 sm:p-6 bg-muted/30 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="text-muted-foreground hover:text-foreground"
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full sm:w-auto"
                   onClick={resetToDefault}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-2" />
                   Restore Defaults
                 </Button>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <Button 
-                    variant="ghost" 
+                    variant="outline" 
                     onClick={() => setEditingType(null)}
                     disabled={saving}
-                    className="rounded-xl px-6"
+                    className="rounded-xl flex-1 sm:flex-none px-4 sm:px-6 hover:bg-muted hover:text-foreground transition-colors"
                   >
                     Cancel
                   </Button>
                   <Button 
+                    variant="secondary" 
+                    onClick={() => setShowAiModal(true)}
+                    disabled={saving}
+                    className="rounded-xl flex-1 sm:flex-none px-4 sm:px-6 hover:bg-muted-foreground/10 transition-colors shadow-sm font-medium"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
+                    AI Generate
+                  </Button>
+                  <Button 
                     onClick={handleSave} 
                     disabled={saving || draftTotal === 0}
-                    className="rounded-xl px-8 shadow-lg shadow-indigo-500/20 font-bold"
+                    className="rounded-xl flex-1 sm:flex-none px-4 sm:px-8 shadow-lg shadow-primary/20 font-bold transition-all hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    {saving ? <RotateCcw className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Save Rubric
+                    {saving ? <RotateCcw className="h-4 w-4 animate-spin mr-1 sm:mr-2" /> : <Save className="h-4 w-4 mr-1 sm:mr-2" />}
+                    Save<span className="hidden sm:inline">&nbsp;Rubric</span>
                   </Button>
                 </div>
               </div>
@@ -1288,8 +1755,88 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
               )}
             </motion.div>
           </div>
+          <Dialog open={showAiModal} onOpenChange={(open) => !isGenerating && setShowAiModal(open)}>
+            <DialogContent className="sm:max-w-[425px] z-[60]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-fuchsia-500" />
+                  AI Rubric Generator
+                </DialogTitle>
+                <DialogDescription>
+                  Describe the project to instantly generate a custom grading rubric totaling 100 points.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <Textarea 
+                  id="prompt"
+                  placeholder="E.g., A React web application with a Firebase backend, focused heavily on UI/UX and proper database security."
+                  className="col-span-3 min-h-[120px] resize-none"
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  disabled={isGenerating}
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAiModal(false)} disabled={isGenerating}>Cancel</Button>
+                <Button onClick={generateWithAI} disabled={isGenerating || !aiPrompt.trim()} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white">
+                  {isGenerating ? (
+                    <><Wand2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                  ) : (
+                    <><Sparkles className="mr-2 h-4 w-4" /> Generate Rubric</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
+
+      {/* Bulk AI Generation Modal */}
+      <Dialog open={showBulkAiModal} onOpenChange={(open) => !isBulkGenerating && setShowBulkAiModal(open)}>
+        <DialogContent className="sm:max-w-[500px] z-[70]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                <Sparkles className="h-4 w-4 text-indigo-600" />
+              </div>
+              Bulk Generate All Rubrics
+            </DialogTitle>
+            <DialogDescription>
+              Describe the project below. The AI will instantly map out comprehensive 100-point grading criteria for EVERY phase (SRS, UML, Code, Final, etc.) at once.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Textarea 
+              placeholder={isFetchingProposal ? "Fetching team proposal..." : "e.g. A Python machine learning platform that predicts stock prices using TensorFlow, with a React frontend and PostgreSQL database."}
+              className="min-h-[140px] resize-none"
+              value={bulkAiPrompt}
+              onChange={(e) => setBulkAiPrompt(e.target.value)}
+              disabled={isBulkGenerating || isFetchingProposal}
+            />
+            {isBulkGenerating && (
+              <div className="text-sm text-muted-foreground flex items-center justify-center gap-2 animate-pulse bg-indigo-500/5 py-3 rounded-lg border border-indigo-500/10">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                Generating rubrics for all 7 phases... This may take a moment.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkAiModal(false)} disabled={isBulkGenerating}>
+              Cancel
+            </Button>
+            <Button onClick={generateAllRubrics} disabled={isBulkGenerating || !bulkAiPrompt.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              {isBulkGenerating ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+              ) : (
+                <><Sparkles className="mr-2 h-4 w-4" /> Bulk Generate All</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -1389,60 +1936,7 @@ export default function SupervisorToolkitPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6 p-4 sm:p-6 pb-24">
-      {/* Hero */}
-      <div className="rounded-2xl p-6 border border-border/50 relative overflow-hidden bg-card">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-emerald-500/5" />
-        <motion.div
-          className="absolute -right-20 -top-20 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"
-          animate={{ scale: [1, 1.15, 1], rotate: [0, 120, 0] }}
-          transition={{ duration: 20, repeat: Infinity }}
-        />
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="min-w-0">
-            <motion.h1
-              className="text-3xl font-bold mb-1.5 flex items-center gap-3"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-            >
-              <StickyNote className="h-7 w-7 text-indigo-500" />
-              Supervision
-            </motion.h1>
-            <motion.p
-              className="text-muted-foreground"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 }}
-            >
-              Everything you need to supervise a team — activity history, private notes,
-              deadlines, and custom grading rubrics.
-            </motion.p>
-          </div>
-
-          {!isLoadingTeams && teamOptions.length > 0 && (
-            <motion.div
-              className="flex items-center gap-2 shrink-0"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground px-2">
-                <Users className="h-3.5 w-3.5" />
-                <span>{teamOptions.length} supervised team{teamOptions.length === 1 ? "" : "s"}</span>
-              </div>
-              <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                <SelectTrigger className="w-[260px]">
-                  <SelectValue placeholder="Select a team" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {teamOptions.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </motion.div>
-          )}
-        </div>
-      </div>
+      {/* Hero section removed to let the dashboard card act as the primary interface */}
 
       {isLoadingTeams ? (
         <Card className="p-12"><Skeleton className="h-24 w-full" /></Card>
@@ -1470,36 +1964,9 @@ export default function SupervisorToolkitPage() {
         </motion.div>
       ) : selectedTeamId ? (
         <div className="space-y-6">
-          {/* Team Context Header - Clearly shows which team settings apply to */}
-          <motion.div 
-            key={`header-${selectedTeamId}`}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center justify-between px-1"
-          >
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                {selectedTeamId === "all" ? <Users className="h-5 w-5" /> : <Activity className="h-5 w-5" />}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold tracking-tight">{selectedTeamName}</h2>
-                <p className="text-xs text-muted-foreground">
-                  {selectedTeamId === "all" 
-                    ? `Managing all ${teamOptions.length - 1} supervised teams`
-                    : `Managing settings and tracking progress for ${selectedTeamName}`}
-                </p>
-              </div>
-            </div>
-            {selectedTeamId !== "all" && (
-               <Badge variant="secondary" className="h-6">Active Team</Badge>
-            )}
-          </motion.div>
-
-          {/* Vital-signs strip — quick at-a-glance counts for the selected team */}
-          <TeamPulse key={selectedTeamId} teamId={selectedTeamId} allTeamIds={allTeamIds} />
-
-        <Tabs defaultValue="activity" className="space-y-4">
-          <TabsList className="p-1 gap-0.5 bg-muted/50 backdrop-blur-sm border border-border/60">
+        <Tabs defaultValue="activity" className="space-y-0 relative group mt-2">
+          <Card className="sticky top-0 sm:top-2 z-40 flex flex-col-reverse md:flex-row md:items-center justify-between gap-1.5 sm:gap-3 p-1.5 sm:p-3 border-x-0 sm:border-x border-t-0 sm:border-t border-b border-border/40 shadow-sm sm:shadow-lg bg-background/90 sm:bg-card/95 backdrop-blur-xl rounded-none sm:rounded-t-2xl sm:rounded-b-none transition-all duration-300">
+            <TabsList className="p-1 h-auto flex flex-nowrap overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden bg-muted/40 sm:bg-muted/50 w-full md:w-auto justify-start border-none rounded-xl sm:rounded-lg">
             <TabsTrigger
               value="activity"
               className="h-9 rounded-xl px-4 text-sm font-medium transition-all duration-200 ease-out hover:bg-muted/70 hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.96] data-[state=active]:shadow-md"
@@ -1528,23 +1995,88 @@ export default function SupervisorToolkitPage() {
               <ListChecks className="h-3.5 w-3.5 mr-1.5" />
               Rubrics
             </TabsTrigger>
-          </TabsList>
+            </TabsList>
+            
+            {!isLoadingTeams && teamOptions.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+                <div className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground px-2">
+                  <Users className="h-3.5 w-3.5" />
+                  <span>{teamOptions.length} supervised team{teamOptions.length === 1 ? "" : "s"}</span>
+                </div>
+                <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                  <SelectTrigger className="w-full md:w-[260px] bg-background border border-border/50 shadow-sm h-11 sm:h-10 rounded-xl sm:rounded-lg font-semibold sm:font-medium text-[15px] sm:text-sm focus:ring-1 focus:ring-primary/20 hover:bg-muted transition-colors">
+                    <SelectValue placeholder="Select a team" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72 rounded-xl">
+                    {teamOptions.map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="rounded-lg max-w-[85vw] sm:max-w-[400px]">
+                        <span className="block truncate">{t.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </Card>
 
-          <TabsContent value="activity" className="mt-4">
-            <ActivityPanel teamId={selectedTeamId} allTeamIds={allTeamIds} teamOptions={teamOptions} />
-          </TabsContent>
+          <div className="bg-card border border-t-0 border-border/40 rounded-b-2xl p-4 sm:p-6 shadow-sm min-h-[500px]">
+            {/* Team Context Header */}
+            <motion.div 
+              key={`header-${selectedTeamId}`}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 sm:mb-8"
+            >
+              <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0 mt-1 sm:mt-0">
+                  {selectedTeamId === "all" ? <Users className="h-5 w-5 sm:h-6 sm:w-6" /> : <Activity className="h-5 w-5 sm:h-6 sm:w-6" />}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 mb-1 sm:mb-1.5">
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight">{selectedTeamName}</h2>
+                    {selectedTeamId !== "all" && (
+                      <Badge variant="secondary" className="h-5 px-2 text-[10px] sm:h-6 sm:px-3 sm:text-xs bg-primary/10 text-primary border-none">
+                        Active Team
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm text-muted-foreground max-w-lg leading-relaxed">
+                    {selectedTeamId === "all" 
+                      ? `Managing all ${teamOptions.length - 1} supervised teams`
+                      : `Managing settings and tracking progress for ${selectedTeamName}`}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+            {/* Vital-signs strip — quick at-a-glance counts for the selected team */}
+            <div className="mb-6">
+              <TeamPulse key={selectedTeamId} teamId={selectedTeamId} allTeamIds={allTeamIds} />
+            </div>
 
-          <TabsContent value="notes" className="mt-4">
-            <NotesPanel teamId={selectedTeamId} allTeamIds={allTeamIds} teamOptions={teamOptions} />
-          </TabsContent>
+            <TabsContent value="activity" className="m-0">
+              <motion.div initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: 0.3 }}>
+                <ActivityPanel teamId={selectedTeamId} allTeamIds={allTeamIds} teamOptions={teamOptions} />
+              </motion.div>
+            </TabsContent>
 
-          <TabsContent value="deadlines" className="mt-4">
-            <DeadlinesPanel teamId={selectedTeamId} allTeamIds={allTeamIds} userRole={(currentUser?.role ?? "").toUpperCase()} />
-          </TabsContent>
+            <TabsContent value="notes" className="m-0">
+              <motion.div initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: 0.3 }}>
+                <NotesPanel teamId={selectedTeamId} allTeamIds={allTeamIds} teamOptions={teamOptions} />
+              </motion.div>
+            </TabsContent>
 
-          <TabsContent value="rubrics" className="mt-4">
-            <RubricsPanel teamId={selectedTeamId} allTeamIds={allTeamIds} userRole={(currentUser?.role ?? "").toUpperCase()} />
-          </TabsContent>
+            <TabsContent value="deadlines" className="m-0">
+              <motion.div initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: 0.3 }}>
+                <DeadlinesPanel teamId={selectedTeamId} allTeamIds={allTeamIds} userRole={(currentUser?.role ?? "").toUpperCase()} />
+              </motion.div>
+            </TabsContent>
+
+            <TabsContent value="rubrics" className="m-0">
+              <motion.div initial={{ opacity: 0, y: 10, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} transition={{ duration: 0.3 }}>
+                <RubricsPanel teamId={selectedTeamId} allTeamIds={allTeamIds} userRole={(currentUser?.role ?? "").toUpperCase()} />
+              </motion.div>
+            </TabsContent>
+          </div>
         </Tabs>
         </div>
       ) : null}

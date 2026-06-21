@@ -28,6 +28,8 @@ import {
   Upload,
   UserCheck,
   UserRound,
+  Sparkles,
+  Wand2,
 } from "lucide-react"
 import { toast } from "sonner"
 import { TeamRequiredGuard } from "@/components/team-required-guard"
@@ -434,6 +436,9 @@ export function TasksBoardPage() {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [isSavingTask, setIsSavingTask] = useState(false)
   const [taskActionInFlight, setTaskActionInFlight] = useState("")
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiGoal, setAiGoal] = useState("")
+  const [isGeneratingTasks, setIsGeneratingTasks] = useState(false)
   const [taskEvidence, setTaskEvidence] = useState<ApiTaskSubmissionEvidence[]>([])
   const [isLoadingEvidence, setIsLoadingEvidence] = useState(false)
   const [evidenceTitle, setEvidenceTitle] = useState("")
@@ -619,6 +624,35 @@ export function TasksBoardPage() {
       toast.error(error instanceof Error ? error.message : "Couldn't create the task.")
     } finally {
       setIsCreatingTask(false)
+    }
+  }
+
+  async function handleAiEnhanceTask() {
+    if (createForm.title.trim().length < 3) { toast.error("Title must be at least 3 characters to enhance."); return }
+    
+    setIsGeneratingTasks(true)
+    try {
+      const res = await fetch("/api/generate-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: createForm.title })
+      });
+      if (!res.ok) throw new Error("Failed to enhance task via AI")
+      
+      const enhancedData = await res.json();
+      
+      setCreateForm(prev => ({
+        ...prev,
+        description: enhancedData.description,
+        taskType: enhancedData.taskType,
+        priority: enhancedData.priority,
+      }))
+      
+      toast.success("Task details auto-filled by AI!")
+    } catch (error: any) {
+      toast.error(error.message || "Couldn't enhance task.")
+    } finally {
+      setIsGeneratingTasks(false)
     }
   }
 
@@ -2074,7 +2108,20 @@ export function TasksBoardPage() {
                     </div>
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="create-task-title" className="text-sm font-medium text-foreground/70 ml-1">Task Title</Label>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="create-task-title" className="text-sm font-medium text-foreground/70 ml-1">Task Title</Label>
+                          <Button 
+                            type="button"
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 text-xs px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                            onClick={() => void handleAiEnhanceTask()}
+                            disabled={createForm.title.trim().length < 3 || isGeneratingTasks}
+                          >
+                            {isGeneratingTasks ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                            AI Enhance
+                          </Button>
+                        </div>
                         <Input 
                           id="create-task-title" 
                           placeholder="e.g. Implement user authentication flow" 

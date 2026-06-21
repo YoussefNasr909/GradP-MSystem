@@ -19,6 +19,8 @@ import {
   ShieldAlert,
   ThumbsUp,
   Trash2,
+  Sparkles,
+  Loader2,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -310,6 +312,13 @@ export default function DiscussionsPage() {
   const [isDetailLoading, setIsDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
 
+  const [isSummarizing, setIsSummarizing] = useState(false)
+  const [discussionSummary, setDiscussionSummary] = useState<{ keyArguments: string[], finalDecision: string } | null>(null)
+  const [isEnhancing, setIsEnhancing] = useState(false)
+  
+  const [summarizingCardId, setSummarizingCardId] = useState<string | null>(null)
+  const [cardSummaryData, setCardSummaryData] = useState<{ id: string, title: string, summary: { keyArguments: string[], finalDecision: string } } | null>(null)
+
   const [commentContent, setCommentContent] = useState("")
   const [replyTargetId, setReplyTargetId] = useState<string | null>(null)
   const [isReplyComposerOpen, setIsReplyComposerOpen] = useState(false)
@@ -473,6 +482,88 @@ export default function DiscussionsPage() {
     const detail = await getDiscussionDetail(discussionId)
     mergeDiscussion(detail)
     return detail
+  }
+
+  async function handleEnhanceDiscussion() {
+    if (!createForm.content.trim()) return
+    setIsEnhancing(true)
+    try {
+      const res = await fetch("/api/enhance-discussion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: createForm.content,
+          category: createForm.category,
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to enhance text")
+      const data = await res.json()
+      if (data.enhancedText) {
+        setCreateForm((prev) => ({ ...prev, content: data.enhancedText }))
+        toast({ title: "Enhanced!", description: "Your discussion text has been professionally polished.", variant: "default" })
+      }
+    } catch (err) {
+      toast({ title: "Enhancement Failed", description: "Could not polish text at this time.", variant: "destructive" })
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
+
+  async function handleSummarizeDiscussion() {
+    if (!selectedDiscussion) return
+    setIsSummarizing(true)
+    setDiscussionSummary(null)
+    try {
+      // Use the detail object if available (it has comments) or fall back
+      const detail = (selectedDiscussion as ApiDiscussionDetail).comments 
+        ? (selectedDiscussion as ApiDiscussionDetail) 
+        : await refreshDiscussionDetail(selectedDiscussion.id)
+      
+      const res = await fetch("/api/summarize-discussion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discussionTitle: detail.title,
+          discussionContent: detail.content,
+          comments: detail.comments?.map(c => ({ author: c.author.fullName, content: c.content })) || [],
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to summarize thread")
+      const data = await res.json()
+      if (data.keyArguments && data.finalDecision) {
+        setDiscussionSummary(data)
+      }
+    } catch (err) {
+      toast({ title: "Summarization Failed", description: "Could not summarize the thread at this time.", variant: "destructive" })
+    } finally {
+      setIsSummarizing(false)
+    }
+  }
+
+  async function handleSummarizeFromCard(discussionId: string, title: string) {
+    setSummarizingCardId(discussionId)
+    try {
+      const detail = await refreshDiscussionDetail(discussionId)
+      
+      const res = await fetch("/api/summarize-discussion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discussionTitle: detail.title,
+          discussionContent: detail.content,
+          comments: detail.comments?.map(c => ({ author: c.author.fullName, content: c.content })) || [],
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to summarize thread from card")
+      const data = await res.json()
+      if (data.keyArguments && data.finalDecision) {
+        setCardSummaryData({ id: discussionId, title: detail.title, summary: data })
+      }
+    } catch (err) {
+      toast({ title: "Summarization Failed", description: "Could not summarize the thread at this time.", variant: "destructive" })
+    } finally {
+      setSummarizingCardId(null)
+    }
   }
 
   async function handleCreateDiscussion() {
@@ -1054,7 +1145,20 @@ export default function DiscussionsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="discussion-content">Content</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="discussion-content">Content</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleEnhanceDiscussion}
+                      disabled={isEnhancing || !createForm.content.trim()}
+                      className="h-7 text-xs border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 dark:hover:text-indigo-200"
+                    >
+                      {isEnhancing ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1.5 h-3 w-3" />}
+                      AI Polish
+                    </Button>
+                  </div>
                   <Textarea
                     id="discussion-content"
                     rows={7}
@@ -1241,6 +1345,15 @@ export default function DiscussionsPage() {
                             <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
                               <Button
                                 variant="outline"
+                                className="rounded-xl border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 dark:hover:text-indigo-200 px-4 shadow-xs"
+                                onClick={() => handleSummarizeFromCard(discussion.id, discussion.title)}
+                                disabled={summarizingCardId === discussion.id}
+                              >
+                                {summarizingCardId === discussion.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                                Summarize
+                              </Button>
+                              <Button
+                                variant="outline"
                                 className="rounded-xl bg-background px-4 shadow-xs"
                                 onClick={() => openDiscussion(discussion.id)}
                               >
@@ -1410,22 +1523,22 @@ export default function DiscussionsPage() {
           }
         }}
       >
-        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-3xl border border-border/70 bg-background/95 p-0 shadow-2xl ring-1 ring-primary/10 sm:max-w-[min(1280px,96vw)] [&_[data-slot=dialog-close]]:right-4 [&_[data-slot=dialog-close]]:top-4 [&_[data-slot=dialog-close]]:z-20 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:border [&_[data-slot=dialog-close]]:border-border/70 [&_[data-slot=dialog-close]]:bg-background/95 [&_[data-slot=dialog-close]]:p-2 [&_[data-slot=dialog-close]]:opacity-100 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-muted">
-          <DialogHeader className="relative border-b border-border/70 bg-gradient-to-br from-primary/[0.075] via-background to-background px-5 py-5 pr-20 shadow-sm sm:px-7 sm:py-6 sm:pr-24">
+        <DialogContent className="grid h-[min(94vh,920px)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-2xl border border-border/70 bg-background/95 p-0 shadow-2xl ring-1 ring-primary/10 sm:rounded-3xl sm:max-w-[min(1280px,96vw)] [&_[data-slot=dialog-close]]:right-3 [&_[data-slot=dialog-close]]:top-3 [&_[data-slot=dialog-close]]:z-20 [&_[data-slot=dialog-close]]:rounded-full [&_[data-slot=dialog-close]]:border [&_[data-slot=dialog-close]]:border-border/70 [&_[data-slot=dialog-close]]:bg-background/95 [&_[data-slot=dialog-close]]:p-1.5 [&_[data-slot=dialog-close]]:opacity-100 [&_[data-slot=dialog-close]]:shadow-sm [&_[data-slot=dialog-close]]:hover:bg-muted">
+          <DialogHeader className="relative border-b border-border/70 bg-gradient-to-br from-primary/[0.075] via-background to-background px-4 py-4 pr-12 shadow-sm sm:px-7 sm:py-6 sm:pr-24">
             <div className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-primary/70 sm:inset-x-8" aria-hidden="true" />
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-2">
+              <div className="min-w-0 overflow-hidden space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                  <span>{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
+                  <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="shrink-0">{selectedDiscussion ? formatCategory(selectedDiscussion.category) : "Discussion"}</span>
                   {selectedDiscussion ? (
                     <>
-                      <span className="text-border">/</span>
-                      <span>{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
+                      <span className="text-border shrink-0">/</span>
+                      <span className="truncate">{formatDistanceToNow(new Date(selectedDiscussion.createdAt), { addSuffix: true })}</span>
                     </>
                   ) : null}
                 </div>
-                <DialogTitle className="max-w-4xl break-words pr-2 text-2xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl">
+                <DialogTitle className="max-w-4xl break-words text-xl font-semibold leading-tight tracking-tight [overflow-wrap:anywhere] sm:text-3xl">
                   {selectedDiscussion?.title ?? selectedDiscussionSummary?.title ?? "Discussion details"}
                 </DialogTitle>
                 {selectedDiscussion ? (
@@ -1440,7 +1553,7 @@ export default function DiscussionsPage() {
               </div>
 
               {selectedDiscussion ? (
-                <div className="flex shrink-0 flex-wrap items-center gap-2 pr-2 lg:max-w-[48%] lg:justify-end lg:pr-8 xl:pr-10">
+                <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0 lg:max-w-[48%] lg:justify-end lg:pr-8 xl:pr-10">
                   <Badge variant="secondary" className="h-9 gap-1.5 rounded-full px-3">
                     <MessageCircle className="h-3.5 w-3.5" />
                     <span className="tabular-nums">{selectedDiscussion.commentCount}</span>
@@ -1530,8 +1643,8 @@ export default function DiscussionsPage() {
                     </div>
 
                     <div className="p-4 sm:p-6">
-                      <div className="flex gap-4">
-                        <Avatar className="h-12 w-12 shrink-0 border border-primary/20 bg-background shadow-sm">
+                      <div className="flex min-w-0 gap-3 sm:gap-4">
+                        <Avatar className="h-10 w-10 shrink-0 border border-primary/20 bg-background shadow-sm sm:h-12 sm:w-12">
                           <AvatarImage
                             src={selectedDiscussion.author.avatarUrl ?? undefined}
                             alt={selectedDiscussion.author.fullName}
@@ -1564,6 +1677,51 @@ export default function DiscussionsPage() {
                       </div>
                     </div>
                   </article>
+
+                  {/* AI Summarize Section */}
+                  <div className="space-y-4">
+                    {!discussionSummary && (
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSummarizeDiscussion}
+                          disabled={isSummarizing}
+                          className="border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/50 dark:hover:text-indigo-200"
+                        >
+                          {isSummarizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                          Summarize Thread
+                        </Button>
+                      </div>
+                    )}
+
+                    {discussionSummary && (
+                      <Alert className="bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-800">
+                        <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                        <AlertTitle className="text-indigo-800 dark:text-indigo-300 font-semibold flex items-center justify-between">
+                          AI Thread Summary
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setDiscussionSummary(null)}>
+                            <Trash2 className="h-3 w-3 text-indigo-500" />
+                          </Button>
+                        </AlertTitle>
+                        <AlertDescription className="mt-3 text-indigo-900 dark:text-indigo-200 space-y-3 text-sm">
+                          <div>
+                            <strong className="block mb-1">Key Arguments:</strong>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {discussionSummary.keyArguments.map((arg, i) => (
+                                <li key={i}>{arg}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <strong className="block mb-1">Final Decision / Consensus:</strong>
+                            <p>{discussionSummary.finalDecision}</p>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+
 
                   <section className="space-y-4 rounded-3xl border border-border/70 bg-background/80 p-4 shadow-sm sm:p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1610,6 +1768,36 @@ export default function DiscussionsPage() {
           ) : (
             <div className="flex min-h-[320px] items-center justify-center p-6 text-sm text-muted-foreground">
               Select a discussion to see its details.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(cardSummaryData)} onOpenChange={(open) => !open && setCardSummaryData(null)}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
+              <Sparkles className="h-5 w-5" />
+              AI Thread Summary
+            </DialogTitle>
+            <DialogDescription>
+              Summary for: <span className="font-medium text-foreground">{cardSummaryData?.title}</span>
+            </DialogDescription>
+          </DialogHeader>
+          {cardSummaryData && (
+            <div className="space-y-4 mt-2">
+              <div className="rounded-lg bg-indigo-50/50 p-4 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-800">
+                <h4 className="font-semibold text-indigo-900 dark:text-indigo-300 mb-2">Key Arguments</h4>
+                <ul className="list-disc pl-5 space-y-1 text-sm text-indigo-800 dark:text-indigo-200">
+                  {cardSummaryData.summary.keyArguments.map((arg, i) => (
+                    <li key={i}>{arg}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-lg bg-indigo-50/50 p-4 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-800">
+                <h4 className="font-semibold text-indigo-900 dark:text-indigo-300 mb-1">Final Decision / Consensus</h4>
+                <p className="text-sm text-indigo-800 dark:text-indigo-200">{cardSummaryData.summary.finalDecision}</p>
+              </div>
             </div>
           )}
         </DialogContent>
