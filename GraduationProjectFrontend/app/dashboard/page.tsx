@@ -1102,7 +1102,7 @@ function StudentMemberDashboard() {
       </motion.div>
 
       {/* Quick Access Grid */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
@@ -1112,8 +1112,8 @@ function StudentMemberDashboard() {
           {quickLinks.map((link, index) => (
             <motion.div
               key={link.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
               transition={{ delay: 0.15 + index * 0.05 }}
               whileHover={{ scale: 1.03, y: -5 }}
               whileTap={{ scale: 0.98 }}
@@ -1136,8 +1136,8 @@ function StudentMemberDashboard() {
                         </Badge>
                       )}
                     </div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{link.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{link.description}</p>
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{link.title}</h3>
+                    <p className="text-xs text-foreground/75 mt-1">{link.description}</p>
                   </div>
                   <ChevronRight className="absolute bottom-4 right-4 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
                 </Card>
@@ -1609,7 +1609,7 @@ function TeamLeaderDashboard() {
       </motion.div>
 
       {/* Quick Access Grid */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
@@ -1619,8 +1619,8 @@ function TeamLeaderDashboard() {
           {quickLinks.map((link, index) => (
             <motion.div
               key={link.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
               transition={{ delay: 0.15 + index * 0.05 }}
               whileHover={{ scale: 1.03, y: -5 }}
               whileTap={{ scale: 0.98 }}
@@ -1656,8 +1656,8 @@ function TeamLeaderDashboard() {
                         )}
                       </div>
                     </div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{link.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{link.description}</p>
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{link.title}</h3>
+                    <p className="text-xs text-foreground/75 mt-1">{link.description}</p>
                   </div>
                 </Card>
               </NextLink>
@@ -2042,7 +2042,7 @@ function DoctorDashboard() {
       <RoleActionInbox />
 
       {/* Quick Access Grid */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
@@ -2052,8 +2052,8 @@ function DoctorDashboard() {
           {quickLinks.map((link, index) => (
             <motion.div
               key={link.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
               transition={{ delay: 0.15 + index * 0.05 }}
               whileHover={{ scale: 1.03, y: -5 }}
             >
@@ -2088,8 +2088,8 @@ function DoctorDashboard() {
                         )}
                       </div>
                     </div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{link.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{link.description}</p>
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{link.title}</h3>
+                    <p className="text-xs text-foreground/75 mt-1">{link.description}</p>
                   </div>
                 </Card>
               </NextLink>
@@ -2403,7 +2403,7 @@ function TADashboard() {
       <RoleActionInbox />
 
       {/* Quick Access Grid */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
@@ -2413,8 +2413,8 @@ function TADashboard() {
           {quickLinks.map((link, index) => (
             <motion.div
               key={link.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
               transition={{ delay: 0.15 + index * 0.05 }}
               whileHover={{ scale: 1.03, y: -5 }}
             >
@@ -2436,8 +2436,8 @@ function TADashboard() {
                         </Badge>
                       )}
                     </div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{link.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{link.description}</p>
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{link.title}</h3>
+                    <p className="text-xs text-foreground/75 mt-1">{link.description}</p>
                   </div>
                 </Card>
               </NextLink>
@@ -2890,7 +2890,7 @@ function AdminDashboard() {
       </motion.div>
 
       {/* Quick Access Grid */}
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ y: 20 }} animate={{ y: 0 }} transition={{ delay: 0.1 }}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" /> Quick Access
@@ -2900,8 +2900,8 @@ function AdminDashboard() {
           {quickLinks.map((link, index) => (
             <motion.div
               key={link.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
               transition={{ delay: 0.15 + index * 0.05 }}
               whileHover={{ scale: 1.03, y: -5 }}
             >
@@ -2923,8 +2923,8 @@ function AdminDashboard() {
                         </Badge>
                       )}
                     </div>
-                    <h3 className="font-semibold group-hover:text-primary transition-colors">{link.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{link.description}</p>
+                    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{link.title}</h3>
+                    <p className="text-xs text-foreground/75 mt-1">{link.description}</p>
                   </div>
                 </Card>
               </NextLink>
@@ -2937,8 +2937,8 @@ function AdminDashboard() {
       <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
         {/* System Health */}
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
+          initial={{ x: -20 }}
+          animate={{ x: 0 }}
           transition={{ delay: 0.2 }}
           className="lg:col-span-2 lg:row-start-1"
         >
@@ -2953,8 +2953,8 @@ function AdminDashboard() {
               {systemHealth.map((item, index) => (
                 <motion.div
                   key={item.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  initial={{ y: 20 }}
+                  animate={{ y: 0 }}
                   transition={{ delay: 0.3 + index * 0.05 }}
                   className={cn(
                     "p-4 rounded-xl border",
@@ -2976,7 +2976,7 @@ function AdminDashboard() {
                             : "text-red-500",
                       )}
                     />
-                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className="text-sm font-semibold text-foreground">{item.label}</span>
                   </div>
                   <div className="text-lg font-bold">{item.value}</div>
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.detail}</p>

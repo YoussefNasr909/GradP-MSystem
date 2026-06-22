@@ -640,8 +640,8 @@ if (rl) {
         {/* Right side - Login form */}
         <div className="w-full md:w-1/2 flex items-center justify-center p-3 sm:p-4 md:p-6 lg:p-8 xl:p-12">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 30 }}
+            animate={{ y: 0 }}
             transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
             className="w-full max-w-lg"
           >

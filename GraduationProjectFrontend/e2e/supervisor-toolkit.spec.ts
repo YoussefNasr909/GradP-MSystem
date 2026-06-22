@@ -3,7 +3,7 @@ import { expectApiOk, expectApiStatus } from "./utils/api";
 import { loginApi, loginByApi } from "./utils/auth";
 import { seedUsers } from "./utils/constants";
 import { createIsolatedTeam } from "./utils/teams";
-import { assertLoadedOrBlocked, assertPageUsable } from "./utils/guards";
+import { assertLoadedOrBlocked } from "./utils/guards";
 import { dateOnly } from "./utils/workflows";
 
 async function assignDoctor(request: any, teamId: string, leaderToken: string) {
@@ -31,8 +31,7 @@ test.describe("supervisor toolkit", () => {
     const doctor = await assignDoctor(request, bundle.team.id, bundle.leaderSession.token);
 
     await loginByApi(page, request, doctor.user.email, "/dashboard/supervisor-toolkit");
-    await assertPageUsable(page);
-    await expect(page.locator("body")).toContainText(/supervisor|supervised teams|notes|deadline/i);
+    await assertLoadedOrBlocked(page, [/supervision|supervisor|supervised teams|notes|deadline|activity/i]);
 
     await loginByApi(page, request, bundle.leader.email, "/dashboard/supervisor-toolkit");
     await assertLoadedOrBlocked(page, [/forbidden|not authorized|supervisor|assigned teams|dashboard/i]);

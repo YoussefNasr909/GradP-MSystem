@@ -72,7 +72,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'npm run dev',
+      command: 'npm run start',
       cwd: path.resolve(__dirname, '../GraduationProjectBackend'),
       url: 'http://127.0.0.1:4000/health',
       reuseExistingServer: !process.env.CI,

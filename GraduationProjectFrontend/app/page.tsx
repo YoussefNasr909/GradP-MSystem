@@ -1182,9 +1182,9 @@ function Outcomes() {
               </div>
               <h3 className="mt-6 text-xl font-bold tracking-normal">{outcome.title}</h3>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">&ldquo;{outcome.quote}&rdquo;</p>
-              <div className="mt-5 flex gap-1 text-amber-500" aria-label="Positive outcome rating">
+              <div className="mt-5 flex gap-1 text-amber-500" role="img" aria-label="5 out of 5 positive outcome rating">
                 {[0, 1, 2, 3, 4].map((star) => (
-                  <Star key={star} className="h-4 w-4 fill-current" />
+                  <Star key={star} className="h-4 w-4 fill-current" aria-hidden="true" />
                 ))}
               </div>
             </MotionCard>

@@ -606,13 +606,13 @@ export default function RegisterPage() {
 
         <div className="w-1/2 hidden md:flex flex-col justify-center p-6 lg:p-8 xl:p-12 2xl:p-20">
           <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
+            initial={{ x: -50 }}
+            animate={{ x: 0 }}
             transition={{ duration: 0.8 }}
             className="glass-card p-6 lg:p-8 xl:p-10 rounded-2xl space-y-6 xl:space-y-8 transition-all hover:-translate-y-0.5 hover:shadow-xl"
           >
             <div className="space-y-4">
-              <div className="inline-flex items-center rounded-full border border-primary/15 bg-primary/8 px-3 py-1 text-xs font-medium text-primary">
+              <div className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold text-foreground">
                 Student registration
               </div>
               <div className="space-y-3">
@@ -621,7 +621,7 @@ export default function RegisterPage() {
                   <br />
                   project workspace
                 </h2>
-                <p className="text-base xl:text-lg text-muted-foreground max-w-xl leading-relaxed">
+                <p className="text-base xl:text-lg text-foreground/80 max-w-xl leading-relaxed">
                   Start with a focused GPMS account built for final-year projects, team collaboration, milestone reviews,
                   and academic delivery.
                 </p>
@@ -642,22 +642,22 @@ export default function RegisterPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-sm xl:text-base">{feature.title}</h3>
-                    <p className="text-xs xl:text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                    <p className="text-xs xl:text-sm text-foreground/75 leading-relaxed">{feature.description}</p>
                   </div>
                 </motion.div>
               ))}
             </div>
 
             <div className="flex flex-wrap items-center gap-4 xl:gap-6 pt-2 xl:pt-4">
-              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-foreground/75">
                 <Shield className="h-3.5 w-3.5 xl:h-4 xl:w-4 text-green-500" />
                 <span>Protected onboarding</span>
               </div>
-              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-foreground/75">
                 <Users className="h-3.5 w-3.5 xl:h-4 xl:w-4 text-blue-500" />
                 <span>Built for student teams</span>
               </div>
-              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-muted-foreground">
+              <div className="flex items-center gap-1.5 xl:gap-2 text-xs xl:text-sm text-foreground/75">
                 <Github className="h-3.5 w-3.5 xl:h-4 xl:w-4 text-amber-500" />
                 <span>Workflow-ready setup</span>
               </div>

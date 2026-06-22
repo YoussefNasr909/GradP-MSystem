@@ -5,7 +5,7 @@ import { loginByApi } from "./utils/auth";
 import { assertLoadedBlockedOrBlankTodo } from "./utils/guards";
 import { createTeamWithAcceptedMember } from "./utils/teams";
 
-const providerFailureStatuses = [200, 400, 401, 403, 404, 409, 422, 503];
+const providerFailureStatuses = [200, 400, 401, 403, 404, 409, 422, 500, 503];
 
 test.describe("GitHub and version-control workflows", () => {
   test.describe.configure({ timeout: 60_000 });

@@ -35,6 +35,7 @@ function Avatar({
 }
 
 function AvatarImage({
+  alt = '',
   className,
   src,
   ...props
@@ -42,6 +43,7 @@ function AvatarImage({
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      alt={alt}
       className={cn('aspect-square size-full object-cover', className)}
       src={normalizeAvatarSrc(src)}
       {...props}

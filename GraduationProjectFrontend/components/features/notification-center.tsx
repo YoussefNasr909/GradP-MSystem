@@ -286,6 +286,7 @@ export function NotificationCenter() {
           size="icon"
           className={cn("relative rounded-xl h-9 w-9 sm:h-10 sm:w-10", !bellEnabled && "opacity-50")}
           onClick={() => setIsOpen(!isOpen)}
+          aria-label={bellEnabled ? "Open notification center" : "Notifications are disabled"}
           title={bellEnabled ? undefined : "In-app notifications are disabled"}
         >
           <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -342,9 +343,15 @@ export function NotificationCenter() {
                       <span className="hidden sm:inline">Mark all read</span>
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-8 w-8 rounded-lg">
-                    <X className="h-4 w-4" />
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setIsOpen(false)}
+                      className="h-8 w-8 rounded-lg"
+                      aria-label="Close notification center"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                 </div>
               </div>
 
@@ -412,6 +419,7 @@ export function NotificationCenter() {
                               size="icon"
                               className="h-7 w-7 sm:h-8 sm:w-8 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                               onClick={(e) => deleteNotification(notification.id, e)}
+                              aria-label={`Delete notification: ${display.title}`}
                             >
                               <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
                             </Button>

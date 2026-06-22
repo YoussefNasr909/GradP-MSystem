@@ -373,8 +373,8 @@ export function AppTopbar() {
       </Dialog>
 
       <motion.header
-        initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-2 glass safe-area-top xs:px-3 sm:px-4"
       >
@@ -384,13 +384,20 @@ export function AppTopbar() {
             size="icon"
             onClick={toggleMobileSidebar}
             className="h-10 w-10 shrink-0 rounded-lg touch-target"
+            aria-label={isMobileSidebarOpen ? "Close dashboard navigation" : "Open dashboard navigation"}
           >
             {isMobileSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </motion.div>
 
         <motion.div whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }} className="hidden lg:block">
-          <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-10 w-10 shrink-0 rounded-xl">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="h-10 w-10 shrink-0 rounded-xl"
+            aria-label="Toggle dashboard sidebar"
+          >
             <Menu className="h-5 w-5" />
           </Button>
         </motion.div>
@@ -401,6 +408,7 @@ export function AppTopbar() {
             size="icon"
             className="h-10 w-10 shrink-0 rounded-lg touch-target sm:hidden"
             onClick={() => setShowMobileSearch((open) => !open)}
+            aria-label={showMobileSearch ? "Close dashboard search" : "Open dashboard search"}
           >
             <Search className="h-5 w-5" />
           </Button>
@@ -417,8 +425,8 @@ export function AppTopbar() {
             <PopoverAnchor asChild>
               <motion.div
                 className="relative hidden w-full max-w-xs sm:block md:max-w-md"
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "100%", opacity: 1 }}
+                initial={{ width: 0 }}
+                animate={{ width: "100%" }}
                 transition={{ delay: 0.2, duration: 0.5 }}
               >
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -429,7 +437,7 @@ export function AppTopbar() {
                   onFocus={handleDesktopSearchFocus}
                   onBlur={handleDesktopSearchBlur}
                   onKeyDown={handleSearchKeyDown}
-                  className="h-10 rounded-xl border-border/60 pl-9 text-sm glass transition-all focus-visible:border-primary/40 focus-visible:ring-primary/10"
+                  className="h-10 rounded-xl border-border/60 pl-9 text-sm text-foreground glass transition-all placeholder:text-foreground/70 focus-visible:border-primary/40 focus-visible:ring-primary/10"
                 />
               </motion.div>
             </PopoverAnchor>
@@ -459,8 +467,8 @@ export function AppTopbar() {
 
         {showMobileSearch && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: -10 }}
+            animate={{ y: 0 }}
             className="absolute left-0 right-0 top-full z-50 border-b p-3 glass sm:hidden"
           >
             <div className="space-y-3 rounded-2xl border border-border/60 bg-background/95 p-3 shadow-lg">
@@ -474,13 +482,14 @@ export function AppTopbar() {
                   onFocus={() => setMobileSearchFocused(true)}
                   onBlur={() => window.setTimeout(() => setMobileSearchFocused(false), 140)}
                   onKeyDown={handleSearchKeyDown}
-                  className="h-11 rounded-xl border-border/50 pl-10 pr-10 text-base glass focus-visible:ring-primary/50"
+                  className="h-11 rounded-xl border-border/50 pl-10 pr-10 text-base text-foreground glass placeholder:text-foreground/70 focus-visible:ring-primary/50"
                 />
                 <Button
                   variant="ghost"
                   size="icon"
                   className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
                   onClick={() => setShowMobileSearch(false)}
+                  aria-label="Close dashboard search"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -516,11 +525,9 @@ export function AppTopbar() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
-                  {resolvedTheme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-                </Button>
-              </motion.div>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl" aria-label="Change theme">
+                {resolvedTheme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="rounded-xl border-border/50 glass-card">
               <DropdownMenuItem onClick={() => setTheme("light")} className="rounded-lg font-medium text-foreground/90 focus:bg-primary/15 focus:text-primary data-highlighted:bg-primary/15 data-highlighted:text-primary">
@@ -543,6 +550,7 @@ export function AppTopbar() {
               <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
+                aria-label={`Open account menu for ${displayName}`}
                 className="flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border/50 px-1.5 py-1.5 transition-all glass-card hover:border-primary/50 xs:px-2 sm:gap-2 sm:px-3 sm:py-2"
               >
                 <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
@@ -552,8 +560,8 @@ export function AppTopbar() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden text-left sm:block">
-                  <div className="max-w-[80px] truncate text-sm font-medium lg:max-w-[100px]">{displayName}</div>
-                  <div className="text-xs text-muted-foreground">{badge.label}</div>
+                  <div className="max-w-[80px] truncate text-sm font-semibold text-slate-950 dark:text-white lg:max-w-[100px]">{displayName}</div>
+                  <div className="text-xs text-foreground/70">{badge.label}</div>
                 </div>
               </motion.button>
             </DropdownMenuTrigger>
