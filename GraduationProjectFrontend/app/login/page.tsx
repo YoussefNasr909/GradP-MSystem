@@ -645,7 +645,7 @@ if (rl) {
             transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
             className="w-full max-w-lg"
           >
-            <Card className="glass-card p-4 sm:p-5 md:p-6 lg:p-8 rounded-2xl sm:rounded-3xl transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 hover:ring-offset-2 hover:ring-offset-background hover:shadow-xl">
+            <Card className="glass-card border-border/80 bg-card/92 p-5 shadow-[0_18px_55px_rgba(15,23,42,0.12)] ring-1 ring-white/60 backdrop-blur-xl sm:p-5 md:p-6 lg:p-8 rounded-[1.35rem] sm:rounded-3xl transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 hover:ring-offset-2 hover:ring-offset-background hover:shadow-xl dark:ring-white/10">
               <div className="mb-4 sm:mb-6">
                 <h3 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1 sm:mb-2">Sign in to GPMS</h3>
                 <p className="text-xs sm:text-sm text-muted-foreground">

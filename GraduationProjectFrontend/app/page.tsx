@@ -22,7 +22,6 @@ import {
   MessageSquare,
   Moon,
   ShieldCheck,
-  Sparkles,
   Star,
   Sun,
   Target,
@@ -46,6 +45,8 @@ const navItems = [
   { label: "Outcomes", id: "outcomes" },
   { label: "FAQ", id: "faq" },
 ] as const
+
+const smoothEase = [0.22, 1, 0.36, 1] as const
 
 const proofMetrics = [
   {
@@ -76,6 +77,111 @@ const workflowSteps = [
   { label: "Submission", icon: FileCheck2 },
   { label: "Grade", icon: Award },
 ] as const
+
+const previewPanels = {
+  Overview: {
+    kicker: "Graduation Project Overview",
+    title: "Smart Campus Assistant",
+    status: "On track",
+    statusClass: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    message: "Clarify the deployment architecture and attach API test evidence before the design review.",
+    stats: [
+      { label: "SDLC phase", value: "Design", icon: Workflow, tone: "text-sky-500" },
+      { label: "Sprint health", value: "78%", icon: BarChart3, tone: "text-emerald-500" },
+      { label: "Next review", value: "Thu 2 PM", icon: Clock3, tone: "text-amber-500" },
+    ],
+    board: {
+      title: "Current board",
+      subtitle: "Evidence-ready tasks for the next supervisor review",
+      badge: "Sprint 06",
+      columns: [
+        { title: "In progress", items: ["Finalize ER diagram", "Build auth guard"], color: "bg-sky-500" },
+        { title: "In review", items: ["SRS draft", "API test plan"], color: "bg-amber-500" },
+        { title: "Approved", items: ["Team invite flow", "GitHub release"], color: "bg-emerald-500" },
+      ],
+    },
+    evidenceTitle: "GitHub evidence",
+    evidenceDetail: "24 commits linked this week",
+    progress: 80,
+  },
+  Tasks: {
+    kicker: "Sprint Execution",
+    title: "Evidence-ready task board",
+    status: "Reviewing",
+    statusClass: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    message: "Two tasks are ready for supervisor review and one implementation item needs final evidence.",
+    stats: [
+      { label: "Open tasks", value: "14", icon: LayoutDashboard, tone: "text-sky-500" },
+      { label: "Ready review", value: "5", icon: CheckCircle2, tone: "text-emerald-500" },
+      { label: "Blocked", value: "1", icon: Bell, tone: "text-amber-500" },
+    ],
+    board: {
+      title: "Sprint task flow",
+      subtitle: "Click a task to preview how feedback follows the work item",
+      badge: "Live board",
+      columns: [
+        { title: "To refine", items: ["Auth edge cases", "Mobile task cards"], color: "bg-sky-500" },
+        { title: "In review", items: ["API test plan", "Sprint evidence"], color: "bg-amber-500" },
+        { title: "Ready", items: ["ER diagram", "Task acceptance"], color: "bg-emerald-500" },
+      ],
+    },
+    evidenceTitle: "Review readiness",
+    evidenceDetail: "5 tasks include links or files",
+    progress: 68,
+  },
+  Submissions: {
+    kicker: "Deliverable Control",
+    title: "SRS package under review",
+    status: "Pending feedback",
+    statusClass: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    message: "The SRS draft is attached with rubric criteria and a structured feedback loop.",
+    stats: [
+      { label: "Deliverable", value: "SRS", icon: FileText, tone: "text-sky-500" },
+      { label: "Rubric score", value: "82/100", icon: Award, tone: "text-emerald-500" },
+      { label: "Revision", value: "1 open", icon: MessageSquare, tone: "text-amber-500" },
+    ],
+    board: {
+      title: "Submission review",
+      subtitle: "Rubric items, comments, and evidence stay attached to the deliverable",
+      badge: "Phase 02",
+      columns: [
+        { title: "Uploaded", items: ["SRS v2.pdf", "UML package"], color: "bg-sky-500" },
+        { title: "Comments", items: ["Scope note", "API section"], color: "bg-amber-500" },
+        { title: "Accepted", items: ["Team charter", "Proposal"], color: "bg-emerald-500" },
+      ],
+    },
+    evidenceTitle: "Rubric evidence",
+    evidenceDetail: "4 criteria reviewed by supervisor",
+    progress: 82,
+  },
+  Meetings: {
+    kicker: "Supervision Rhythm",
+    title: "Design review prepared",
+    status: "Thu 2 PM",
+    statusClass: "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    message: "Meeting notes, risks, and next actions are connected to the current SDLC phase.",
+    stats: [
+      { label: "Upcoming", value: "Thu", icon: Calendar, tone: "text-sky-500" },
+      { label: "Agenda", value: "4 items", icon: FileCheck2, tone: "text-emerald-500" },
+      { label: "Risk level", value: "Low", icon: ShieldCheck, tone: "text-amber-500" },
+    ],
+    board: {
+      title: "Meeting agenda",
+      subtitle: "A clean supervision checklist before the next design review",
+      badge: "45 min",
+      columns: [
+        { title: "Discuss", items: ["Architecture", "Risks"], color: "bg-sky-500" },
+        { title: "Decide", items: ["API scope", "Timeline"], color: "bg-amber-500" },
+        { title: "Follow up", items: ["Minutes", "Next tasks"], color: "bg-emerald-500" },
+      ],
+    },
+    evidenceTitle: "Calendar sync",
+    evidenceDetail: "Agenda and notes ready",
+    progress: 72,
+  },
+} as const
+
+type PreviewPanel = keyof typeof previewPanels
 
 const processSteps = [
   {
@@ -496,21 +602,16 @@ function Header({
 
 function Hero({ cta, shouldReduceMotion }: { cta: CtaState; shouldReduceMotion: boolean }) {
   return (
-    <section className="px-4 pb-16 pt-28 sm:px-6 sm:pb-20 sm:pt-32 lg:px-8 lg:pb-24">
+    <section className="overflow-x-clip px-4 pb-14 pt-20 sm:px-6 sm:pb-16 sm:pt-28 lg:px-8 lg:pb-20 lg:pt-24">
       <div className="mx-auto max-w-7xl">
-        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] lg:gap-12">
+        <div className="grid min-w-0 items-start gap-8 lg:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] lg:gap-12 xl:gap-14">
           <motion.div
             initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
             transition={{ duration: 0.55 }}
-            className="text-center lg:text-left"
+            className="min-w-0 pt-2 text-center lg:pt-8 lg:text-left xl:pt-10"
           >
-            <Badge variant="secondary" className="mb-5 gap-2 rounded-full px-3 py-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              FCAI graduation project workspace
-            </Badge>
-
-            <h1 className="mx-auto max-w-4xl text-balance text-4xl font-bold tracking-normal text-foreground sm:text-5xl md:text-6xl lg:mx-0 lg:text-7xl">
+            <h1 className="mx-auto max-w-[22rem] text-balance text-[2.35rem] font-bold leading-[1.02] tracking-normal text-foreground sm:max-w-4xl sm:text-5xl sm:leading-[1] md:text-6xl lg:mx-0 lg:text-7xl">
               Run graduation projects from proposal to final defense.
             </h1>
 
@@ -550,6 +651,7 @@ function Hero({ cta, shouldReduceMotion }: { cta: CtaState; shouldReduceMotion: 
             initial={shouldReduceMotion ? false : { opacity: 0, y: 24, scale: 0.98 }}
             animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.65, delay: 0.1 }}
+            className="min-w-0"
           >
             <DashboardPreview />
           </motion.div>
@@ -557,10 +659,14 @@ function Hero({ cta, shouldReduceMotion }: { cta: CtaState; shouldReduceMotion: 
 
         <div className="mt-8 grid gap-3 md:grid-cols-3 lg:mt-10">
           {proofMetrics.map((metric, index) => (
-            <MotionCard key={metric.label} delay={0.1 + index * 0.06} className="group border-border/70 bg-card/82 p-5 shadow-sm backdrop-blur">
+            <MotionCard
+              key={metric.label}
+              delay={0.1 + index * 0.06}
+              className="group border-border/70 bg-card/82 p-5 shadow-sm backdrop-blur transition-[background-color,border-color,box-shadow] duration-150 hover:border-primary/35 hover:bg-card hover:shadow-lg hover:shadow-primary/10"
+            >
               <div className="flex items-start gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-                  <metric.icon className="h-5 w-5" />
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-[background-color,transform] duration-150 group-hover:-translate-y-0.5 group-hover:bg-primary/15">
+                  <metric.icon className="h-5 w-5 transition-transform duration-150 group-hover:scale-110" />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-foreground">{metric.label}</p>
@@ -577,32 +683,54 @@ function Hero({ cta, shouldReduceMotion }: { cta: CtaState; shouldReduceMotion: 
 }
 
 function DashboardPreview() {
-  const boardColumns = [
-    { title: "In progress", items: ["Finalize ER diagram", "Build auth guard"], color: "bg-sky-500" },
-    { title: "In review", items: ["SRS draft", "API test plan"], color: "bg-amber-500" },
-    { title: "Approved", items: ["Team invite flow", "GitHub release"], color: "bg-emerald-500" },
-  ]
-  const sidebarItems: Array<{ label: string; icon: LucideIcon }> = [
+  const shouldReduceMotion = useReducedMotion()
+  const [activePanel, setActivePanel] = useState<PreviewPanel>("Overview")
+  const [selectedTask, setSelectedTask] = useState("SRS draft")
+  const activeCopy = previewPanels[activePanel]
+  const sidebarItems: Array<{ label: PreviewPanel; icon: LucideIcon }> = [
     { label: "Overview", icon: LayoutDashboard },
     { label: "Tasks", icon: CheckCircle2 },
     { label: "Submissions", icon: FileCheck2 },
     { label: "Meetings", icon: Calendar },
   ]
 
+  useEffect(() => {
+    setSelectedTask(activeCopy.board.columns[1]?.items[0] ?? activeCopy.board.columns[0]?.items[0] ?? activeCopy.title)
+  }, [activeCopy])
+
   return (
-    <div className="relative">
-      <div className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-primary/18 via-transparent to-emerald-500/12 blur-2xl" />
-      <Card className="relative overflow-hidden rounded-2xl border-border/70 bg-card/92 p-0 shadow-2xl shadow-primary/10 backdrop-blur">
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-3 sm:px-5">
+    <motion.div
+      className="relative w-full min-w-0 max-w-full"
+      whileHover={shouldReduceMotion ? undefined : { y: -6, scale: 1.005 }}
+      transition={{ duration: 0.28, ease: smoothEase }}
+    >
+      <motion.div
+        aria-hidden="true"
+        className="absolute -inset-4 rounded-[2rem] bg-gradient-to-br from-primary/18 via-transparent to-emerald-500/12 blur-2xl"
+        animate={shouldReduceMotion ? undefined : { opacity: [0.56, 0.9, 0.56], scale: [1, 1.03, 1] }}
+        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+      />
+      <Card className="relative w-full max-w-full overflow-hidden rounded-2xl border-border/70 bg-card/92 p-0 shadow-2xl shadow-primary/10 backdrop-blur">
+        <div className="flex items-center justify-between border-b border-border/70 px-3 py-3 sm:px-5">
           <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full bg-red-400" />
-            <span className="h-3 w-3 rounded-full bg-amber-400" />
-            <span className="h-3 w-3 rounded-full bg-emerald-400" />
+            {["bg-red-400", "bg-amber-400", "bg-emerald-400"].map((dot, index) => (
+              <motion.span
+                key={dot}
+                className={cn("h-3 w-3 rounded-full", dot)}
+                animate={shouldReduceMotion ? undefined : { opacity: [0.55, 1, 0.55] }}
+                transition={{ duration: 2.3, delay: index * 0.28, repeat: Infinity, ease: "easeInOut" }}
+              />
+            ))}
           </div>
-          <Badge variant="secondary" className="rounded-full">Live workspace</Badge>
+          <motion.div
+            animate={shouldReduceMotion ? undefined : { y: [0, -1.5, 0] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Badge variant="secondary" className="rounded-full">Live workspace</Badge>
+          </motion.div>
         </div>
 
-        <div className="grid lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <div className="grid min-w-0 lg:grid-cols-[13rem_minmax(0,1fr)]">
           <aside className="hidden border-r border-border/70 bg-muted/20 p-4 lg:block">
             <div className="flex items-center gap-3 rounded-xl bg-background/80 p-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -615,126 +743,290 @@ function DashboardPreview() {
             </div>
             <div className="mt-5 space-y-2">
               {sidebarItems.map(({ label, icon: Icon }) => (
-                <div
+                <motion.button
                   key={label}
+                  type="button"
+                  aria-pressed={activePanel === label}
+                  onClick={() => setActivePanel(label)}
+                  whileHover={shouldReduceMotion ? undefined : { x: 3 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
                   className={cn(
-                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground",
-                    label === "Overview" && "bg-primary/10 text-primary",
+                    "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-primary/8 hover:text-foreground",
+                    activePanel === label && "bg-primary/10 text-primary shadow-sm",
                   )}
                 >
                   <Icon className="h-4 w-4" />
                   {label}
-                </div>
+                </motion.button>
               ))}
             </div>
           </aside>
 
-          <div className="p-4 sm:p-5">
+          <div className="min-w-0 p-3 sm:p-5">
+            <div className="mb-4 flex max-w-full gap-2 overflow-x-auto pb-1 lg:hidden">
+              {sidebarItems.map(({ label, icon: Icon }) => (
+                <motion.button
+                  key={label}
+                  type="button"
+                  aria-pressed={activePanel === label}
+                  onClick={() => setActivePanel(label)}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 text-xs font-medium text-muted-foreground shadow-sm transition-colors duration-150",
+                    activePanel === label && "border-primary/30 bg-primary/10 text-primary",
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </motion.button>
+              ))}
+            </div>
+
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Graduation Project Overview</p>
-                <h2 className="mt-1 text-xl font-bold tracking-normal sm:text-2xl">Smart Campus Assistant</h2>
-              </div>
-              <Badge variant="outline" className="rounded-full border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                On track
-              </Badge>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activePanel}
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                  exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                  transition={{ duration: 0.22, ease: smoothEase }}
+                >
+                  <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground sm:text-xs sm:tracking-[0.18em]">{activeCopy.kicker}</p>
+                  <h2 className="mt-1 text-lg font-bold tracking-normal sm:text-2xl">{activeCopy.title}</h2>
+                </motion.div>
+              </AnimatePresence>
+              <motion.div layout>
+                <Badge variant="outline" className={cn("rounded-full", activeCopy.statusClass)}>
+                  {activeCopy.status}
+                </Badge>
+              </motion.div>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <MiniStat label="SDLC phase" value="Design" icon={Workflow} tone="text-sky-500" />
-              <MiniStat label="Sprint health" value="78%" icon={BarChart3} tone="text-emerald-500" />
-              <MiniStat label="Next review" value="Thu 2 PM" icon={Clock3} tone="text-amber-500" />
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-border/70 bg-background/72 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Current board</p>
-                  <p className="text-xs text-muted-foreground">Evidence-ready tasks for the next supervisor review</p>
-                </div>
-                <Badge variant="secondary" className="rounded-full">Sprint 06</Badge>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {boardColumns.map((column) => (
-                  <div key={column.title} className="rounded-xl border border-border/70 bg-muted/30 p-3">
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                      <span className={cn("h-2 w-2 rounded-full", column.color)} />
-                      {column.title}
-                    </div>
-                    <div className="mt-3 space-y-2">
-                      {column.items.map((item) => (
-                        <div key={item} className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-foreground shadow-sm">
-                          {item}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            <div className="mt-4 grid grid-cols-[repeat(3,minmax(0,1fr))] gap-2 sm:mt-5 sm:gap-3">
+              <AnimatePresence mode="popLayout">
+                {activeCopy.stats.map((stat, index) => (
+                  <motion.div
+                    key={`${activePanel}-${stat.label}`}
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 10, scale: 0.98 }}
+                    animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+                    exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.24, delay: index * 0.035, ease: smoothEase }}
+                  >
+                    <MiniStat
+                      active={selectedTask === stat.label}
+                      label={stat.label}
+                      value={stat.value}
+                      icon={stat.icon}
+                      tone={stat.tone}
+                      onSelect={() => setSelectedTask(stat.label)}
+                    />
+                  </motion.div>
                 ))}
-              </div>
+              </AnimatePresence>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_0.8fr]">
-              <div className="rounded-2xl border border-border/70 bg-muted/25 p-4">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                  Supervisor feedback
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activePanel}-board`}
+                className="mt-4 rounded-2xl border border-border/70 bg-background/72 p-3 sm:mt-5 sm:p-4"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0, y: -10 }}
+                transition={{ duration: 0.26, ease: smoothEase }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{activeCopy.board.title}</p>
+                    <p className="text-xs leading-5 text-muted-foreground">{activeCopy.board.subtitle}</p>
+                  </div>
+                  <Badge variant="secondary" className="rounded-full">{activeCopy.board.badge}</Badge>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Clarify the deployment architecture and attach API test evidence before the design review.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border/70 bg-muted/25 p-4">
-                <div className="flex items-center justify-between text-sm font-semibold">
-                  GitHub evidence
-                  <Github className="h-4 w-4 text-foreground/70" />
+
+                <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 md:mx-0 md:mt-4 md:grid md:grid-cols-3 md:gap-3 md:overflow-visible md:px-0 md:pb-0">
+                  {activeCopy.board.columns.map((column, columnIndex) => (
+                    <motion.div
+                      key={`${activePanel}-${column.title}`}
+                      className="min-w-[8.75rem] flex-1 rounded-xl border border-border/70 bg-muted/30 p-2.5 md:min-w-0 md:p-3"
+                      initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                      animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: columnIndex * 0.04, ease: smoothEase }}
+                    >
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:text-xs sm:tracking-[0.14em]">
+                        <span className={cn("h-2 w-2 rounded-full", column.color)} />
+                        {column.title}
+                      </div>
+                      <div className="mt-2.5 space-y-2 md:mt-3">
+                        {column.items.map((item) => (
+                          <motion.button
+                            key={item}
+                            type="button"
+                            aria-pressed={selectedTask === item}
+                            onClick={() => setSelectedTask(item)}
+                            whileHover={shouldReduceMotion ? undefined : { x: 3, y: -1 }}
+                            whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                            className={cn(
+                              "w-full rounded-lg border border-border/70 bg-background/80 px-2.5 py-2 text-left text-xs text-foreground shadow-sm transition-colors duration-150 hover:border-primary/35 hover:bg-primary/5 md:px-3",
+                              selectedTask === item && "border-primary/40 bg-primary/10 text-primary",
+                            )}
+                          >
+                            {item}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-                <div className="mt-3 h-2 rounded-full bg-background">
-                  <div className="h-full w-4/5 rounded-full bg-gradient-to-r from-sky-500 to-emerald-500" />
+
+                <div className="mt-3 overflow-hidden rounded-xl border border-border/70 bg-muted/25 sm:mt-4">
+                  <motion.div
+                    className="h-1 bg-gradient-to-r from-sky-500 via-emerald-500 to-amber-400"
+                    initial={shouldReduceMotion ? false : { scaleX: 0 }}
+                    animate={shouldReduceMotion ? undefined : { scaleX: activeCopy.progress / 100 }}
+                    style={{ originX: 0, scaleX: shouldReduceMotion ? activeCopy.progress / 100 : undefined }}
+                    transition={{ duration: 0.5, ease: smoothEase }}
+                  />
+                  <div className="flex items-center justify-between px-3 py-2 text-xs text-muted-foreground">
+                    <span>{activePanel} focus</span>
+                    <span className="font-semibold text-primary">{activeCopy.progress}% ready</span>
+                  </div>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">24 commits linked this week</p>
-              </div>
-            </div>
+              </motion.div>
+            </AnimatePresence>
+
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${activePanel}-cards`}
+                className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-[1fr_0.8fr] sm:gap-3"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                exit={shouldReduceMotion ? undefined : { opacity: 0, y: -10 }}
+                transition={{ duration: 0.26, ease: smoothEase }}
+              >
+                <motion.div
+                  className="rounded-2xl border border-border/70 bg-muted/25 p-3 sm:p-4"
+                  whileHover={shouldReduceMotion ? undefined : { y: -2 }}
+                  transition={{ duration: 0.22, ease: smoothEase }}
+                >
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                    Workspace signal
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
+                    {activeCopy.message}
+                  </p>
+                  <p className="mt-3 text-xs font-medium text-primary">Selected: {selectedTask}</p>
+                </motion.div>
+                <motion.div
+                  className="rounded-2xl border border-border/70 bg-muted/25 p-3 sm:p-4"
+                  whileHover={shouldReduceMotion ? undefined : { y: -2 }}
+                  transition={{ duration: 0.22, ease: smoothEase }}
+                >
+                  <div className="flex items-center justify-between text-sm font-semibold">
+                    {activeCopy.evidenceTitle}
+                    <Github className="h-4 w-4 text-foreground/70" />
+                  </div>
+                  <div className="mt-3 h-2 rounded-full bg-background">
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-500"
+                      initial={shouldReduceMotion ? false : { width: "18%" }}
+                      animate={shouldReduceMotion ? undefined : { width: `${activeCopy.progress}%` }}
+                      transition={{ duration: 0.55, delay: 0.08, ease: smoothEase }}
+                      style={shouldReduceMotion ? { width: `${activeCopy.progress}%` } : undefined}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{activeCopy.evidenceDetail}</p>
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
       </Card>
-    </div>
+    </motion.div>
   )
 }
 
-function MiniStat({ icon: Icon, label, tone, value }: { icon: LucideIcon; label: string; tone: string; value: string }) {
+function MiniStat({
+  active = false,
+  icon: Icon,
+  label,
+  onSelect,
+  tone,
+  value,
+}: {
+  active?: boolean
+  icon: LucideIcon
+  label: string
+  onSelect?: () => void
+  tone: string
+  value: string
+}) {
+  const shouldReduceMotion = useReducedMotion()
+
   return (
-    <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        {label}
-        <Icon className={cn("h-4 w-4", tone)} />
+    <motion.button
+      type="button"
+      onClick={onSelect}
+      disabled={!onSelect}
+      aria-pressed={active}
+      whileHover={shouldReduceMotion || !onSelect ? undefined : { y: -2 }}
+      whileTap={shouldReduceMotion || !onSelect ? undefined : { scale: 0.98 }}
+      className={cn(
+        "min-h-[4.5rem] rounded-xl border border-border/70 bg-muted/30 p-2.5 text-left transition-colors duration-150 hover:border-primary/35 hover:bg-primary/5 sm:min-h-0 sm:p-3",
+        active && "border-primary/40 bg-primary/10",
+        !onSelect && "cursor-default",
+      )}
+    >
+      <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground sm:text-xs">
+        <span className="min-w-0 leading-tight">{label}</span>
+        <Icon className={cn("h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4", tone)} />
       </div>
-      <p className="mt-2 text-lg font-bold">{value}</p>
-    </div>
+      <p className="mt-1.5 text-base font-bold sm:mt-2 sm:text-lg">{value}</p>
+    </motion.button>
   )
 }
 
 function WorkflowStrip() {
+  const shouldReduceMotion = useReducedMotion()
+
   return (
     <section id="workflow" className="scroll-mt-24 border-y border-border/70 bg-muted/20 px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-7 flex flex-col gap-2 text-center sm:mb-8">
+        <motion.div
+          className="mb-7 flex flex-col gap-2 text-center sm:mb-8"
+          initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
+          whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.42, ease: smoothEase }}
+        >
           <p className="text-sm font-semibold text-primary">One academic flow</p>
           <h2 className="text-2xl font-bold tracking-normal sm:text-3xl">From proposal to grade without context switching.</h2>
-        </div>
+        </motion.div>
         <div className="grid gap-3 md:grid-cols-6">
           {workflowSteps.map((step, index) => (
-            <div key={step.label} className="relative">
+            <motion.div
+              key={step.label}
+              className="relative"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
+              whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-70px" }}
+              transition={{ duration: 0.36, delay: index * 0.045, ease: smoothEase }}
+            >
               {index < workflowSteps.length - 1 && (
                 <div className="absolute left-[calc(50%+1.5rem)] right-[calc(-50%+1.5rem)] top-7 hidden h-px bg-border md:block" />
               )}
-              <div className="relative flex items-center gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm md:flex-col md:justify-center md:text-center">
+              <motion.a
+                href="#features"
+                className="group relative flex items-center gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 shadow-sm transition-colors hover:border-primary/35 hover:bg-primary/5 md:flex-col md:justify-center md:text-center"
+                whileHover={shouldReduceMotion ? undefined : { y: -4 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                transition={{ duration: 0.22, ease: smoothEase }}
+              >
                 <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <step.icon className="h-5 w-5" />
+                  <step.icon className="h-5 w-5 transition-transform group-hover:scale-105" />
                 </span>
                 <span className="text-sm font-semibold">{step.label}</span>
-              </div>
-            </div>
+              </motion.a>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -754,11 +1046,15 @@ function HowItWorks() {
 
         <div className="mt-10 grid gap-5 lg:grid-cols-3">
           {processSteps.map((item, index) => (
-            <MotionCard key={item.step} delay={index * 0.06} className="group border-border/70 bg-card/85 p-6 shadow-sm transition-colors hover:border-primary/30">
+            <MotionCard
+              key={item.step}
+              delay={index * 0.06}
+              className="group border-border/70 bg-card/85 p-6 shadow-sm transition-[background-color,border-color,box-shadow] duration-150 hover:border-primary/35 hover:bg-card hover:shadow-lg hover:shadow-primary/10"
+            >
               <div className="flex items-start justify-between gap-4">
                 <span className="text-sm font-semibold text-primary">{item.step}</span>
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:-translate-y-0.5">
-                  <item.icon className="h-5 w-5" />
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-[background-color,transform] duration-150 group-hover:-translate-y-0.5 group-hover:bg-primary/15">
+                  <item.icon className="h-5 w-5 transition-transform duration-150 group-hover:scale-110" />
                 </span>
               </div>
               <h3 className="mt-5 text-xl font-bold tracking-normal">{item.title}</h3>
@@ -781,6 +1077,8 @@ function RoleFeatures({
   cta: CtaState
   setActiveRoleTab: (value: string) => void
 }) {
+  const shouldReduceMotion = useReducedMotion()
+
   return (
     <section id="features" className="scroll-mt-24 bg-muted/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
@@ -808,31 +1106,44 @@ function RoleFeatures({
                 transition={{ duration: 0.28 }}
                 className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
               >
-                <Card className={cn("overflow-hidden rounded-2xl border-border/70 bg-card/90 p-0 shadow-sm", `bg-gradient-to-br ${role.accent}`)}>
-                  <div className="p-6 sm:p-8">
-                    <Badge variant="secondary" className="rounded-full">{role.eyebrow}</Badge>
-                    <h3 className="mt-5 text-2xl font-bold tracking-normal sm:text-3xl">{role.title}</h3>
-                    <p className="mt-4 text-sm leading-6 text-muted-foreground sm:text-base">{role.description}</p>
-                    <div className="mt-7 flex items-end gap-3 rounded-2xl border border-border/70 bg-background/70 p-5">
-                      <span className="text-4xl font-bold tracking-normal text-primary">{role.metric}</span>
-                      <span className="pb-1 text-sm font-medium text-muted-foreground">{role.metricLabel}</span>
+                <motion.div
+                  whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+                  transition={{ duration: 0.22, ease: smoothEase }}
+                >
+                  <Card className={cn("overflow-hidden rounded-2xl border-border/70 bg-card/90 p-0 shadow-sm", `bg-gradient-to-br ${role.accent}`)}>
+                    <div className="p-6 sm:p-8">
+                      <Badge variant="secondary" className="rounded-full">{role.eyebrow}</Badge>
+                      <h3 className="mt-5 text-2xl font-bold tracking-normal sm:text-3xl">{role.title}</h3>
+                      <p className="mt-4 text-sm leading-6 text-muted-foreground sm:text-base">{role.description}</p>
+                      <div className="mt-7 flex items-end gap-3 rounded-2xl border border-border/70 bg-background/70 p-5">
+                        <span className="text-4xl font-bold tracking-normal text-primary">{role.metric}</span>
+                        <span className="pb-1 text-sm font-medium text-muted-foreground">{role.metricLabel}</span>
+                      </div>
+                      <Button asChild className="mt-6 h-11 rounded-xl">
+                        <Link href={cta.primaryHref}>
+                          {cta.isReadyAuthenticated ? "View Dashboard" : "View Dashboard"}
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
                     </div>
-                    <Button asChild className="mt-6 h-11 rounded-xl">
-                      <Link href={cta.primaryHref}>
-                        {cta.isReadyAuthenticated ? "View Dashboard" : "View Dashboard"}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </div>
-                </Card>
+                  </Card>
+                </motion.div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {role.bullets.map((item) => (
-                    <Card key={item.title} className="group rounded-2xl border-border/70 bg-card/85 p-5 shadow-sm transition-colors hover:border-primary/30">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500 transition-transform group-hover:scale-105" />
-                      <h4 className="mt-4 text-base font-bold">{item.title}</h4>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
-                    </Card>
+                  {role.bullets.map((item, index) => (
+                    <motion.div
+                      key={item.title}
+                      initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+                      animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                      transition={{ duration: 0.24, delay: index * 0.035, ease: smoothEase }}
+                      whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+                    >
+                      <Card className="group h-full rounded-2xl border-border/70 bg-card/85 p-5 shadow-sm transition-colors hover:border-primary/30">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500 transition-transform group-hover:scale-105" />
+                        <h4 className="mt-4 text-base font-bold">{item.title}</h4>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
+                      </Card>
+                    </motion.div>
                   ))}
                 </div>
               </motion.div>
@@ -885,6 +1196,8 @@ function Outcomes() {
 }
 
 function FAQ({ cta }: { cta: CtaState }) {
+  const [openFaq, setOpenFaq] = useState<string>(faqs[0]?.question ?? "")
+
   return (
     <section id="faq" className="scroll-mt-24 bg-muted/20 px-4 py-16 sm:px-6 sm:py-20 lg:px-8 lg:py-24">
       <div className="mx-auto max-w-7xl">
@@ -900,9 +1213,15 @@ function FAQ({ cta }: { cta: CtaState }) {
             </Button>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            {faqs.map((faq, index) => (
-              <FAQItem key={faq.question} defaultOpen={index === 0} question={faq.question} answer={faq.answer} />
+          <div className="grid items-start gap-3 md:grid-cols-2">
+            {faqs.map((faq) => (
+              <FAQItem
+                key={faq.question}
+                isOpen={openFaq === faq.question}
+                question={faq.question}
+                answer={faq.answer}
+                onToggle={() => setOpenFaq((current) => (current === faq.question ? "" : faq.question))}
+              />
             ))}
           </div>
         </div>
@@ -912,9 +1231,18 @@ function FAQ({ cta }: { cta: CtaState }) {
 }
 
 function FinalCTA({ cta }: { cta: CtaState }) {
+  const shouldReduceMotion = useReducedMotion()
+
   return (
     <section className="px-4 py-14 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl overflow-hidden rounded-2xl border border-border/70 bg-foreground px-6 py-10 text-background shadow-2xl shadow-primary/10 sm:px-10 lg:px-12">
+      <motion.div
+        className="mx-auto max-w-7xl overflow-hidden rounded-2xl border border-border/70 bg-foreground px-6 py-10 text-background shadow-2xl shadow-primary/10 sm:px-10 lg:px-12"
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 22, scale: 0.985 }}
+        whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+        viewport={{ once: true, margin: "-90px" }}
+        transition={{ duration: 0.5, ease: smoothEase }}
+        whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+      >
         <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
           <div>
             <p className="text-sm font-semibold text-background/70">Ready for a cleaner semester?</p>
@@ -935,7 +1263,7 @@ function FinalCTA({ cta }: { cta: CtaState }) {
             </Button>
           </div>
         </div>
-      </div>
+      </motion.div>
     </section>
   )
 }
@@ -952,9 +1280,9 @@ function Footer({ cta }: { cta: CtaState }) {
   }))
 
   return (
-    <footer className="border-t border-border/70 bg-background px-4 py-10 sm:px-6 lg:px-8">
+    <footer className="border-t border-border/70 bg-background px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-9 lg:grid-cols-[1.2fr_1fr]">
+        <div className="grid gap-7 lg:grid-cols-[1.2fr_1fr] lg:gap-9">
           <div>
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -970,11 +1298,11 @@ function Footer({ cta }: { cta: CtaState }) {
             </p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-3">
+          <div className="grid grid-cols-[0.85fr_1fr_1.15fr] gap-x-4 gap-y-6 sm:grid-cols-3 sm:gap-6">
             {groups.map((group) => (
-              <div key={group.title}>
-                <h3 className="text-sm font-semibold">{group.title}</h3>
-                <ul className="mt-3 space-y-2">
+              <div key={group.title} className="min-w-0">
+                <h3 className="text-sm font-semibold text-foreground">{group.title}</h3>
+                <ul className="mt-3 space-y-2.5 sm:space-y-2">
                   {group.links.map((link) => (
                     <li key={`${group.title}-${link.label}`}>
                       <FooterLink href={link.href}>{link.label}</FooterLink>
@@ -1004,12 +1332,20 @@ function SectionHeader({
   eyebrow: string
   title: string
 }) {
+  const shouldReduceMotion = useReducedMotion()
+
   return (
-    <div className="mx-auto max-w-3xl text-center">
+    <motion.div
+      className="mx-auto max-w-3xl text-center"
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
+      whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-90px" }}
+      transition={{ duration: 0.42, ease: smoothEase }}
+    >
       <Badge variant="secondary" className="rounded-full">{eyebrow}</Badge>
       <h2 className="mt-4 text-balance text-3xl font-bold tracking-normal sm:text-4xl lg:text-5xl">{title}</h2>
       <p className="mt-4 text-pretty text-sm leading-6 text-muted-foreground sm:text-base">{description}</p>
-    </div>
+    </motion.div>
   )
 }
 
@@ -1029,8 +1365,9 @@ function MotionCard({
       initial={shouldReduceMotion ? false : { opacity: 0, y: 18 }}
       whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-80px" }}
-      transition={{ duration: 0.42, delay }}
-      whileHover={shouldReduceMotion ? undefined : { y: -3 }}
+      transition={{ duration: 0.34, delay, ease: smoothEase }}
+      whileHover={shouldReduceMotion ? undefined : { y: -4, scale: 1.008, transition: { duration: 0.14, ease: smoothEase } }}
+      whileTap={shouldReduceMotion ? undefined : { scale: 0.992, transition: { duration: 0.08, ease: smoothEase } }}
     >
       <Card className={cn("h-full", className)}>{children}</Card>
     </motion.div>
@@ -1039,25 +1376,26 @@ function MotionCard({
 
 function FAQItem({
   answer,
-  defaultOpen = false,
+  isOpen,
+  onToggle,
   question,
 }: {
   answer: string
-  defaultOpen?: boolean
+  isOpen: boolean
+  onToggle: () => void
   question: string
 }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
   const id = question.toLowerCase().replace(/[^a-z0-9]+/g, "-")
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-border/70 bg-card/85 p-0 shadow-sm">
+    <Card className="self-start overflow-hidden rounded-2xl border-border/70 bg-card/85 p-0 shadow-sm">
       <button
         type="button"
         className="flex min-h-16 w-full items-center justify-between gap-4 px-5 py-4 text-left"
         aria-expanded={isOpen}
         aria-controls={`${id}-content`}
         id={`${id}-trigger`}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={onToggle}
       >
         <span className="text-sm font-semibold sm:text-base">{question}</span>
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
@@ -1083,11 +1421,11 @@ function FAQItem({
 }
 
 function FooterLink({ children, href }: { children: ReactNode; href: string }) {
-  const className = "group inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+  const className = "group inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-5 text-muted-foreground transition-colors hover:text-foreground sm:text-sm"
   const content = (
     <>
-      <span>{children}</span>
-      <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      <span className="min-w-0">{children}</span>
+      <ArrowRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" />
     </>
   )
 

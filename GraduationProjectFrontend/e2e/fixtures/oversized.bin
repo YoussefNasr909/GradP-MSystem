@@ -1,0 +1,1 @@
+This fixture is intentionally tiny. Specs that need oversized upload checks create a larger Buffer through the Playwright multipart API.

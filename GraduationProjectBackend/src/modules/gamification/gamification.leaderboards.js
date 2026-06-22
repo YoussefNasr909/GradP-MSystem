@@ -30,21 +30,23 @@ export async function generateLeaderboardSnapshot(type, now = new Date()) {
   const rows = await loadLeaderboardRows(type);
   const data = rows.map((row, index) => buildSnapshotData(type, row, index + 1, period, now));
 
-  await prisma.$transaction(async (tx) => {
-    await tx.leaderboardSnapshot.deleteMany({
-      where: {
-        leaderboardType: type,
-        scopeType: "GLOBAL",
-        scopeId: null,
-        periodStart: period.periodStart,
-        periodEnd: period.periodEnd,
-      },
-    });
+  await withLeaderboardSnapshotRetry(async () => {
+    await prisma.$transaction(async (tx) => {
+      await tx.leaderboardSnapshot.deleteMany({
+        where: {
+          leaderboardType: type,
+          scopeType: "GLOBAL",
+          scopeId: null,
+          periodStart: period.periodStart,
+          periodEnd: period.periodEnd,
+        },
+      });
 
-    if (data.length > 0) {
-      await tx.leaderboardSnapshot.createMany({ data });
-    }
-  }, GAMIFICATION_TRANSACTION_OPTIONS);
+      if (data.length > 0) {
+        await tx.leaderboardSnapshot.createMany({ data });
+      }
+    }, GAMIFICATION_TRANSACTION_OPTIONS);
+  });
 
   return {
     type,
@@ -52,6 +54,19 @@ export async function generateLeaderboardSnapshot(type, now = new Date()) {
     periodEnd: period.periodEnd,
     created: data.length,
   };
+}
+
+async function withLeaderboardSnapshotRetry(operation, attempts = 3) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error?.code !== "P2034" || attempt === attempts) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+    }
+  }
 }
 
 export function getLeaderboardPeriod(type, now = new Date()) {

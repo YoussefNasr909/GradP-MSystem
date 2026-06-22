@@ -15,7 +15,7 @@ export function errorHandler(err, req, res, next) {
     message: isAppError ? err.message : "Internal Server Error",
   };
 
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.INCLUDE_ERROR_STACK === "true") {
     payload.stack = err.stack;
   }
 

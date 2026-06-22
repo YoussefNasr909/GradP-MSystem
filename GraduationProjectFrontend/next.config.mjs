@@ -1,28 +1,24 @@
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:4000";
 
-/** @type {import('next').NextConfig} */
+/** @type {import("next").NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['pdf-parse', 'officeparser'],
-  },
+  serverExternalPackages: ["pdf-parse", "officeparser"],
   typescript: {
     ignoreBuildErrors: false,
   },
   images: {
-  unoptimized: false,
-  formats: ["image/avif", "image/webp"],
-  minimumCacheTTL: 60 * 60 * 24,
-  remotePatterns: [
-    { protocol: "https", hostname: "randomuser.me", pathname: "/api/portraits/**" },
-    { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
-    { protocol: "https", hostname: "avatars.githubusercontent.com", pathname: "/**" },
-  ],
-},
+    unoptimized: false,
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24,
+    remotePatterns: [
+      { protocol: "https", hostname: "randomuser.me", pathname: "/api/portraits/**" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
+      { protocol: "https", hostname: "avatars.githubusercontent.com", pathname: "/**" },
+    ],
+  },
 
-  // turbopack config removed — using webpack for dev (lower memory/disk usage)
-  // reactCompiler disabled — too expensive for large codebase
-  reactCompiler: false,
-
+  // Turbopack config removed; webpack dev is steadier for this large E2E suite.
+  // React Compiler is intentionally not enabled for this project.
   async rewrites() {
     return [
       {

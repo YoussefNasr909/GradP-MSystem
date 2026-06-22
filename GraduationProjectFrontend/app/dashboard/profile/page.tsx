@@ -30,7 +30,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Coordinator / Admin",
   doctor: "Doctor",
   ta: "Teaching Assistant",
-  support: "Support",
   leader: "Team Leader",
   member: "Student",
   support: "Support Staff",
@@ -43,7 +42,6 @@ const ROLE_TONES: Record<UserRole, "primary" | "blue" | "emerald" | "amber" | "r
   support: "slate",
   leader: "violet",
   member: "primary",
-  support: "amber",
 }
 
 function getInitials(name?: string | null) {

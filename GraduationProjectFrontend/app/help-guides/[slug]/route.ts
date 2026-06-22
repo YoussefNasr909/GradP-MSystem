@@ -1,5 +1,5 @@
 import { getHelpGuideById } from "@/lib/help-guides"
-import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from "pdf-lib"
+import { PDFDocument, rgb, StandardFonts, type Color, type PDFFont, type PDFPage } from "pdf-lib"
 
 export const runtime = "nodejs"
 
@@ -264,7 +264,7 @@ function drawTextBlock(
   topY: number,
   font: PDFFont,
   size: number,
-  color: { r: number; g: number; b: number },
+  color: Color,
   maxWidth: number,
   lineGap = size + 4,
 ) {
@@ -284,7 +284,7 @@ function drawBullets(
   font: PDFFont,
   size: number,
   maxWidth: number,
-  bulletColor = COLORS.blue,
+  bulletColor: Color = COLORS.blue,
 ) {
   let y = topY
   for (const bullet of bullets) {

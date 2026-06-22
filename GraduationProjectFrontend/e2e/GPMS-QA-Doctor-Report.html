@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GPMS QA Testing Report</title>
+    <style>
+      :root {
+        --bg: #f6f8fb;
+        --panel: #ffffff;
+        --ink: #152033;
+        --muted: #667085;
+        --line: #d9e2ef;
+        --brand: #185adb;
+        --brand-2: #0f766e;
+        --pass: #0f8a4b;
+        --warn: #b45309;
+        --fail: #b42318;
+        --code: #f2f5f9;
+        --shadow: 0 18px 45px rgba(21, 32, 51, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: var(--brand);
+      }
+
+      .page {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, #ffffff 0%, #eef6ff 54%, #effcf7 100%);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 34px;
+        box-shadow: var(--shadow);
+      }
+
+      .eyebrow {
+        color: var(--brand-2);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.15;
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 10px;
+        font-size: clamp(34px, 5vw, 62px);
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-top: 34px;
+        margin-bottom: 14px;
+        font-size: 26px;
+      }
+
+      h3 {
+        margin-top: 22px;
+        margin-bottom: 10px;
+        font-size: 18px;
+      }
+
+      .lead {
+        max-width: 880px;
+        margin-top: 16px;
+        color: #344054;
+        font-size: 18px;
+      }
+
+      .meta-grid,
+      .stats-grid {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .meta-grid {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+
+      .meta,
+      .stat,
+      .section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 10px 28px rgba(21, 32, 51, 0.05);
+      }
+
+      .meta,
+      .stat {
+        padding: 16px;
+      }
+
+      .meta span,
+      .stat span {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .meta strong,
+      .stat strong {
+        display: block;
+        margin-top: 5px;
+        color: var(--ink);
+        font-size: 20px;
+      }
+
+      .section {
+        margin-top: 22px;
+        padding: 24px;
+        overflow: hidden;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        border-radius: 999px;
+        padding: 3px 10px;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .pass {
+        background: #dcfae6;
+        color: var(--pass);
+      }
+
+      .warn {
+        background: #fef0c7;
+        color: var(--warn);
+      }
+
+      .fail {
+        background: #fee4e2;
+        color: var(--fail);
+      }
+
+      .neutral {
+        background: #eef2f7;
+        color: #344054;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #ffffff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 12px 14px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+      }
+
+      th {
+        background: #f8fafc;
+        color: #344054;
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      ul {
+        margin: 10px 0 0 20px;
+        padding: 0;
+      }
+
+      li {
+        margin: 5px 0;
+      }
+
+      code {
+        background: var(--code);
+        border: 1px solid #e4e7ec;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-family: "Cascadia Mono", Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      .callout {
+        border-left: 4px solid var(--brand);
+        background: #f5f9ff;
+        border-radius: 12px;
+        margin-top: 14px;
+        padding: 14px 16px;
+      }
+
+      .two-col {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .footer {
+        color: var(--muted);
+        margin-top: 30px;
+        text-align: center;
+        font-size: 13px;
+      }
+
+      @media print {
+        body {
+          background: #ffffff;
+        }
+
+        .page {
+          max-width: none;
+          padding: 0;
+        }
+
+        .hero,
+        .section,
+        .meta,
+        .stat {
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="eyebrow">Graduation Project Management System</div>
+        <h1>E2E + API QA Testing Report</h1>
+        <p class="lead">
+          This report summarizes the latest branch sync, the application changes reviewed from main,
+          test updates made for those changes, and the final validation result for the GPMS frontend
+          and backend testing phase.
+        </p>
+        <div class="meta-grid">
+          <div class="meta"><span>Report date</span><strong>2026-06-21</strong></div>
+          <div class="meta"><span>Branch</span><strong>Vuritch</strong></div>
+          <div class="meta"><span>Synced commit</span><strong>48a7da8</strong></div>
+          <div class="meta"><span>Final verdict</span><strong>Ready for discussion</strong></div>
+        </div>
+        <div class="stats-grid">
+          <div class="stat"><span>Total specs</span><strong>27</strong></div>
+          <div class="stat"><span>Total tests</span><strong>110</strong></div>
+          <div class="stat"><span>Passed</span><strong>109</strong></div>
+          <div class="stat"><span>Failed</span><strong>0</strong></div>
+          <div class="stat"><span>Skipped</span><strong>1</strong></div>
+          <div class="stat"><span>Confidence</span><strong>High</strong></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Executive Summary</h2>
+        <p>
+          Local <code>main</code>, local <code>Vuritch</code>, <code>origin/main</code>, and
+          <code>origin/Vuritch</code> are now aligned at commit <code>48a7da8</code>. The latest main
+          changes were reviewed, the affected tests were updated, and the full Playwright suite passed
+          after the sync.
+        </p>
+        <div class="callout">
+          <strong>Doctor-ready status:</strong> The project is ready to present from a QA/testing
+          perspective. The suite covers real workflows, API boundaries, permissions, responsive behavior,
+          external-service failure states, file security, database reset safety, and role access. The only
+          intentional skip documents a missing weekly-report create/seed capability.
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Main Sync Result</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Status</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Fetch latest main</td>
+                <td><span class="status pass">PASS</span></td>
+                <td><code>origin/main</code> advanced from <code>3bbe5b3</code> to <code>48a7da8</code>.</td>
+              </tr>
+              <tr>
+                <td>Update Vuritch</td>
+                <td><span class="status pass">PASS</span></td>
+                <td><code>Vuritch</code> fast-forwarded cleanly to latest <code>origin/main</code>; no merge conflicts.</td>
+              </tr>
+              <tr>
+                <td>Update local main</td>
+                <td><span class="status pass">PASS</span></td>
+                <td>Local <code>main</code> was set to <code>origin/main</code>.</td>
+              </tr>
+              <tr>
+                <td>Push Vuritch</td>
+                <td><span class="status pass">PASS</span></td>
+                <td><code>origin/Vuritch</code> now matches <code>origin/main</code> at <code>48a7da8</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>What Changed From Latest Main</h2>
+        <div class="two-col">
+          <div>
+            <h3>Backend</h3>
+            <ul>
+              <li><code>rubric-templates.routes.js</code>: rubric criteria now require a non-empty criterion name.</li>
+              <li><code>submissions.schema.js</code>: grading rubric criteria now require criterion names and validate score ranges.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Frontend</h3>
+            <ul>
+              <li><code>submissions/page.tsx</code>: grading now uses rubric totals directly and removes manual grade override UI.</li>
+              <li><code>submissions/page.tsx</code>: added supervisor review inbox and filters for Doctor/TA workflows.</li>
+              <li><code>proposals/page.tsx</code>: added supervisor team filtering through <code>teamId</code>.</li>
+              <li><code>risk-management/page.tsx</code>: UI structure and styling were refreshed.</li>
+              <li><code>rubric-editor.tsx</code>: total score display now shows raw total/max score.</li>
+              <li><code>calendar/page.tsx</code>: animation variant typing was clarified.</li>
+              <li><code>profile/page.tsx</code>: duplicate <code>support</code> keys were introduced and then fixed during QA.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Tests Updated For Main Changes</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Update</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>analytics-evaluations-reviews.spec.ts</code></td>
+                <td>Added an assertion that a rubric template rejects an empty criterion name with <code>422</code>.</td>
+                <td>Covers the new backend rubric validation from latest main.</td>
+              </tr>
+              <tr>
+                <td><code>deliverables.spec.ts</code></td>
+                <td>Added an assertion that submission grading rejects rubric criteria with empty names.</td>
+                <td>Covers the new grading schema and protects the final-grade flow.</td>
+              </tr>
+              <tr>
+                <td><code>proposals.spec.ts</code></td>
+                <td>Added a Doctor supervisor list check using <code>/proposals?teamId=...</code>.</td>
+                <td>Covers the new supervisor team filter behavior.</td>
+              </tr>
+              <tr>
+                <td><code>profile/page.tsx</code></td>
+                <td>Removed duplicate <code>support</code> role label/tone keys.</td>
+                <td>Fixes latest-main TypeScript failure and preserves support profile rendering.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Validation Results</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Status</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Skipped</th>
+                <th>Time</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>cd GraduationProjectBackend &amp;&amp; npm test</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>257</td>
+                <td>0</td>
+                <td>15</td>
+                <td>~3.8s test duration</td>
+                <td>Backend unit suite passed. Expected negative validation/auth logs were printed.</td>
+              </tr>
+              <tr>
+                <td><code>cd GraduationProjectFrontend &amp;&amp; npm run lint</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>n/a</td>
+                <td>0 errors</td>
+                <td>n/a</td>
+                <td>~42s</td>
+                <td>19 warnings remain: unescaped entities and one existing hook dependency warning.</td>
+              </tr>
+              <tr>
+                <td><code>cd GraduationProjectFrontend &amp;&amp; npm run type-check</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>n/a</td>
+                <td>0</td>
+                <td>n/a</td>
+                <td>~5-10s</td>
+                <td>Initial latest-main duplicate support-key failure was fixed, then type-check passed.</td>
+              </tr>
+              <tr>
+                <td><code>cd GraduationProjectFrontend &amp;&amp; npx playwright test e2e/auth.spec.ts --project=chromium</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>7</td>
+                <td>0</td>
+                <td>0</td>
+                <td>57.4s</td>
+                <td>Standalone auth acceptance check passed.</td>
+              </tr>
+              <tr>
+                <td><code>cd GraduationProjectFrontend &amp;&amp; npx playwright test e2e/teams.spec.ts --project=chromium</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>8</td>
+                <td>0</td>
+                <td>0</td>
+                <td>59.7s</td>
+                <td>Standalone team management acceptance check passed.</td>
+              </tr>
+              <tr>
+                <td><code>cd GraduationProjectFrontend &amp;&amp; npx playwright test</code></td>
+                <td><span class="status pass">PASS</span></td>
+                <td>109</td>
+                <td>0</td>
+                <td>1</td>
+                <td>12.2m</td>
+                <td>Full desktop and mobile Playwright suite passed. HTML report is available in <code>playwright-report/index.html</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Coverage By Spec</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Spec</th>
+                <th>Tests</th>
+                <th>Status</th>
+                <th>Detailed coverage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>admin.spec.ts</code></td><td>3</td><td><span class="status pass">PASS</span></td><td>Admin dashboard, users list/search/create/update/deactivate/delete, logs, report/PDF endpoints, non-admin blocking.</td></tr>
+              <tr><td><code>ai-routes.spec.ts</code></td><td>15</td><td><span class="status pass">PASS</span></td><td>Assistant, enhance/summarize discussion, rubric/evaluation/task/sprint/supervisor/proposal/submission/PR AI routes with invalid payload and provider-failure behavior. Documents missing auth-gate TODO.</td></tr>
+              <tr><td><code>analytics-evaluations-reviews.spec.ts</code></td><td>3</td><td><span class="status pass">PASS</span></td><td>Analytics/evaluations/reviews route smoke, rubric create/read, invalid rubric validation, post-grade data, unauthorized rubric mutation blocks.</td></tr>
+              <tr><td><code>api.spec.ts</code></td><td>6</td><td><span class="status pass">PASS</span></td><td>Health/ping, auth hardening, bad IDs, malformed payloads, duplicates, mounted modules, rate-limit surfaces, provider failure states.</td></tr>
+              <tr><td><code>auth.spec.ts</code></td><td>7</td><td><span class="status pass">PASS</span></td><td>Login, registration validation, verification/reset invalid OTP, OAuth complete errors, 2FA invalid flow, inactive/suspended login, role switch, privacy, complete-profile.</td></tr>
+              <tr><td><code>chat.spec.ts</code></td><td>3</td><td><span class="status pass">PASS</span></td><td>Direct chat, team chat, discussions, replies, likes, search, private team chat permissions.</td></tr>
+              <tr><td><code>deadlines-timeline.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Deadline list, timeline display, admin/doctor management if exposed, overdue/empty states, role restrictions.</td></tr>
+              <tr><td><code>deliverables.spec.ts</code></td><td>4</td><td><span class="status pass">PASS</span></td><td>Submission upload/review/revision/grading/comments/unlock, rubric validation, deployment/final defense-meeting gate, bulk approval behavior.</td></tr>
+              <tr><td><code>discover-search-help.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Discover, search, FAQ, help, help-guide routes, filters, empty states, all-role smoke behavior.</td></tr>
+              <tr><td><code>economy-gamification.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>XP idempotency, leaderboards, admin cases, adjustments, audit logs, process-events, snapshots, quests/rewards, purchase/equip/duplicate claim.</td></tr>
+              <tr><td><code>files-security.spec.ts</code></td><td>3</td><td><span class="status pass">PASS</span></td><td>Allowed/rejected upload types, private team document list protection, deleted metadata removal, path traversal rejection, public upload behavior documentation.</td></tr>
+              <tr><td><code>github-version-control.spec.ts</code></td><td>5</td><td><span class="status pass">PASS</span></td><td>GitHub UI, version-control UI, team-required states, leader/member repository permissions, workspace/access/tree/blob/commits/compare/actions/releases/contributors/collaborators/branches/issues/PRs/webhooks.</td></tr>
+              <tr><td><code>meetings-calendar.spec.ts</code></td><td>4</td><td><span class="status pass">PASS</span></td><td>Meeting schedule/update/cancel, conflict check, participant response, calendar event visibility, approval/completion smoke, Google/Outlook error states.</td></tr>
+              <tr><td><code>navigation-smoke.spec.ts</code></td><td>6</td><td><span class="status pass">PASS</span></td><td>Public routes, all major dashboard routes, role-access matrix, dynamic route IDs, sidebar/dashboard link sweep, no crash/loading/leak assertions.</td></tr>
+              <tr><td><code>notifications.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Event-created notifications, unread count, read/read-all, delete, unauthorized notification access, empty state.</td></tr>
+              <tr><td><code>profile-settings.spec.ts</code></td><td>4</td><td><span class="status pass">PASS</span></td><td>Profile/settings updates, GitHub/LinkedIn validation, avatar upload/remove validation, password/delete-account guards, complete-profile, oauth-complete validation.</td></tr>
+              <tr><td><code>proposals.spec.ts</code></td><td>4</td><td><span class="status pass">PASS</span></td><td>Proposal create/edit/submit/revision/resubmit, Doctor approve/reject, wrong-doctor block, member status, admin override, supervisor team filter, dynamic route smoke.</td></tr>
+              <tr><td><code>resources-documents.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Doctor/TA resources, student visibility, invalid/oversized files, owner edit/delete, team document upload/list/delete, non-team visibility block.</td></tr>
+              <tr><td><code>responsive.spec.ts</code></td><td>6</td><td><span class="status pass">PASS</span></td><td>Mobile Chrome and Mobile Safari login, navigation, drawer/sidebar, search/filter, team/support pages/dialogs, no crash/leak states.</td></tr>
+              <tr><td><code>risk-announcements.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Risk lifecycle, approval/revision, announcement all/byStage/overdue/needsProposalApproval audiences, preview, pin/update/delete, permission checks.</td></tr>
+              <tr><td><code>supervisor-toolkit.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Doctor/TA toolkit access, student/member/leader blocked or proper state, assigned teams, supervisor notes CRUD, deadline tools.</td></tr>
+              <tr><td><code>supervisors.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Doctor/TA supervisor request send/accept/decline, duplicates, no-team/member/wrong-supervisor/non-supervisor restrictions.</td></tr>
+              <tr><td><code>support.spec.ts</code></td><td>2</td><td><span class="status pass">PASS</span></td><td>Ticket create/validation/attachments, support/user replies, close/reopen, quick-chat, bulk update, summary, agents, saved replies, attachment permissions.</td></tr>
+              <tr><td><code>tasks-sprints.spec.ts</code></td><td>5</td><td><span class="status pass">PASS</span></td><td>Sprint/task lifecycle, assignment, evidence upload/link, member submit, leader/TA review, rejection active state, TA evaluation, admin review, no-team/unrelated block, task GitHub error states.</td></tr>
+              <tr><td><code>teams.spec.ts</code></td><td>8</td><td><span class="status pass">PASS</span></td><td>Team create/update/delete, join request, invite/accept/cancel, join-by-code, full/private team, transfer leadership, remove/leave member, supervisor assignment/removal.</td></tr>
+              <tr><td><code>time-tracker.spec.ts</code></td><td>3</td><td><span class="status pass">PASS</span></td><td>LocalStorage timer start/pause/resume/stop/save, reload persistence, invalid transitions, no-team/non-student states.</td></tr>
+              <tr><td><code>weekly-reports.spec.ts</code></td><td>3</td><td><span class="status warn">1 SKIPPED</span></td><td>Weekly progress/reports pages, unauthorized and wrong-role API checks. Full create/review/resubmit journey is skipped because no create endpoint or editable seed report is available.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Fixed In Project Flow</h2>
+        <div class="two-col">
+          <div>
+            <h3>Frontend</h3>
+            <ul>
+              <li>Fixed profile role metadata so support users no longer break TypeScript compilation.</li>
+              <li>Stabilized time-tracker JSX from latest-main code.</li>
+              <li>Fixed help-guide PDF generation typing for <code>pdf-lib</code>.</li>
+              <li>Updated evaluate-submission parser integration so the Next API route type-checks.</li>
+              <li>Improved QA coverage for the changed submissions, proposals, rubrics, profile, risk, calendar, and responsive flows.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Backend</h3>
+            <ul>
+              <li>Added guarded E2E database prepare script so reset/reseed cannot run against an unsafe DB by accident.</li>
+              <li>Hardened error responses so stack traces require an explicit opt-in flag.</li>
+              <li>Added retry behavior for transient gamification leaderboard snapshot conflicts.</li>
+              <li>Covered new rubric/submission criterion-name validation in API-backed tests.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Failed Tests And Fixes</h2>
+        <p>
+          Final full Playwright result: <strong>0 failed tests</strong>. Earlier stabilization failures were fixed before the final run.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Issue</th>
+                <th>Classification</th>
+                <th>Fix</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>TypeScript failed on duplicate profile <code>support</code> keys.</td><td>Frontend bug from latest main</td><td>Removed duplicate role label/tone entries.</td><td><span class="status pass">Fixed</span></td></tr>
+              <tr><td>Weekly-report full create/review journey cannot run in current API/seed state.</td><td>Missing product/test data capability</td><td>Kept unauthorized/page checks and skipped the full journey with an explicit TODO.</td><td><span class="status warn">Documented</span></td></tr>
+              <tr><td>External AI/GitHub/OAuth/calendar providers cannot be required in E2E.</td><td>Environment/external dependency</td><td>Tested validation, missing key/token, and provider failure states only.</td><td><span class="status pass">Covered safely</span></td></tr>
+              <tr><td>Some routes can render blank states in edge contexts.</td><td>Frontend empty-state gap</td><td>Asserted no crash, no secret leak, and documented blank-state TODO fallbacks.</td><td><span class="status warn">Documented</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Remaining Risks And TODOs</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Priority</th>
+                <th>Risk / TODO</th>
+                <th>Affected workflow</th>
+                <th>Fallback test</th>
+                <th>Recommendation</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="status warn">High</span></td><td>No weekly-report create endpoint or seeded editable report.</td><td>Weekly reports full submit/review/resubmit.</td><td>Unauthorized and page smoke tests run; one explicit skip remains.</td><td>Add create endpoint or seed editable report for E2E.</td></tr>
+              <tr><td><span class="status warn">High</span></td><td>AI frontend routes do not consistently enforce auth before provider logic.</td><td>AI-assisted workflows.</td><td>Bad payload/provider failure tests and auth TODO.</td><td>Add shared auth gate to AI route handlers.</td></tr>
+              <tr><td><span class="status warn">Medium</span></td><td>Some dashboard routes need clearer empty/forbidden/team-required states.</td><td>Navigation matrix, notifications, proposal detail, mobile states.</td><td>No crash/no leak assertions plus blank-state TODO.</td><td>Add explicit state components for each route.</td></tr>
+              <tr><td><span class="status warn">Medium</span></td><td>Time tracker persists only in browser localStorage.</td><td>Time tracking history across devices.</td><td>Reload persistence test.</td><td>Add backend time-tracker model/API if cross-device history is required.</td></tr>
+              <tr><td><span class="status warn">Medium</span></td><td>External provider success paths are not exercised.</td><td>GitHub, AI, OAuth, Google/Outlook calendar.</td><td>Smoke/error-state tests.</td><td>Add mocked provider adapters for success-path contracts.</td></tr>
+              <tr><td><span class="status neutral">Low</span></td><td>Lint warnings remain.</td><td>General code quality.</td><td>Lint passes with warnings documented.</td><td>Fix unescaped entities and hook dependency warning later.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Final Status</h2>
+        <div class="table-wrap">
+          <table>
+            <tbody>
+              <tr><th>Backend unit tests</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Frontend lint</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Frontend type-check</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Chromium auth tests</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Chromium team tests</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Full Playwright suite</th><td><span class="status pass">PASS</span></td></tr>
+              <tr><th>Total specs</th><td>27</td></tr>
+              <tr><th>Total tests</th><td>110</td></tr>
+              <tr><th>Passed</th><td>109</td></tr>
+              <tr><th>Failed</th><td>0</td></tr>
+              <tr><th>Skipped</th><td>1</td></tr>
+              <tr><th>Flaky/retried</th><td>0</td></tr>
+              <tr><th>Final confidence level</th><td>High</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">
+          Detailed Playwright run artifacts are also available in <code>GraduationProjectFrontend/playwright-report/index.html</code>.
+          Failure artifacts, when generated during stabilization, are stored under <code>GraduationProjectFrontend/test-results/</code>.
+        </p>
+      </section>
+
+      <p class="footer">
+        Prepared for the GPMS testing phase discussion. This report reflects the local workspace after syncing
+        <code>Vuritch</code> with latest <code>main</code> and rerunning the required validation commands.
+      </p>
+    </main>
+  </body>
+</html>

@@ -670,7 +670,7 @@ export default function RegisterPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-lg">
             
 
-            <Card className="glass-card p-4 sm:p-5 md:p-6 lg:p-8 rounded-2xl sm:rounded-3xl transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 hover:ring-offset-2 hover:ring-offset-background hover:shadow-xl">
+            <Card className="glass-card border-border/80 bg-card/92 p-5 shadow-[0_18px_55px_rgba(15,23,42,0.12)] ring-1 ring-white/60 backdrop-blur-xl sm:p-5 md:p-6 lg:p-8 rounded-[1.35rem] sm:rounded-3xl transition-all hover:-translate-y-0.5 hover:ring-2 hover:ring-primary/30 hover:ring-offset-2 hover:ring-offset-background hover:shadow-xl dark:ring-white/10">
               <div className="flex items-center justify-between mb-6 sm:mb-8 gap-2">
                 {[1, 2].map((s) => (
                   <div key={s} className="flex items-center flex-1">

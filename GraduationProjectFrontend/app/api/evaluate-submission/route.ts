@@ -1,8 +1,8 @@
 import { google } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
-import pdfParse from 'pdf-parse';
-import { parseOfficeAsync } from 'officeparser';
+import { PDFParse } from 'pdf-parse';
+import { parseOffice } from 'officeparser';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -41,8 +41,13 @@ export async function POST(req: Request) {
           const ext = submission.fileUrl.split('.').pop()?.toLowerCase();
 
           if (fileType === "application/pdf" || ext === "pdf") {
-            const data = await pdfParse(buffer);
-            extractedText = data.text;
+            const parser = new PDFParse({ data: buffer });
+            try {
+              const data = await parser.getText();
+              extractedText = data.text;
+            } finally {
+              await parser.destroy();
+            }
           } else if (
             fileType.includes("presentation") || 
             fileType.includes("document") || 
@@ -52,7 +57,13 @@ export async function POST(req: Request) {
             const tempFilePath = path.join(os.tmpdir(), `temp_submission_${Date.now()}.${ext || 'docx'}`);
             fs.writeFileSync(tempFilePath, buffer);
             try {
-              extractedText = await parseOfficeAsync(tempFilePath);
+              const parsed = await parseOffice(tempFilePath);
+              extractedText =
+                typeof parsed === "string"
+                  ? parsed
+                  : typeof parsed?.toText === "function"
+                    ? parsed.toText()
+                    : JSON.stringify(parsed?.content ?? parsed);
             } finally {
               if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             }

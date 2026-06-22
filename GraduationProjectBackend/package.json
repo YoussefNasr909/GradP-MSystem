@@ -11,6 +11,7 @@
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:huge-seed": "node prisma/huge-seed.js",
+    "e2e:prepare": "node scripts/e2e-prepare.js",
     "test": "node --test \"src/**/*.test.js\""
   },
   "keywords": [],
