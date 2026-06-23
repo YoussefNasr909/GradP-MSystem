@@ -174,19 +174,34 @@ function displayAcademicId(user: Pick<ApiUser, "academicId" | "role">) {
   return academicId;
 }
 
-function validateForm(form: AdminUserFormState, requirePassword: boolean) {
-  if (
-    !form.firstName.trim() ||
-    !form.lastName.trim() ||
-    !form.email.trim() ||
-    (form.role !== "SUPPORT" && !form.academicId.trim())
-  ) {
-    return "First name, last name, email, and academic ID are required.";
+type FieldErrors = Partial<Record<keyof AdminUserFormState, string>>;
+
+function validateForm(form: AdminUserFormState, requirePassword: boolean): { isValid: boolean, errors: FieldErrors } {
+  const errors: FieldErrors = {};
+  
+  if (!form.firstName.trim()) errors.firstName = "First name is required.";
+  if (!form.lastName.trim()) errors.lastName = "Last name is required.";
+  
+  if (!form.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+    errors.email = "Invalid email format.";
   }
+
+  if (form.role !== "SUPPORT" && !form.academicId.trim()) {
+    errors.academicId = "Academic ID is required.";
+  }
+  
   if (requirePassword && form.password.trim().length < 6) {
-    return "Password must be at least 6 characters.";
+    errors.password = "Password must be at least 6 characters.";
+  } else if (!requirePassword && form.password.trim().length > 0 && form.password.trim().length < 6) {
+    errors.password = "Password must be at least 6 characters.";
   }
-  return "";
+  
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors
+  };
 }
 
 export default function AdminPage() {
@@ -219,6 +234,7 @@ export default function AdminPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ApiUser | null>(null);
   const [form, setForm] = useState(createEmptyUserForm());
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -357,6 +373,7 @@ export default function AdminPage() {
 
   const resetDialogs = () => {
     setActionError("");
+    setFieldErrors({});
     setSelectedUser(null);
     setForm(createEmptyUserForm());
   };
@@ -364,13 +381,22 @@ export default function AdminPage() {
   const updateForm = <K extends keyof AdminUserFormState>(
     key: K,
     value: AdminUserFormState[K],
-  ) => setForm((current) => ({ ...current, [key]: value }));
+  ) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      return { ...current, [key]: undefined };
+    });
+  };
 
   const refreshData = () => setRefreshKey((value) => value + 1);
 
   async function handleCreate() {
-    const validationError = validateForm(form, true);
-    if (validationError) return setActionError(validationError);
+    const validation = validateForm(form, true);
+    if (!validation.isValid) {
+      setFieldErrors(validation.errors);
+      return;
+    }
 
     setIsSubmitting(true);
     setActionError("");
@@ -404,8 +430,11 @@ export default function AdminPage() {
   async function handleUpdate() {
     if (!selectedUser) return;
 
-    const validationError = validateForm(form, false);
-    if (validationError) return setActionError(validationError);
+    const validation = validateForm(form, false);
+    if (!validation.isValid) {
+      setFieldErrors(validation.errors);
+      return;
+    }
 
     setIsSubmitting(true);
     setActionError("");
@@ -642,6 +671,7 @@ export default function AdminPage() {
                     isCurrentAdmin={user.id === currentUser?.id}
                     onEdit={() => {
                       setActionError("");
+                      setFieldErrors({});
                       setSelectedUser(user);
                       setForm(mapApiUserToAdminForm(user));
                       setIsEditOpen(true);
@@ -766,6 +796,7 @@ export default function AdminPage() {
                                 variant="ghost"
                                 onClick={() => {
                                   setActionError("");
+                                  setFieldErrors({});
                                   setSelectedUser(user);
                                   setForm(mapApiUserToAdminForm(user));
                                   setIsEditOpen(true);
@@ -829,7 +860,7 @@ export default function AdminPage() {
             if (!open) resetDialogs();
           }}
         >
-          <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden border-border/60 sm:max-w-2xl">
+          <DialogContent className="max-h-[90vh] overflow-y-auto border-border/60 sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create User</DialogTitle>
               <DialogDescription>
@@ -839,6 +870,7 @@ export default function AdminPage() {
             </DialogHeader>
             <AdminUserForm
               form={form}
+              fieldErrors={fieldErrors}
               actionError={actionError}
               isSubmitting={isSubmitting}
               submitLabel="Create User"
@@ -857,7 +889,7 @@ export default function AdminPage() {
             if (!open) resetDialogs();
           }}
         >
-          <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden border-border/60 sm:max-w-2xl">
+          <DialogContent className="max-h-[90vh] overflow-y-auto border-border/60 sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
               <DialogDescription>
@@ -932,6 +964,7 @@ export default function AdminPage() {
 
                 <AdminUserForm
                   form={form}
+                  fieldErrors={fieldErrors}
                   actionError={actionError}
                   isSubmitting={isSubmitting}
                   submitLabel="Save Changes"

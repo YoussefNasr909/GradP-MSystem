@@ -20,6 +20,7 @@ import type {
   Track,
 } from "@/lib/api/types";
 import { Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const NONE_VALUE = "__none__";
 type SelectOption<T extends string = string> = {
@@ -145,6 +146,7 @@ export function mapApiUserToAdminForm(user: ApiUser): AdminUserFormState {
 
 type AdminUserFormProps = {
   form: AdminUserFormState;
+  fieldErrors?: Partial<Record<keyof AdminUserFormState, string>>;
   actionError: string;
   isSubmitting: boolean;
   submitLabel: string;
@@ -160,6 +162,7 @@ type AdminUserFormProps = {
 
 export function AdminUserForm({
   form,
+  fieldErrors,
   actionError,
   isSubmitting,
   submitLabel,
@@ -177,12 +180,14 @@ export function AdminUserForm({
           label="First Name *"
           value={form.firstName}
           onChange={(value) => onChange("firstName", value)}
+          error={fieldErrors?.firstName}
         />
         <FormInput
           id="lastName"
           label="Last Name *"
           value={form.lastName}
           onChange={(value) => onChange("lastName", value)}
+          error={fieldErrors?.lastName}
         />
         <FormInput
           id="email"
@@ -190,6 +195,7 @@ export function AdminUserForm({
           type="email"
           value={form.email}
           onChange={(value) => onChange("email", value)}
+          error={fieldErrors?.email}
           className="sm:col-span-2"
         />
         <FormInput
@@ -198,6 +204,7 @@ export function AdminUserForm({
           type="password"
           value={form.password}
           onChange={(value) => onChange("password", value)}
+          error={fieldErrors?.password}
           placeholder={
             requirePassword
               ? "At least 6 characters"
@@ -210,6 +217,7 @@ export function AdminUserForm({
           value={form.role}
           onChange={(value) => onChange("role", value as Role)}
           options={roleOptions}
+          error={fieldErrors?.role}
         />
         <FormSelect
           label="Account Status *"
@@ -219,6 +227,7 @@ export function AdminUserForm({
           }
           options={statusOptions}
           disabled={disableStatusChange}
+          error={fieldErrors?.accountStatus}
           helperText="Inactive is a temporary disable. Suspended is an admin block for security or policy issues."
         />
         {form.role !== "SUPPORT" ? (
@@ -227,6 +236,7 @@ export function AdminUserForm({
             label="Academic ID *"
             value={form.academicId}
             onChange={(value) => onChange("academicId", value)}
+            error={fieldErrors?.academicId}
             placeholder="e.g. CS2021010 or ADMIN-0001"
           />
         ) : null}
@@ -235,6 +245,7 @@ export function AdminUserForm({
           label="Phone"
           value={form.phone}
           onChange={(value) => onChange("phone", value)}
+          error={fieldErrors?.phone}
           className={form.role === "SUPPORT" ? "sm:col-span-2" : ""}
         />
         {form.role !== "SUPPORT" ? (
@@ -247,6 +258,7 @@ export function AdminUserForm({
               }
               options={departmentOptions}
               allowNone
+              error={fieldErrors?.department}
             />
             <FormSelect
               label="Academic Year"
@@ -259,6 +271,7 @@ export function AdminUserForm({
               }
               options={academicYearOptions}
               allowNone
+              error={fieldErrors?.academicYear}
             />
             <FormSelect
               label="Preferred Track"
@@ -271,6 +284,7 @@ export function AdminUserForm({
               }
               options={trackOptions}
               allowNone
+              error={fieldErrors?.preferredTrack}
               className="sm:col-span-2"
             />
           </>
@@ -316,6 +330,7 @@ function FormInput({
   type = "text",
   placeholder,
   className = "",
+  error,
 }: {
   id: string;
   label: string;
@@ -324,18 +339,24 @@ function FormInput({
   type?: string;
   placeholder?: string;
   className?: string;
+  error?: string;
 }) {
   return (
-    <div className={`space-y-2 min-w-0 ${className}`.trim()}>
-      <Label htmlFor={id}>{label}</Label>
+    <div className={`space-y-2 ${className}`.trim()}>
+      <Label htmlFor={id} className={error ? "text-destructive" : ""}>{label}</Label>
       <Input
         id={id}
         type={type}
-        className="h-11"
+        className={cn("h-11", error ? "border-destructive focus-visible:ring-destructive" : "")}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
       />
+      {error && (
+        <p className="text-xs font-medium text-destructive animate-in fade-in slide-in-from-top-1">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -349,6 +370,7 @@ function FormSelect({
   disabled = false,
   className = "",
   helperText,
+  error,
 }: {
   label: string;
   value: string;
@@ -358,12 +380,13 @@ function FormSelect({
   disabled?: boolean;
   className?: string;
   helperText?: string;
+  error?: string;
 }) {
   return (
-    <div className={`space-y-2 min-w-0 ${className}`.trim()}>
-      <Label>{label}</Label>
+    <div className={`space-y-2 ${className}`.trim()}>
+      <Label className={error ? "text-destructive" : ""}>{label}</Label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="h-11">
+        <SelectTrigger className={cn("h-11", error ? "border-destructive focus-visible:ring-destructive" : "")}>
           <SelectValue placeholder="Select" />
         </SelectTrigger>
         <SelectContent>
@@ -377,7 +400,12 @@ function FormSelect({
           ))}
         </SelectContent>
       </Select>
-      {helperText ? (
+      {error && (
+        <p className="text-xs font-medium text-destructive animate-in fade-in slide-in-from-top-1">
+          {error}
+        </p>
+      )}
+      {helperText && !error ? (
         <p className="text-xs leading-relaxed text-muted-foreground">
           {helperText}
         </p>
