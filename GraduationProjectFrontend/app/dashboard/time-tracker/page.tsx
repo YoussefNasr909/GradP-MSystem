@@ -1042,6 +1042,7 @@ export default function TimeTrackerPage() {
                 ) : null}
               </>
             )}
+            </div>
           </Card>
         </div>
 
