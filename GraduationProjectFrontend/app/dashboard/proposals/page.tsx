@@ -12,13 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   FileText, Plus, Search, Filter, Clock, CheckCircle2, XCircle, RotateCcw,
-  AlertCircle, Sparkles, ArrowRight, RefreshCw, FileEdit, LockKeyhole, ShieldCheck,
+  AlertCircle, Sparkles, ArrowRight, FileEdit, LockKeyhole, ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/lib/stores/auth-store"
 import { proposalsApi } from "@/lib/api/proposals"
 import type { ApiProposal, ApiProposalStatus } from "@/lib/api/proposals"
-import { toast } from "sonner"
+import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
 
 // ─── Status meta ─────────────────────────────────────────────────────────────
 
@@ -198,10 +198,22 @@ export default function ProposalsPage() {
   const [items, setItems]         = useState<ApiProposal[]>([])
   const [loading, setLoading]     = useState(true)
   const [error, setError]         = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
 
   const [search, setSearch]       = useState("")
   const [statusFilter, setStatus] = useState<string>("all")
+  const [teamFilter, setTeamFilter] = useState("all")
+  const { data: myTeamState } = useMyTeamState(isSupervisor)
+
+  const teamOptions = useMemo(() => {
+    const teams = new Map<string, { id: string; name: string }>()
+    ;(myTeamState?.supervisedTeams ?? []).forEach((team) => {
+      teams.set(team.id, { id: team.id, name: team.name })
+    })
+    items.forEach((proposal) => {
+      teams.set(proposal.team.id, { id: proposal.team.id, name: proposal.team.name })
+    })
+    return Array.from(teams.values())
+  }, [items, myTeamState?.supervisedTeams])
 
   const fetchData = useCallback(async () => {
     setError(false)
@@ -209,24 +221,17 @@ export default function ProposalsPage() {
       const data = await proposalsApi.list({
         search: search || undefined,
         status: (statusFilter !== "all" ? (statusFilter as ApiProposalStatus) : undefined),
+        teamId: isSupervisor && teamFilter !== "all" ? teamFilter : undefined,
       })
       setItems(data)
     } catch {
       setError(true)
     }
-  }, [search, statusFilter])
+  }, [isSupervisor, search, statusFilter, teamFilter])
 
   useEffect(() => {
-    setLoading(true)
     fetchData().finally(() => setLoading(false))
   }, [fetchData])
-
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchData()
-    setRefreshing(false)
-    toast.success("Proposals refreshed")
-  }
 
   // Find "my" proposal (leader's own team) so we can pin it at the top
   const myProposal = useMemo(
@@ -270,10 +275,6 @@ export default function ProposalsPage() {
             </motion.p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => void handleRefresh()} disabled={refreshing}>
-              <RefreshCw className={cn("h-4 w-4 mr-2", refreshing && "animate-spin")} />
-              Refresh
-            </Button>
             {isLeader && items.length === 0 && !loading && (
               <Link href="/dashboard/proposals/new">
                 <Button size="sm">
@@ -350,8 +351,23 @@ export default function ProposalsPage() {
                 ))}
               </SelectContent>
             </Select>
-            {(search || statusFilter !== "all") && (
-              <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatus("all") }}>
+            {isSupervisor && (
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger className="w-full md:w-[220px]">
+                  <SelectValue placeholder="Team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Teams</SelectItem>
+                  {teamOptions.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {(search || statusFilter !== "all" || (isSupervisor && teamFilter !== "all")) && (
+              <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatus("all"); setTeamFilter("all") }}>
                 <Filter className="h-4 w-4 mr-1.5" />
                 Clear
               </Button>

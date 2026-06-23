@@ -224,7 +224,7 @@ export default function AnnouncementsPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 p-4 sm:p-8">
       {/* Hero Section */}
-      <div className="group relative overflow-hidden rounded-[32px] border border-border/50 bg-background/50 p-8 shadow-sm backdrop-blur-md">
+      <div className="group relative overflow-hidden rounded-2xl border border-border/50 bg-background/50 p-6 shadow-sm backdrop-blur-md">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.03] via-transparent to-primary/[0.03]" />
         <motion.div
           className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none"
@@ -255,15 +255,6 @@ export default function AnnouncementsPage() {
             </motion.p>
           </div>
           <div className="flex items-center gap-3">
-            <Button 
-              variant="outline" 
-              className="h-11 rounded-2xl border-border/40 bg-background/50 px-5 text-xs font-semibold uppercase tracking-wider transition-all hover:bg-muted hover:text-foreground"
-              onClick={() => void handleRefresh()} 
-              disabled={refreshing}
-            >
-              <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
-              Refresh
-            </Button>
             {canPost && (
               <Button 
                 className="h-11 rounded-2xl bg-primary px-6 text-xs font-semibold uppercase tracking-wider text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30"

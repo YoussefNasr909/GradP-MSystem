@@ -113,15 +113,16 @@ function SummaryTile({
   tone: string
 }) {
   return (
-    <Card className="border-border/60 bg-card/80 p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
+    <Card className="relative overflow-visible border-border/60 bg-card/80 p-4 pr-16 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
         </div>
-        <div className={cn("rounded-2xl border p-2.5", tone)}>
-          <Icon className="h-4 w-4" />
-        </div>
+      </div>
+
+      <div className={cn("absolute -right-3 top-1/2 -translate-y-1/2 rounded-full border p-2.5", tone)}>
+        <Icon className="h-4 w-4" />
       </div>
     </Card>
   )
@@ -354,9 +355,6 @@ export default function AdminLogsPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                {activeTab === "system" ? "Showing latest 24 logs" : "Showing latest 24 actions"}
-              </Badge>
               <span>
                 Last updated{" "}
                 {lastUpdatedAt ? format(lastUpdatedAt, "MMM d, yyyy HH:mm:ss") : "when the first request completes"}
@@ -364,21 +362,16 @@ export default function AdminLogsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="outline" className="rounded-xl px-4" onClick={() => void handleRefresh()} disabled={isRefreshing}>
-              <RefreshCw className={cn("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
-              Refresh current view
-            </Button>
+          <div className="mt-4 grid gap-6 md:grid-cols-2 xl:grid-cols-4 items-start">
+            <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
+            <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
+            <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
+            <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
           </div>
+
         </div>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryTile label="Total" value={counts.total} icon={Server} tone="border-slate-200/80 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300" />
-        <SummaryTile label="Info" value={counts.info} icon={Info} tone={getLevelTone("info")} />
-        <SummaryTile label="Warnings" value={counts.warning} icon={AlertTriangle} tone={getLevelTone("warning")} />
-        <SummaryTile label="Errors" value={counts.error} icon={XCircle} tone={getLevelTone("error")} />
-      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid h-auto w-full max-w-md grid-cols-2 rounded-2xl border border-border/60 bg-muted/40 p-1">

@@ -35,20 +35,20 @@ type ApproveRiskErrors = Partial<Record<"severity", string>>
 
 function severityColor(severity: ApiRiskSeverity | null) {
   switch (severity) {
-    case "CRITICAL": return "text-red-500"
-    case "HIGH": return "text-orange-500"
-    case "MEDIUM": return "text-yellow-500"
-    case "LOW": return "text-green-500"
+    case "CRITICAL": return "text-rose-600 dark:text-rose-400"
+    case "HIGH": return "text-orange-600 dark:text-orange-400"
+    case "MEDIUM": return "text-amber-600 dark:text-amber-400"
+    case "LOW": return "text-emerald-600 dark:text-emerald-400"
     default: return "text-muted-foreground"
   }
 }
 
 function severityBg(severity: ApiRiskSeverity | null) {
   switch (severity) {
-    case "CRITICAL": return "bg-red-500/10 border-red-500/20"
+    case "CRITICAL": return "bg-rose-500/10 border-rose-500/20"
     case "HIGH": return "bg-orange-500/10 border-orange-500/20"
-    case "MEDIUM": return "bg-yellow-500/10 border-yellow-500/20"
-    case "LOW": return "bg-green-500/10 border-green-500/20"
+    case "MEDIUM": return "bg-amber-500/10 border-amber-500/20"
+    case "LOW": return "bg-emerald-500/10 border-emerald-500/20"
     default: return "bg-muted/50 border-border"
   }
 }
@@ -384,54 +384,45 @@ export default function RiskManagementPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 bg-clip-text text-transparent">
-              Risk Management
-            </h1>
-            <p className="text-muted-foreground mt-2">Identify, assess, and mitigate project risks</p>
+        {/* Main Header & Summary Card */}
+        <Card className="border-none shadow-lg bg-gradient-to-br from-card to-muted/30 overflow-hidden relative">
+          <div className="absolute -top-12 -right-12 p-12 opacity-[0.03] pointer-events-none">
+            <AlertTriangle className="w-80 h-80" />
           </div>
-          {isLeader ? (
-            <Button onClick={openAddDialog}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Risk
-            </Button>
-          ) : null}
-        </div>
+          
+          <CardContent className="p-5 md:p-6 space-y-6 relative z-10">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 bg-clip-text text-transparent">
+                  Risk Management
+                </h1>
+              </div>
+              {isLeader ? (
+                <Button className="shadow-md hover:shadow-lg transition-all" onClick={openAddDialog}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Risk
+                </Button>
+              ) : null}
+            </div>
 
-        {showPreliminaryRiskBanner && (
-          <Card className="border-amber-500/25 bg-amber-500/5">
-            <CardContent className="p-5">
-              <div className="flex gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            {showPreliminaryRiskBanner && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 flex gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <div>
-                  <h2 className="font-semibold">Preliminary risk planning</h2>
-                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  <h2 className="font-semibold text-sm text-amber-700 dark:text-amber-500">Preliminary risk planning</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     You can log risks while the proposal is being prepared or reviewed. Formal TA approval, monitoring, and resolution review unlock after the doctor approves the proposal.
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            )}
 
-        {/* Risk Matrix Summary */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Risk Matrix
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as ApiRiskSeverity[]).map(s => (
-                <Card key={s} className={`border ${severityBg(s)}`}>
-                  <CardContent className="p-4 text-center">
-                    <div className={`text-2xl font-bold ${severityColor(s)}`}>{countBySeverity(s)}</div>
-                    <div className="text-sm text-muted-foreground capitalize">{s.charAt(0) + s.slice(1).toLowerCase()}</div>
-                  </CardContent>
-                </Card>
+                <div key={s} className={`rounded-xl border shadow-sm transition-all hover:-translate-y-1 hover:shadow-md flex flex-col items-center justify-center p-4 ${severityBg(s)}`}>
+                  <div className={`text-3xl font-black mb-1 ${severityColor(s)}`}>{countBySeverity(s)}</div>
+                  <div className={`text-[11px] font-bold tracking-widest uppercase ${severityColor(s)} opacity-90`}>{s}</div>
+                </div>
               ))}
             </div>
           </CardContent>
@@ -555,18 +546,18 @@ export default function RiskManagementPage() {
                           </Button>
                         )}
                         {canAskForReview(risk) && (
-                          <Button variant="outline" size="sm" title="Ask doctor to review this risk" className="gap-1.5 text-blue-600 border-blue-600/30 hover:bg-blue-600/10" onClick={() => openResolutionReview(risk)}>
+                          <Button variant="outline" size="sm" title="Ask doctor to review this risk" className="gap-1.5 text-blue-600 border-blue-600/30 hover:bg-blue-600/10 hover:text-blue-700 dark:hover:text-blue-400" onClick={() => openResolutionReview(risk)}>
                             <Send className="w-4 h-4" />
                             <span>Ask Review</span>
                           </Button>
                         )}
                         {risk.permissions.canApprove && risk.approvalStatus !== "APPROVED" && (
-                          <Button variant="outline" size="sm" title={risk.status === "RESOLVED" ? "Confirm resolution" : "Approve risk"} className="text-green-600 border-green-600/30 hover:bg-green-600/10" onClick={() => { setApprovingRisk(risk); setApproveErrors({}); setApproveForm({ severity: risk.severity ?? "", approvalNote: "" }) }}>
+                          <Button variant="outline" size="sm" title={risk.status === "RESOLVED" ? "Confirm resolution" : "Approve risk"} className="text-emerald-600 border-emerald-600/30 hover:bg-emerald-600/10 hover:text-emerald-700 dark:hover:text-emerald-400" onClick={() => { setApprovingRisk(risk); setApproveErrors({}); setApproveForm({ severity: risk.severity ?? "", approvalNote: "" }) }}>
                             <CheckCircle className="w-4 h-4" />
                           </Button>
                         )}
                         {risk.permissions.canRequestRevision && risk.approvalStatus === "PENDING" && (
-                          <Button variant="outline" size="sm" title={risk.status === "RESOLVED" ? "Keep monitoring" : "Request revision"} className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10" onClick={() => { setRevisionRisk(risk); setRevisionNote("") }}>
+                          <Button variant="outline" size="sm" title={risk.status === "RESOLVED" ? "Keep monitoring" : "Request revision"} className="text-orange-600 border-orange-600/30 hover:bg-orange-600/10 hover:text-orange-700 dark:hover:text-orange-400" onClick={() => { setRevisionRisk(risk); setRevisionNote("") }}>
                             <RotateCcw className="w-4 h-4" />
                           </Button>
                         )}

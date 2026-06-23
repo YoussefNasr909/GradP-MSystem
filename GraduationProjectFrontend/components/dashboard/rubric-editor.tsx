@@ -5,9 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Plus, X, Wand2 } from "lucide-react"
-import { cn } from "@/lib/utils"
 import type { RubricItem } from "@/lib/api/submissions"
 
 /**
@@ -203,29 +201,17 @@ export function RubricEditor({ value, onChange, onTotalChange, defaultRubricType
       {items.length > 0 && (
         <motion.div
           layout
-          className={cn(
-            "flex items-center justify-between rounded-lg border px-3 py-2 mt-2",
-            scaled >= 90 && "border-green-500/30 bg-green-500/5",
-            scaled >= 80 && scaled < 90 && "border-blue-500/30 bg-blue-500/5",
-            scaled >= 70 && scaled < 80 && "border-amber-500/30 bg-amber-500/5",
-            scaled >= 60 && scaled < 70 && "border-orange-500/30 bg-orange-500/5",
-            scaled < 60 && "border-red-500/30 bg-red-500/5",
-          )}
+          className="mt-2 flex items-center justify-between rounded-lg border bg-muted/30 px-4 py-3"
         >
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Total</span>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] font-mono">
-              {total}/{possible}
-            </Badge>
-            <motion.span
-              key={scaled}
-              initial={{ scale: 0.85, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="text-lg font-bold tabular-nums"
-            >
-              {scaled}<span className="text-xs text-muted-foreground">/100</span>
-            </motion.span>
-          </div>
+          <span className="text-sm font-semibold">Total</span>
+          <motion.span
+            key={`${total}-${possible}`}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="text-xl font-bold tabular-nums"
+          >
+            {total}<span className="text-sm text-muted-foreground">/{possible}</span>
+          </motion.span>
         </motion.div>
       )}
     </div>

@@ -11,7 +11,7 @@ const router = Router();
 router.use(auth);
 
 const rubricItem = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1, "Criterion name is required").max(120, "Criterion name must be 120 characters or less"),
   score: z.coerce.number().min(0).max(100),
   maxScore: z.coerce.number().min(1).max(100),
 });

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, useMemo } from "react"
+import { cn } from "@/lib/utils"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -575,6 +576,14 @@ function getRubricScaledTotal(rubric: RubricItem[]) {
   return possible > 0 ? Math.round((total / possible) * 100) : null
 }
 
+function getRubricValidationError(rubric: RubricItem[]) {
+  const missingNameIndex = rubric.findIndex((item) => !item.name?.trim())
+  if (missingNameIndex !== -1) {
+    return `Criterion ${missingNameIndex + 1} needs a name.`
+  }
+  return null
+}
+
 // ─── Submission Detail Dialog ────────────────────────────────────────────────
 function SubmissionDetailDialog({
   submissions,
@@ -584,6 +593,7 @@ function SubmissionDetailDialog({
   userRole,
   onGraded,
   onDeleted,
+  customTrigger,
 }: {
   submissions: ApiSubmission[]
   initialVersionId?: string
@@ -593,6 +603,7 @@ function SubmissionDetailDialog({
   userRole?: string
   onGraded: (updated: ApiSubmission) => void
   onDeleted?: (id: string) => void
+  customTrigger?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(initialVersionId || null)
@@ -644,9 +655,7 @@ function SubmissionDetailDialog({
   const [overrideReason, setOverrideReason] = useState("")
   const [loading, setLoading] = useState(false)
   const doctorRubricScoreRef = useRef<number | null>(null)
-  const doctorGradeManuallyEditedRef = useRef(false)
   const taRubricScoreRef = useRef<number | null>(null)
-  const taGradeManuallyEditedRef = useRef(false)
 
   // Unlock dialog state
   const [unlockOpen, setUnlockOpen] = useState(false)
@@ -657,40 +666,22 @@ function SubmissionDetailDialog({
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDoctorRubricChange = useCallback((next: RubricItem[]) => {
-    setDoctorRubricTouched(true)
     setDoctorRubric(next)
   }, [])
 
   const handleDoctorRubricTotalChange = useCallback((total: number) => {
-    const previousTotal = doctorRubricScoreRef.current
     doctorRubricScoreRef.current = total
     setDoctorRubricScore(total)
-    setGrade((current) => {
-      if (doctorGradeManuallyEditedRef.current) return current
-      if (current === "" && total > 0) return String(total)
-      if (previousTotal !== null && current === String(previousTotal)) {
-        return String(total)
-      }
-      return current
-    })
+    setGrade(String(total))
   }, [])
 
   const handleTaRubricChange = useCallback((next: RubricItem[]) => {
-    setTaRubricTouched(true)
     setTaRubric(next)
   }, [])
 
   const handleTaRubricTotalChange = useCallback((total: number) => {
-    const previousTotal = taRubricScoreRef.current
     taRubricScoreRef.current = total
-    setRecommendedGrade((current) => {
-      if (taGradeManuallyEditedRef.current) return current
-      if (current === "" && total > 0) return String(total)
-      if (previousTotal !== null && current === String(previousTotal)) {
-        return String(total)
-      }
-      return current
-    })
+    setRecommendedGrade(String(total))
   }, [])
 
   const submission = submissions.find(s => s.id === selectedVersionId) || submissions[0]
@@ -703,27 +694,15 @@ function SubmissionDetailDialog({
 
   const isLatest = submission.id === submissions[0]?.id
   const hasMultipleVersions = submissions.length > 1;
-  const doctorRubricHasAssessment = doctorRubric.some((item) => Number(item.score) > 0)
-  const taRubricHasAssessment = taRubric.some((item) => Number(item.score) > 0)
-  const shouldSubmitDoctorRubric = doctorRubricTouched || doctorRubricHasAssessment
-  const shouldSubmitTaRubric = taRubricTouched || taRubricHasAssessment
-  const parsedFinalGrade = grade === "" ? null : Number(grade)
-  const doctorRubricMismatch =
-    shouldSubmitDoctorRubric &&
-    doctorRubricScore !== null &&
-    parsedFinalGrade !== null &&
-    Number.isFinite(parsedFinalGrade) &&
-    parsedFinalGrade !== doctorRubricScore
+  const shouldSubmitDoctorRubric = doctorRubric.length > 0
+  const shouldSubmitTaRubric = taRubric.length > 0
   const deploymentDefenseBlocked =
     submission.sdlcPhase === "DEPLOYMENT" &&
     (!submission.defenseMeeting || submission.defenseMeeting.status !== "COMPLETED")
 
   function openDoctorGradeDialog() {
-    doctorGradeManuallyEditedRef.current = false
     doctorRubricScoreRef.current = null
     setDoctorRubricScore(null)
-    setDoctorRubricTouched(false)
-    setOverrideReason("")
     setGrade(
       submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined
         ? String(submission.taRecommendedGrade)
@@ -759,9 +738,9 @@ function SubmissionDetailDialog({
         try { const errData = await res.json(); if (errData.error) errMsg = errData.error; } catch(e) {}
         throw new Error(errMsg);
       }
-      
+
       const data = await res.json()
-      
+
       // Update the rubric with the AI suggested scores
       if (data.rubricScores && Array.isArray(data.rubricScores)) {
         const updatedRubric = doctorRubric.map((item) => {
@@ -773,7 +752,7 @@ function SubmissionDetailDialog({
         })
         setDoctorRubric(updatedRubric)
         setDoctorRubricTouched(true)
-        
+
         // Compute total
         let total = 0
         let possible = 0
@@ -823,9 +802,9 @@ function SubmissionDetailDialog({
         try { const errData = await res.json(); if (errData.error) errMsg = errData.error; } catch(e) {}
         throw new Error(errMsg);
       }
-      
+
       const data = await res.json()
-      
+
       if (data.rubricScores && Array.isArray(data.rubricScores)) {
         const updatedRubric = taRubric.map((item) => {
           const aiMatch = data.rubricScores.find((aiItem: any) => aiItem.name === item.name)
@@ -836,7 +815,7 @@ function SubmissionDetailDialog({
         })
         setTaRubric(updatedRubric)
         setTaRubricTouched(true)
-        
+
         let total = 0
         let possible = 0
         updatedRubric.forEach(r => {
@@ -844,7 +823,7 @@ function SubmissionDetailDialog({
           possible += Number(r.maxScore) || 0
         })
         const scaled = possible > 0 ? Math.round((total / possible) * 100) : 0
-        
+
         taRubricScoreRef.current = scaled
         setRecommendedGrade(String(scaled))
       }
@@ -863,9 +842,7 @@ function SubmissionDetailDialog({
   }
 
   function openTaReviewDialog() {
-    taGradeManuallyEditedRef.current = false
     taRubricScoreRef.current = null
-    setTaRubricTouched(false)
     setRecommendedGrade(
       submission.taRecommendedGrade !== null && submission.taRecommendedGrade !== undefined
         ? String(submission.taRecommendedGrade)
@@ -897,7 +874,8 @@ function SubmissionDetailDialog({
   }
 
   async function handleGrade() {
-    const g = parseInt(grade)
+    const rubricGrade = getRubricScaledTotal(doctorRubric)
+    const g = rubricGrade ?? doctorRubricScore ?? parseInt(grade)
     if (isNaN(g) || g < 0 || g > 100) {
       toast.error("Grade must be between 0 and 100")
       return
@@ -912,13 +890,12 @@ function SubmissionDetailDialog({
       return
     }
     const rubricForPayload = shouldSubmitDoctorRubric ? doctorRubric : undefined
-    const needsOverrideReason =
-      Boolean(rubricForPayload) &&
-      doctorRubricScore !== null &&
-      doctorRubricScore !== g
-    if (needsOverrideReason && overrideReason.trim().length < 5) {
-      toast.error("Add an override reason of at least 5 characters because the grade differs from the rubric total.")
-      return
+    if (rubricForPayload) {
+      const rubricError = getRubricValidationError(rubricForPayload)
+      if (rubricError) {
+        toast.error(rubricError)
+        return
+      }
     }
     setLoading(true)
     try {
@@ -926,7 +903,6 @@ function SubmissionDetailDialog({
         grade: g,
         feedback: feedback || undefined,
         rubric: rubricForPayload,
-        overrideReason: needsOverrideReason ? overrideReason.trim() : undefined,
       })
       onGraded(updated)
       setGradeDialogOpen(false)
@@ -940,7 +916,8 @@ function SubmissionDetailDialog({
   }
 
   async function handleTaReview() {
-    const g = parseInt(recommendedGrade)
+    const rubricGrade = getRubricScaledTotal(taRubric)
+    const g = rubricGrade ?? taRubricScoreRef.current ?? parseInt(recommendedGrade)
     if (isNaN(g) || g < 0 || g > 100) {
       toast.error("Recommended grade must be between 0 and 100")
       return
@@ -949,6 +926,13 @@ function SubmissionDetailDialog({
     if (feedback.length > 0 && feedback.length < 3) {
       toast.error("TA feedback must be at least 3 characters, or leave it empty.")
       return
+    }
+    if (shouldSubmitTaRubric) {
+      const rubricError = getRubricValidationError(taRubric)
+      if (rubricError) {
+        toast.error(rubricError)
+        return
+      }
     }
     setLoading(true)
     try {
@@ -1011,7 +995,6 @@ function SubmissionDetailDialog({
       ),
     )
     setGradeFeedback(submission.feedback || submission.taFeedback || "")
-    setOverrideReason("")
   }
 
   async function prepareDoctorGradeDialog() {
@@ -1024,10 +1007,12 @@ function SubmissionDetailDialog({
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
-            <Eye className="h-3.5 w-3.5 mr-1.5" />
-            View Details
-          </Button>
+          {customTrigger ? customTrigger : (
+            <Button variant="outline" size="sm">
+              <Eye className="h-3.5 w-3.5 mr-1.5" />
+              View Details
+            </Button>
+          )}
         </DialogTrigger>
         <DialogContent className={hasMultipleVersions ? "sm:max-w-[1000px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden" : "sm:max-w-[700px] w-[95vw] sm:w-[90vw] p-0 gap-0 overflow-hidden"}>
           <div className="flex h-full max-h-[85vh] bg-background w-full min-w-0 overflow-hidden">
@@ -1074,12 +1059,12 @@ function SubmissionDetailDialog({
                   <Badge variant="secondary" className="font-medium bg-secondary/50 text-secondary-foreground mb-1">Version {submission.version}</Badge>
                   <DialogTitle className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">{meta.label}</DialogTitle>
                 </div>
-                
+
                 {canSubmit && submission.status !== "APPROVED" && (
                   <div>
                     <Button
-                      variant="ghost" 
-                      size="sm" 
+                      variant="ghost"
+                      size="sm"
                       className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 px-2"
                       onClick={() => setDeleteAlertOpen(true)}
                     >
@@ -1522,42 +1507,6 @@ function SubmissionDetailDialog({
               defaultRubricType={submission.deliverableType}
             />
 
-            {!shouldSubmitDoctorRubric && doctorRubric.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                This rubric is just a template until you score or edit it, so manual grades will not be blocked by empty criteria.
-              </p>
-            )}
-
-            <div>
-              <Label>Final Grade (0–100)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={grade}
-                onChange={(e) => {
-                  doctorGradeManuallyEditedRef.current = true
-                  setGrade(e.target.value)
-                }}
-                placeholder="Driven by rubric, or override here"
-                className="mt-1.5"
-              />
-            </div>
-            {doctorRubricMismatch && (
-              <div>
-                <Label>Override Reason</Label>
-                <Textarea
-                  value={overrideReason}
-                  onChange={(e) => setOverrideReason(e.target.value)}
-                  placeholder="Explain why the final grade differs from the rubric total."
-                  className="mt-1.5 resize-none"
-                  rows={3}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Required because the final grade differs from the rubric total.
-                </p>
-              </div>
-            )}
             <div>
               <Label>Final Feedback (optional)</Label>
               <Textarea
@@ -1601,9 +1550,7 @@ function SubmissionDetailDialog({
           setTaReviewDialogOpen(open)
           if (open) {
             void resolveInitialRubric(submission).then(setTaRubric)
-            taGradeManuallyEditedRef.current = false
             taRubricScoreRef.current = null
-            setTaRubricTouched(false)
           }
         }}
       >
@@ -1843,6 +1790,9 @@ function NewSubmissionDialog({
   ) as Array<[ApiDeliverableType, (typeof DELIVERABLE_META)[ApiDeliverableType]]>
   const submissionPhaseMeta = PHASE_META[submissionPhase]
   const canSubmitInCurrentStage = !stageLoading && !disabled && availableDeliverables.length > 0
+  const unavailableReason = stageLoading
+    ? "Loading phase details..."
+    : disabledReason ?? `There are no configured submissions for the ${submissionPhaseMeta.label} phase.`
   const initialTypeIsAvailable =
     initialDeliverableType && DELIVERABLE_META[initialDeliverableType].phase === submissionPhase
 
@@ -1866,14 +1816,14 @@ function NewSubmissionDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    
+
     const errors: { type?: string; file?: string } = {}
     if (!deliverableType) errors.type = "Please select a deliverable type."
     if (deliverableType && DELIVERABLE_META[deliverableType].phase !== submissionPhase) {
       errors.type = `Only ${submissionPhaseMeta.label} deliverables can be submitted from this row.`
     }
     if (!file) errors.file = "Please upload a file."
-    
+
     if (Object.keys(errors).length > 0 || !deliverableType || !file) {
       setFormErrors(errors)
       return
@@ -1985,7 +1935,7 @@ function NewSubmissionDialog({
                 )}
                 {!canSubmitInCurrentStage && (
                   <p className="text-xs text-muted-foreground mt-1.5">
-                    There are no configured submissions for the {submissionPhaseMeta.label} phase.
+                    {unavailableReason}
                   </p>
                 )}
                 {formErrors.type && <p className="text-[10px] font-medium text-destructive mt-1">{formErrors.type}</p>}
@@ -2353,6 +2303,7 @@ function OptionalSubmissionRow({
   submitDisabledReason,
   currentStage,
   canGrade,
+  userRole,
   onCreated,
   onUpdated,
 }: {
@@ -2367,6 +2318,7 @@ function OptionalSubmissionRow({
   submitDisabledReason: string
   currentStage: ApiTeamStage
   canGrade: boolean
+  userRole?: string
   onCreated: (s: ApiSubmission) => void
   onUpdated: (s: ApiSubmission) => void
 }) {
@@ -2440,6 +2392,7 @@ function OptionalSubmissionRow({
               submissions={[latest]}
               canGrade={canGrade}
               canSubmit={canSubmit}
+              userRole={userRole}
               onGraded={onUpdated}
             />
           )}
@@ -2449,14 +2402,81 @@ function OptionalSubmissionRow({
   )
 }
 
+// ─── Submission Card ────────────────────────────────────────────────────────
+function SubmissionCard({ submission, index }: { submission: ApiSubmission; index: number }) {
+  const meta = DELIVERABLE_META[submission.deliverableType]
+  const statusInfo = STATUS_META[submission.status]
+  const StatusIcon = statusInfo.icon
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ delay: Math.min(index * 0.04, 0.4), duration: 0.3 }}
+      className="w-full h-full cursor-pointer"
+    >
+      <Card className="p-5 h-full flex flex-col border-border/50 hover:border-border/80 hover:shadow-lg transition-all group relative overflow-hidden">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Badge variant={statusInfo.variant} className="text-[10px] gap-1 px-1.5 py-0 capitalize">
+                <StatusIcon className="h-3 w-3" />
+                {statusInfo.label}
+              </Badge>
+              <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 border", PHASE_META[submission.sdlcPhase].color)}>
+                {PHASE_META[submission.sdlcPhase].label}
+              </Badge>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">v{submission.version}</Badge>
+              {submission.late && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Late</Badge>}
+            </div>
+            <h3 className="font-semibold text-lg truncate group-hover:text-primary transition-colors">
+              {meta.label}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Team: <span className="text-foreground font-medium">{submission.team?.name || "Unknown Team"}</span>
+            </p>
+          </div>
+          <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+        </div>
+
+        <p className="text-sm text-muted-foreground line-clamp-2 mb-auto pb-4">
+          {submission.title}
+        </p>
+
+        <div className="flex items-center justify-between flex-wrap gap-2 mt-4 pt-4 border-t">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] text-muted-foreground">
+              Submitted: {new Date(submission.submittedAt).toLocaleDateString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {submission.submittedBy && (
+              <Avatar className="h-6 w-6 ring-2 ring-background">
+                <AvatarImage src={submission.submittedBy.avatarUrl ?? undefined} />
+                <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                  {commentInitials(submission.submittedBy.fullName)}
+                </AvatarFallback>
+              </Avatar>
+            )}
+          </div>
+        </div>
+      </Card>
+    </motion.div>
+  )
+}
+
 export default function SubmissionsPage() {
   const { currentUser } = useAuthStore()
   const [submissions, setSubmissions] = useState<ApiSubmission[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedTeamId, setSelectedTeamId] = useState<string>("")
+  const [reviewTeamFilter, setReviewTeamFilter] = useState("all")
   const [myProposal, setMyProposal] = useState<ApiProposal | null>(null)
   const [proposalLoading, setProposalLoading] = useState(false)
+  const [phaseFilter, setPhaseFilter] = useState<string>("all")
 
   const userRole = currentUser?.role?.toUpperCase() || ""
   const isLeader = userRole === "LEADER"
@@ -2464,7 +2484,7 @@ export default function SubmissionsPage() {
   const isSupervisor = userRole === "DOCTOR" || userRole === "TA"
   const isAdmin = userRole === "ADMIN"
   const isReviewInboxOnly = isSupervisor && !isAdmin
-  const { data: myTeamState, isLoading: myTeamLoading } = useMyTeamState(isLeader || isMember)
+  const { data: myTeamState, isLoading: myTeamLoading } = useMyTeamState(isLeader || isMember || isSupervisor)
 
   useEffect(() => {
     loadSubmissions()
@@ -2511,6 +2531,19 @@ export default function SubmissionsPage() {
     })
     return Array.from(teams.values())
   }, [submissions])
+
+  const reviewTeamOptions = useMemo(() => {
+    const teams = new Map<string, { id: string; name: string }>()
+    ;(myTeamState?.supervisedTeams ?? []).forEach((team) => {
+      teams.set(team.id, { id: team.id, name: team.name })
+    })
+    uniqueTeams.forEach((team) => teams.set(team.id, { id: team.id, name: team.name }))
+    return Array.from(teams.values())
+  }, [myTeamState?.supervisedTeams, uniqueTeams])
+
+  const supervisedTeamsById = useMemo(() => {
+    return new Map((myTeamState?.supervisedTeams ?? []).map((team) => [team.id, team]))
+  }, [myTeamState?.supervisedTeams])
 
   useEffect(() => {
     if ((isSupervisor || isAdmin) && uniqueTeams.length > 0 && !selectedTeamId) {
@@ -2574,20 +2607,41 @@ export default function SubmissionsPage() {
       : 0
 
   // Role-aware queue:
-  //   TA     → see fresh submissions (PENDING) that need first-pass review
-  //   Doctor → see submissions UNDER_REVIEW (TA reviewed, awaiting final grade)
-  //   Admin  → see everything that's not finalized
+  //   TA     -> fresh submissions (PENDING) that need first-pass review
+  //   Doctor -> TA-reviewed submissions, plus pending submissions for teams without a TA
+  //   Admin  -> everything that's not finalized
   const isTaRole     = userRole === "TA"
   const isDoctorRole = userRole === "DOCTOR"
-  const pendingReviews = submissions.filter((s) => {
+  const pendingReviewSource =
+    reviewTeamFilter === "all"
+      ? submissions
+      : submissions.filter((s) => s.teamId === reviewTeamFilter)
+  const pendingReviews = pendingReviewSource.filter((s) => {
     if (isTaRole)     return s.status === "PENDING"
-    if (isDoctorRole) return s.status === "UNDER_REVIEW"
+    if (isDoctorRole) {
+      const supervisedTeam = supervisedTeamsById.get(s.teamId)
+      return s.status === "UNDER_REVIEW" || (s.status === "PENDING" && supervisedTeam !== undefined && !supervisedTeam.ta)
+    }
     return s.status === "PENDING" || s.status === "UNDER_REVIEW"
   })
+
+  const filteredPendingReviews = useMemo(() => {
+    if (phaseFilter === "all") return pendingReviews
+    return pendingReviews.filter(s => s.sdlcPhase === phaseFilter)
+  }, [pendingReviews, phaseFilter])
+
+  const phaseStats = useMemo(() => ({
+    total: pendingReviews.length,
+    REQUIREMENTS: pendingReviews.filter(s => s.sdlcPhase === "REQUIREMENTS").length,
+    DESIGN: pendingReviews.filter(s => s.sdlcPhase === "DESIGN").length,
+    IMPLEMENTATION: pendingReviews.filter(s => s.sdlcPhase === "IMPLEMENTATION").length,
+    TESTING: pendingReviews.filter(s => s.sdlcPhase === "TESTING").length,
+    DEPLOYMENT: pendingReviews.filter(s => s.sdlcPhase === "DEPLOYMENT").length,
+  }), [pendingReviews])
   const pendingReviewsTitle = isTaRole
     ? "Awaiting Your First-Pass Review"
     : isDoctorRole
-    ? "Awaiting Your Final Grade"
+    ? "Awaiting Doctor Review"
     : "Pending Reviews"
 
   return (
@@ -2720,7 +2774,7 @@ export default function SubmissionsPage() {
         )}
 
         {/* Pending reviews — role-aware: TA sees PENDING, Doctor sees UNDER_REVIEW */}
-        {(isSupervisor || isAdmin) && pendingReviews.length > 0 && (
+        {isAdmin && pendingReviews.length > 0 && (
           <Card className="p-6">
             <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
               <Clock className={`h-5 w-5 ${isTaRole ? "text-cyan-500" : "text-amber-500"}`} />
@@ -2759,16 +2813,104 @@ export default function SubmissionsPage() {
           </Card>
         )}
 
-        {isReviewInboxOnly && !loading && pendingReviews.length === 0 && !error && (
-          <Card className="p-8 text-center border-dashed">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-              <Clock className="h-5 w-5 text-muted-foreground" />
+        {isReviewInboxOnly && !loading && !error && (
+          <div className="space-y-6">
+            <div className="grid gap-2 sm:gap-4 grid-cols-2 md:grid-cols-6">
+              {[
+                { label: "Total", value: phaseStats.total, color: "from-blue-500/10", icon: Clock },
+                { label: "Requirements", value: phaseStats.REQUIREMENTS, color: "from-blue-500/10", icon: FileText },
+                { label: "Design", value: phaseStats.DESIGN, color: "from-purple-500/10", icon: Eye },
+                { label: "Implementation", value: phaseStats.IMPLEMENTATION, color: "from-orange-500/10", icon: FileUp },
+                { label: "Testing", value: phaseStats.TESTING, color: "from-yellow-500/10", icon: AlertTriangle },
+                { label: "Deployment", value: phaseStats.DEPLOYMENT, color: "from-green-500/10", icon: CheckCircle2 },
+              ].map((s, i) => (
+                <motion.div key={s.label}
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
+                  <Card className="p-3 sm:p-4 relative overflow-hidden h-full flex flex-col justify-center">
+                    <div className={cn("absolute inset-0 bg-gradient-to-br to-transparent", s.color)} />
+                    <div className="relative flex flex-col items-center gap-2 text-center">
+                      <div className="p-1.5 sm:p-2 rounded-xl bg-background/80 border border-border/60">
+                        <s.icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-lg sm:text-xl font-bold tabular-nums leading-none">{s.value}</p>
+                        <p className="text-[9px] sm:text-[10px] uppercase tracking-wider text-muted-foreground mt-1">{s.label}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
             </div>
-            <h2 className="font-semibold">No review requests</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              New submissions from your assigned teams will appear here when they need your review.
-            </p>
-          </Card>
+
+            <Card className="p-4 border-border/50">
+              <div className="flex flex-col md:flex-row gap-3 items-center">
+                <span className="text-sm font-semibold whitespace-nowrap px-2 flex items-center gap-2">
+                  <Clock className={`h-4 w-4 ${isTaRole ? "text-cyan-500" : "text-amber-500"}`} />
+                  {pendingReviewsTitle}
+                </span>
+                <div className="grid w-full gap-3 md:ml-auto md:w-auto md:grid-cols-2">
+                  <Select value={reviewTeamFilter} onValueChange={setReviewTeamFilter}>
+                    <SelectTrigger className="w-full md:w-[220px]">
+                      <SelectValue placeholder="Filter by Team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Teams</SelectItem>
+                      {reviewTeamOptions.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+                    <SelectTrigger className="w-full md:w-[220px]">
+                      <SelectValue placeholder="Filter by Phase" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Phases</SelectItem>
+                      <SelectItem value="REQUIREMENTS">Requirements</SelectItem>
+                      <SelectItem value="DESIGN">Design</SelectItem>
+                      <SelectItem value="IMPLEMENTATION">Implementation</SelectItem>
+                      <SelectItem value="TESTING">Testing</SelectItem>
+                      <SelectItem value="DEPLOYMENT">Deployment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </Card>
+
+            {filteredPendingReviews.length === 0 ? (
+              <Card className="p-12 text-center border-dashed">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
+                  <Clock className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <h2 className="font-semibold text-lg">No review requests</h2>
+                <p className="mt-1 text-sm text-muted-foreground max-w-sm mx-auto">
+                  {phaseFilter === "all"
+                    ? "New submissions from your assigned teams will appear here when they need your review."
+                    : `No pending submissions for the ${phaseFilter.toLowerCase()} phase.`}
+                </p>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredPendingReviews.map((s, i) => (
+                  <SubmissionDetailDialog
+                    key={s.id}
+                    submissions={submissions.filter(x => x.deliverableType === s.deliverableType && x.teamId === s.teamId).sort((a,b)=>b.version - a.version)}
+                    initialVersionId={s.id}
+                    canGrade={true}
+                    userRole={userRole}
+                    onGraded={handleUpdated}
+                    customTrigger={
+                      <div className="h-full">
+                        <SubmissionCard submission={s} index={i} />
+                      </div>
+                    }
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Deliverables by phase */}
@@ -2800,7 +2942,7 @@ export default function SubmissionsPage() {
             </div>
           )}
         </div>
-        
+
         {loading ? (
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (
@@ -2966,6 +3108,7 @@ export default function SubmissionsPage() {
                                       submitDisabledReason={optionalSubmitDisabledReason}
                                       currentStage={currentStage}
                                       canGrade={isSupervisor || isAdmin}
+                                      userRole={userRole}
                                       onCreated={handleCreated}
                                       onUpdated={handleUpdated}
                                     />
@@ -2985,6 +3128,7 @@ export default function SubmissionsPage() {
                                         submitDisabledReason={optionalSubmitDisabledReason}
                                         currentStage={currentStage}
                                         canGrade={isSupervisor || isAdmin}
+                                        userRole={userRole}
                                         onCreated={handleCreated}
                                         onUpdated={handleUpdated}
                                       />

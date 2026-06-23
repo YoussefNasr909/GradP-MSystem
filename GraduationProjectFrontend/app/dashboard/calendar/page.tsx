@@ -950,7 +950,7 @@ function CalendarGrid({
   // Use month string as key for animations so they only run when changing months
   const monthKey = format(month, "yyyy-MM")
 
-  const container = {
+  const container: Variants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
