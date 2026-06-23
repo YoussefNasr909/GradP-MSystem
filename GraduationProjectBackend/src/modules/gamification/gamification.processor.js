@@ -1,19 +1,29 @@
 import { prisma } from "../../loaders/dbLoader.js";
 import { env } from "../../config/env.js";
 import { notify } from "../../common/utils/notify.js";
-import { matchRules, calculateXp } from "./gamification.rules-engine.js";
 import { evaluateBadgesForTeam, evaluateBadgesForUser } from "./gamification.badges.js";
 import { computeLevel } from "./gamification.math.js";
 import { awardCoinsForXpTransaction } from "../economy/economy.repository.js";
-import {
-  GAMIFICATION_TRANSACTION_OPTIONS,
-  MAX_SERIALIZATION_RETRIES,
-  isPrismaSerializationConflict,
-} from "./gamification.transactions.js";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 3;
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
+
+const TEAM_AWARD_EVENTS = new Set([
+  "SUBMISSION_APPROVED",
+  "WEEKLY_REPORT_APPROVED",
+  "SPRINT_COMPLETED",
+  "TEAM_STAGE_ADVANCED",
+]);
+
+const EVENT_QUEST_METRICS = {
+  TASK_APPROVED: "TASKS_DONE",
+  SUBMISSION_APPROVED: "SUBMISSIONS_APPROVED",
+  WEEKLY_REPORT_APPROVED: "WEEKLY_REPORTS_APPROVED",
+  GITHUB_PR_MERGED: "PRS_MERGED",
+  GITHUB_PR_REVIEWED: "REVIEWS_GIVEN",
+  SPRINT_COMPLETED: "SPRINTS_COMPLETED",
+};
 
 export async function processPendingEvents({ retryFailed = false, eventIds = [] } = {}) {
   if (!env.gamificationEnabled) {
@@ -38,12 +48,14 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
     };
   }
 
+  const eventIdWhere = eventIds.length > 0 ? { id: { in: eventIds } } : {};
+
   let retried = 0;
   if (retryFailed) {
     const retryResult = await prisma.gamificationEvent.updateMany({
       where: {
         status: "FAILED",
-        ...(eventIds.length > 0 ? { id: { in: eventIds } } : {}),
+        ...eventIdWhere,
       },
       data: {
         status: "PENDING",
@@ -70,6 +82,7 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
   const events = await prisma.gamificationEvent.findMany({
     where: {
       ...claimableEventWhere,
+      ...eventIdWhere,
     },
     orderBy: { createdAt: "asc" },
     take: BATCH_SIZE,
@@ -78,10 +91,6 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
   if (events.length === 0) {
     return { processed: 0, failed: 0, skipped: 0, retried };
   }
-
-  const activeRules = await prisma.gamificationRule.findMany({
-    where: { isActive: true },
-  });
 
   let processed = 0;
   let failed = 0;
@@ -114,22 +123,18 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
         continue;
       }
 
-      const matchedRules = matchRules(activeRules, event);
-      if (matchedRules.length === 0) {
+      const result = await processFlatAwardForEvent(event);
+      if (!result.awarded && !result.duplicate) {
         await prisma.gamificationEvent.update({
           where: { id: event.id },
           data: {
             status: "IGNORED",
             processedAt: new Date(),
-            lastError: "No matching active rules found.",
+            lastError: result.reason,
           },
         });
         skipped++;
         continue;
-      }
-
-      for (const rule of matchedRules) {
-        await processRuleForEvent(event, rule);
       }
 
       await prisma.gamificationEvent.update({
@@ -142,7 +147,9 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
         targetId: event.id,
         after: {
           status: "PROCESSED",
-          matchedRuleCodes: matchedRules.map((rule) => rule.code),
+          eventType: event.eventType,
+          flatXp: result.amount ?? 0,
+          duplicate: Boolean(result.duplicate),
         },
         reason: `Processed ${event.eventType}.`,
       });
@@ -176,334 +183,165 @@ export async function processPendingEvents({ retryFailed = false, eventIds = [] 
   return { processed, failed, skipped, retried };
 }
 
-export async function processRuleForEvent(event, rule) {
+export function getFlatXpForEvent(event) {
+  const payload = event?.payload ?? {};
+
+  switch (event?.eventType) {
+    case "TASK_APPROVED": {
+      const storyPoints = Number(payload.storyPoints ?? payload.actualPoints ?? 0);
+      return storyPoints >= 1 ? storyPoints * 10 : 50;
+    }
+    case "SUBMISSION_APPROVED":
+      return 100;
+    case "WEEKLY_REPORT_APPROVED":
+      return 50;
+    case "GITHUB_PR_MERGED":
+      return 20;
+    case "GITHUB_PR_REVIEWED":
+      return 10;
+    case "SPRINT_COMPLETED":
+      return 100;
+    case "TEAM_STAGE_ADVANCED":
+      return 150;
+    default:
+      return 0;
+  }
+}
+
+export async function processFlatAwardForEvent(event) {
   const payload = event.payload ?? {};
-  const { amount, breakdown } = calculateXp(rule, payload);
-
-  if (amount === 0) return;
-  if (
-    event.eventType === "TASK_APPROVED" &&
-    payload.storyPoints !== undefined &&
-    Number(payload.storyPoints) < 1
-  ) {
-    console.warn(
-      `[gamification] Skipping task XP for event ${event.id}: storyPoints must be at least 1.`,
-    );
-    return;
-  }
-  if (
-    event.eventType === "TASK_APPROVED" &&
-    payload.assigneeUserId &&
-    event.actorUserId &&
-    payload.assigneeUserId === event.actorUserId
-  ) {
-    console.warn(
-      `[gamification] Skipping task XP for event ${event.id}: self-approved tasks are not XP eligible.`,
-    );
-    return;
+  const amount = getFlatXpForEvent(event);
+  if (amount <= 0) {
+    return { awarded: false, duplicate: false, amount, reason: "No flat XP mapping found." };
   }
 
-  const isTeamTarget = rule.targetType === "TEAM";
-  const recipientUserId = isTeamTarget
-    ? null
-    : payload.assigneeUserId ?? payload.submittedByUserId ?? event.actorUserId;
-  const recipientTeamId = isTeamTarget ? event.teamId : null;
+  const isTeamTarget = TEAM_AWARD_EVENTS.has(event.eventType);
+  const recipientUserId = isTeamTarget ? null : resolveUserRecipient(event, payload);
+  const recipientTeamId = isTeamTarget ? event.teamId ?? payload.teamId ?? null : null;
 
   if (!isTeamTarget && !recipientUserId) {
-    console.warn(
-      `[gamification] Skipping rule ${rule.code}: no user recipient for event ${event.id}`,
-    );
-    return;
+    return { awarded: false, duplicate: false, amount, reason: "No user recipient for flat XP award." };
   }
   if (isTeamTarget && !recipientTeamId) {
-    console.warn(
-      `[gamification] Skipping rule ${rule.code}: no team recipient for event ${event.id}`,
-    );
-    return;
+    return { awarded: false, duplicate: false, amount, reason: "No team recipient for flat XP award." };
   }
 
-  const suspicion = await evaluateAwardSuspicion(event);
   const transactionIdempotencyKey = buildAwardTransactionKey({
     event,
-    rule,
     recipientUserId,
     recipientTeamId,
+    recipientType: isTeamTarget ? "TEAM" : "USER",
   });
 
-  let attempt = 0;
+  return prisma.$transaction(async (tx) => {
+    const existingTransaction = await tx.xpTransaction.findUnique({
+      where: { idempotencyKey: transactionIdempotencyKey },
+      select: { id: true },
+    });
 
-  while (attempt < MAX_SERIALIZATION_RETRIES) {
-    try {
-      await prisma.$transaction(async (tx) => {
-        const existingTransaction = await tx.xpTransaction.findUnique({
-          where: { idempotencyKey: transactionIdempotencyKey },
-          select: { id: true },
-        });
-
-        if (existingTransaction) {
-          return;
-        }
-
-        const capped = await isAwardBlockedByCaps({
-          client: tx,
-          event,
-          rule,
-          recipientUserId,
-          recipientTeamId,
-          amount,
-        });
-        if (capped) return;
-
-        const transaction = await tx.xpTransaction.create({
-          data: {
-            idempotencyKey: transactionIdempotencyKey,
-            recipientType: rule.targetType,
-            userId: recipientUserId,
-            teamId: recipientTeamId,
-            amount,
-            direction: "CREDIT",
-            status: suspicion ? "FROZEN" : "AWARDED",
-            reason: `${rule.name} - ${event.eventType}`,
-            eventId: event.id,
-            sourceType: event.sourceType,
-            sourceId: event.sourceId,
-            ruleCode: rule.code,
-            ruleVersion: rule.version,
-            baseXp: rule.baseXp,
-            qualityMultiplier: breakdown.qualityMultiplier ?? null,
-            timelinessMultiplier: breakdown.timelinessMultiplier ?? null,
-            evidenceMultiplier: breakdown.evidenceMultiplier ?? null,
-            difficultyMultiplier: breakdown.difficultyMultiplier ?? null,
-            createdByType: "SYSTEM",
-            metadata: { breakdown, eventPayload: payload },
-          },
-        });
-
-        if (suspicion) {
-          if (isTeamTarget) {
-            await upsertTeamFrozenBalance(tx, recipientTeamId, amount);
-          } else {
-            await upsertUserFrozenBalance(tx, recipientUserId, amount);
-          }
-
-          await tx.suspiciousActivityCase.create({
-            data: {
-              userId: recipientUserId,
-              teamId: event.teamId ?? recipientTeamId,
-              eventId: event.id,
-              transactionId: transaction.id,
-              score: suspicion.score,
-              reason: suspicion.reason,
-              signals: suspicion.signals,
-              studentVisibleReason:
-                suspicion.studentVisibleReason ??
-                "This XP is pending staff review before it can be added to your balance.",
-            },
-          });
-
-          await appendAuditLog(tx, {
-            action: "TRANSACTION_FROZEN",
-            targetType: "XpTransaction",
-            targetId: transaction.id,
-            after: {
-              idempotencyKey: transactionIdempotencyKey,
-              recipientType: rule.targetType,
-              userId: recipientUserId,
-              teamId: recipientTeamId,
-              amount,
-              reason: suspicion.reason,
-              signals: suspicion.signals,
-            },
-            reason: `Frozen while processing ${event.eventType} event ${event.id}.`,
-          });
-          await notifyXpTransaction(tx, { transaction, kind: "FROZEN" });
-          return;
-        }
-
-        if (isTeamTarget) {
-          await upsertTeamBalance(tx, recipientTeamId, amount);
-        } else {
-          await upsertUserBalance(tx, recipientUserId, amount);
-          await awardCoinsForXpTransaction(tx, transaction);
-        }
-
-        await appendAuditLog(tx, {
-          action: "TRANSACTION_CREATED",
-          targetType: "XpTransaction",
-          targetId: transaction.id,
-          after: {
-            idempotencyKey: transactionIdempotencyKey,
-            recipientType: rule.targetType,
-            userId: recipientUserId,
-            teamId: recipientTeamId,
-            amount,
-            ruleCode: rule.code,
-            ruleVersion: rule.version,
-          },
-          reason: `Processed ${event.eventType} event ${event.id}.`,
-        });
-        await notifyXpTransaction(tx, { transaction, kind: "AWARDED" });
-        if (isTeamTarget) {
-          await evaluateBadgesForTeam(tx, {
-            teamId: recipientTeamId,
-            event,
-            triggeringTransaction: transaction,
-          });
-        } else {
-          await evaluateBadgesForUser(tx, {
-            userId: recipientUserId,
-            event,
-            triggeringTransaction: transaction,
-          });
-        }
-      }, GAMIFICATION_TRANSACTION_OPTIONS);
-      break; // Success, exit retry loop
-    } catch (error) {
-      if (isPrismaSerializationConflict(error)) {
-        attempt++;
-        if (attempt >= MAX_SERIALIZATION_RETRIES) {
-          throw error;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
-      } else {
-        throw error;
-      }
+    if (existingTransaction) {
+      return { awarded: false, duplicate: true, amount, transaction: existingTransaction };
     }
-  }
-}
 
-async function evaluateAwardSuspicion(event) {
-  return (await evaluateSubmissionDuplicateSuspicion(event)) ?? evaluateTaskApprovalSuspicion(event);
-}
-
-async function evaluateSubmissionDuplicateSuspicion(event) {
-  if (event.eventType !== "SUBMISSION_APPROVED" || event.sourceType !== "Submission") {
-    return null;
-  }
-
-  const submission = await prisma.submission.findUnique({
-    where: { id: event.sourceId },
-    select: {
-      id: true,
-      teamId: true,
-      deliverableType: true,
-      version: true,
-      fileHash: true,
-      normalizedTextHash: true,
-      contentFingerprint: true,
-    },
-  });
-
-  if (!submission?.fileHash && !submission?.normalizedTextHash && !submission?.contentFingerprint) {
-    return null;
-  }
-
-  const duplicate = await prisma.submission.findFirst({
-    where: {
-      id: { not: submission.id },
-      status: "APPROVED",
-      OR: [
-        ...(submission.fileHash ? [{ fileHash: submission.fileHash }] : []),
-        ...(submission.normalizedTextHash
-          ? [{ normalizedTextHash: submission.normalizedTextHash }]
-          : []),
-        ...(submission.contentFingerprint
-          ? [{ contentFingerprint: submission.contentFingerprint }]
-          : []),
-      ],
-    },
-    select: {
-      id: true,
-      teamId: true,
-      deliverableType: true,
-      version: true,
-      fileHash: true,
-      normalizedTextHash: true,
-      contentFingerprint: true,
-    },
-    orderBy: { reviewedAt: "desc" },
-  });
-
-  if (!duplicate) return null;
-
-  return {
-    score: 85,
-    reason: "Duplicate submission content detected.",
-    studentVisibleReason: "This XP is pending staff review because a similar submission was detected.",
-    signals: {
-      type: "DUPLICATE_SUBMISSION_HASH",
-      submissionId: submission.id,
-      matchedSubmissionId: duplicate.id,
-      matchedTeamId: duplicate.teamId,
-      sameTeam: duplicate.teamId === submission.teamId,
-      sameDeliverableType: duplicate.deliverableType === submission.deliverableType,
-      fileHashMatched: Boolean(submission.fileHash && submission.fileHash === duplicate.fileHash),
-      normalizedTextHashMatched: Boolean(
-        submission.normalizedTextHash &&
-          submission.normalizedTextHash === duplicate.normalizedTextHash
-      ),
-      contentFingerprintMatched: Boolean(
-        submission.contentFingerprint &&
-          submission.contentFingerprint === duplicate.contentFingerprint
-      ),
-    },
-  };
-}
-
-function evaluateTaskApprovalSuspicion(event) {
-  if (event.eventType !== "TASK_APPROVED" || event.sourceType !== "Task") {
-    return null;
-  }
-
-  const payload = event.payload ?? {};
-  const createdAt = parseEventDate(payload.createdAt);
-  const acceptedAt = parseEventDate(payload.acceptedAt);
-  const submittedAt = parseEventDate(payload.submittedForReviewAt);
-  const reviewedAt = parseEventDate(payload.reviewedAt);
-  if (!reviewedAt) return null;
-
-  const signals = [];
-  if (createdAt && minutesBetween(createdAt, reviewedAt) < 10) {
-    signals.push({
-      type: "RAPID_CREATE_TO_APPROVAL",
-      minutes: minutesBetween(createdAt, reviewedAt),
-      thresholdMinutes: 10,
+    const transaction = await tx.xpTransaction.create({
+      data: {
+        idempotencyKey: transactionIdempotencyKey,
+        recipientType: isTeamTarget ? "TEAM" : "USER",
+        userId: recipientUserId,
+        teamId: recipientTeamId,
+        amount,
+        direction: "CREDIT",
+        status: "AWARDED",
+        reason: buildFlatAwardReason(event),
+        eventId: event.id,
+        sourceType: event.sourceType,
+        sourceId: event.sourceId,
+        ruleCode: null,
+        ruleVersion: null,
+        baseXp: amount,
+        createdByType: "SYSTEM",
+        metadata: { flatXp: true, eventPayload: payload },
+      },
     });
-  }
-  if (acceptedAt && submittedAt && minutesBetween(acceptedAt, submittedAt) < 5) {
-    signals.push({
-      type: "RAPID_ACCEPT_TO_SUBMISSION",
-      minutes: minutesBetween(acceptedAt, submittedAt),
-      thresholdMinutes: 5,
+
+    if (isTeamTarget) {
+      await upsertTeamBalance(tx, recipientTeamId, amount);
+    } else {
+      await upsertUserBalance(tx, recipientUserId, amount);
+      await awardCoinsForXpTransaction(tx, transaction);
+    }
+
+    const questRecipientUserIds = await resolveQuestRecipientUserIds(tx, {
+      recipientType: isTeamTarget ? "TEAM" : "USER",
+      userId: recipientUserId,
+      teamId: recipientTeamId,
     });
+    await incrementQuestProgressForUsers(tx, {
+      userIds: questRecipientUserIds,
+      metric: "XP_EARNED",
+      incrementValue: amount,
+    });
+
+    const eventMetric = EVENT_QUEST_METRICS[event.eventType];
+    if (eventMetric) {
+      await incrementQuestProgressForUsers(tx, {
+        userIds: questRecipientUserIds,
+        metric: eventMetric,
+        incrementValue: 1,
+      });
+    }
+
+    await appendAuditLog(tx, {
+      action: "TRANSACTION_CREATED",
+      targetType: "XpTransaction",
+      targetId: transaction.id,
+      after: {
+        idempotencyKey: transactionIdempotencyKey,
+        recipientType: isTeamTarget ? "TEAM" : "USER",
+        userId: recipientUserId,
+        teamId: recipientTeamId,
+        amount,
+        flatXp: true,
+      },
+      reason: `Processed ${event.eventType} event ${event.id}.`,
+    });
+    await notifyXpTransaction(tx, { transaction, kind: "AWARDED" });
+
+    if (isTeamTarget) {
+      await evaluateBadgesForTeam(tx, {
+        teamId: recipientTeamId,
+        event,
+        triggeringTransaction: transaction,
+      });
+    } else {
+      await evaluateBadgesForUser(tx, {
+        userId: recipientUserId,
+        event,
+        triggeringTransaction: transaction,
+      });
+    }
+
+    return { awarded: true, duplicate: false, amount, transaction };
+  });
+}
+
+function resolveUserRecipient(event, payload) {
+  if (event.eventType === "GITHUB_PR_REVIEWED") {
+    return payload.reviewerUserId ?? event.actorUserId ?? null;
   }
 
-  if (signals.length === 0) return null;
-
-  return {
-    score: signals.some((signal) => signal.type === "RAPID_CREATE_TO_APPROVAL") ? 65 : 45,
-    reason: "Task was approved unusually quickly.",
-    studentVisibleReason: "This task XP is pending staff review because the task moved through review unusually quickly.",
-    signals: {
-      type: "RAPID_TASK_APPROVAL",
-      taskId: event.sourceId,
-      createdAt: payload.createdAt ?? null,
-      acceptedAt: payload.acceptedAt ?? null,
-      submittedForReviewAt: payload.submittedForReviewAt ?? null,
-      reviewedAt: payload.reviewedAt ?? null,
-      checks: signals,
-    },
-  };
+  return (
+    payload.assigneeUserId ??
+    payload.submittedByUserId ??
+    payload.userId ??
+    payload.authorUserId ??
+    event.actorUserId ??
+    null
+  );
 }
 
-function parseEventDate(value) {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function minutesBetween(start, end) {
-  return Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60));
+function buildFlatAwardReason(event) {
+  return `Flat XP award - ${event.eventType}`;
 }
 
 export async function processTaskReopenedEvent(event) {
@@ -613,7 +451,7 @@ export async function processTaskReopenedEvent(event) {
       });
       await notifyXpTransaction(tx, { transaction: originalTransaction, kind: "REVERSED" });
     }
-  }, GAMIFICATION_TRANSACTION_OPTIONS);
+  });
 
   await prisma.gamificationEvent.update({
     where: { id: event.id },
@@ -628,16 +466,9 @@ export async function processTaskReopenedEvent(event) {
   });
 }
 
-function buildAwardTransactionKey({ event, rule, recipientUserId, recipientTeamId }) {
+function buildAwardTransactionKey({ event, recipientUserId, recipientTeamId, recipientType }) {
   const recipientId = recipientUserId ?? recipientTeamId;
-  return [
-    "XP_AWARD",
-    event.id,
-    rule.code,
-    `v${rule.version}`,
-    rule.targetType,
-    recipientId,
-  ].join(":");
+  return ["XP_AWARD", event.id, event.eventType, recipientType, recipientId].join(":");
 }
 
 function buildReversalTransactionKey(event, originalTransaction) {
@@ -663,18 +494,6 @@ export function buildXpTransactionNotification({ transaction, kind, teamName = n
   const amount = transaction.amount ?? 0;
   const isTeam = transaction.recipientType === "TEAM";
   const teamLabel = teamName ?? "your team";
-
-  if (kind === "FROZEN") {
-    return {
-      userId,
-      type: "XP_FROZEN",
-      title: isTeam ? "Team XP Pending Review" : "XP Pending Review",
-      message: isTeam
-        ? `${amount} team XP for ${teamLabel} is pending staff review.`
-        : `${amount} XP is pending staff review.`,
-      actionUrl: "/dashboard/gamification",
-    };
-  }
 
   if (kind === "REVERSED") {
     return {
@@ -731,208 +550,99 @@ async function notifyXpTransaction(tx, { transaction, kind }) {
   }
 }
 
-function getAwardFilter({ rule, recipientUserId, recipientTeamId }) {
-  return {
-    recipientType: rule.targetType,
-    userId: recipientUserId,
-    teamId: recipientTeamId,
-    direction: "CREDIT",
-    status: "AWARDED",
-    ruleCode: rule.code,
-    ruleVersion: rule.version,
-  };
+async function resolveQuestRecipientUserIds(tx, { recipientType, userId, teamId }) {
+  if (recipientType === "USER") {
+    return userId ? [userId] : [];
+  }
+
+  if (!teamId) return [];
+
+  const team = await tx.team.findUnique({
+    where: { id: teamId },
+    select: {
+      leaderId: true,
+      members: { select: { userId: true } },
+    },
+  });
+
+  const ids = [team?.leaderId, ...(team?.members ?? []).map((member) => member.userId)].filter(Boolean);
+  return [...new Set(ids)];
 }
 
-function getRecipientAwardFilter({ rule, recipientUserId, recipientTeamId }) {
-  return {
-    recipientType: rule.targetType,
-    userId: recipientUserId,
-    teamId: recipientTeamId,
-    direction: "CREDIT",
-    status: "AWARDED",
-  };
+async function incrementQuestProgressForUsers(tx, { userIds, metric, incrementValue }) {
+  for (const userId of userIds) {
+    await incrementQuestProgress(tx, { userId, metric, incrementValue });
+  }
 }
 
-function toPositiveCap(value) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) return null;
-  return parsed;
-}
+async function incrementQuestProgress(tx, { userId, metric, incrementValue = 1 }) {
+  if (!userId || !metric || incrementValue <= 0) return;
 
-async function isAwardBlockedByCaps({ client = prisma, event, rule, recipientUserId, recipientTeamId, amount }) {
-  const caps = rule.caps;
-  if (!caps || typeof caps !== "object") return false;
+  const now = new Date();
+  const activeQuests = await tx.quest.findMany({
+    where: {
+      isActive: true,
+      metric,
+      AND: [
+        { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+        { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+      ],
+    },
+  });
 
-  const baseFilter = getAwardFilter({ rule, recipientUserId, recipientTeamId });
-  const recipientAwardFilter = getRecipientAwardFilter({ rule, recipientUserId, recipientTeamId });
-
-  const maxPerTask = toPositiveCap(caps.maxPerTask);
-  if (maxPerTask) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: "Task",
-        sourceId: event.sourceId,
+  for (const quest of activeQuests) {
+    const windowKey = getQuestWindowKey(quest, now);
+    const progress = await tx.userQuestProgress.upsert({
+      where: { questId_userId_windowKey: { questId: quest.id, userId, windowKey } },
+      create: {
+        questId: quest.id,
+        userId,
+        windowKey,
+        currentValue: incrementValue,
+        completedAt: null,
+      },
+      update: {
+        currentValue: { increment: incrementValue },
       },
     });
-    if (count >= maxPerTask) return true;
-  }
 
-  const maxPerSubmissionVersion = toPositiveCap(caps.maxPerSubmissionVersion);
-  if (maxPerSubmissionVersion) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: "Submission",
-        sourceId: event.sourceId,
-      },
-    });
-    if (count >= maxPerSubmissionVersion) return true;
-  }
-
-  const maxPerRelease = toPositiveCap(caps.maxPerRelease);
-  if (maxPerRelease) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: event.sourceType,
-        sourceId: event.sourceId,
-      },
-    });
-    if (count >= maxPerRelease) return true;
-  }
-
-  const maxPerSprint = toPositiveCap(caps.maxPerSprint);
-  if (maxPerSprint) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: "Sprint",
-        sourceId: event.sourceId,
-      },
-    });
-    if (count >= maxPerSprint) return true;
-  }
-
-  const maxPerWeeklyReport = toPositiveCap(caps.maxPerWeeklyReport);
-  if (maxPerWeeklyReport) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: "WeeklyReport",
-        sourceId: event.sourceId,
-      },
-    });
-    if (count >= maxPerWeeklyReport) return true;
-  }
-
-  const maxPerBadgePerRecipient = toPositiveCap(caps.maxPerBadgePerRecipient);
-  if (maxPerBadgePerRecipient) {
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        sourceType: event.sourceType,
-        sourceId: event.sourceId,
-      },
-    });
-    if (count >= maxPerBadgePerRecipient) return true;
-  }
-
-  const maxPerStageTransition = toPositiveCap(caps.maxPerStageTransition);
-  if (maxPerStageTransition) {
-    const transitionKey =
-      event.payload?.transitionKey ??
-      (event.payload?.previousStage && event.payload?.newStage
-        ? `${event.payload.previousStage}->${event.payload.newStage}`
-        : null);
-
-    if (transitionKey) {
-      const count = await client.xpTransaction.count({
-        where: {
-          ...baseFilter,
-          sourceType: "Team",
-          sourceId: event.sourceId,
-          metadata: {
-            path: ["eventPayload", "transitionKey"],
-            equals: transitionKey,
-          },
-        },
+    if (progress.currentValue >= quest.targetValue && !progress.completedAt) {
+      await tx.userQuestProgress.update({
+        where: { id: progress.id },
+        data: { completedAt: now },
       });
-      if (count >= maxPerStageTransition) return true;
+      await notify(
+        {
+          userId,
+          type: "SYSTEM",
+          title: "Quest ready to claim",
+          message: `${quest.title} is complete. Claim ${quest.coinReward} coins in the Gamification Hub.`,
+          actionUrl: "/dashboard/gamification?tab=quests",
+        },
+        tx,
+      );
     }
   }
+}
 
-  const maxPerUserPerDay = toPositiveCap(caps.maxPerUserPerDay);
-  if (maxPerUserPerDay && recipientUserId) {
-    const since = new Date();
-    since.setDate(since.getDate() - 1);
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        createdAt: { gte: since },
-      },
-    });
-    if (count >= maxPerUserPerDay) return true;
+function getQuestWindowKey(quest, now = new Date()) {
+  if (quest.type === "DAILY") {
+    return `daily:${getUtcDateKey(now)}`;
   }
 
-  const maxXpPerUserPerDay = toPositiveCap(caps.maxXpPerUserPerDay);
-  if (maxXpPerUserPerDay && recipientUserId) {
-    const since = new Date();
-    since.setDate(since.getDate() - 1);
-    const aggregate = await client.xpTransaction.aggregate({
-      where: {
-        ...recipientAwardFilter,
-        createdAt: { gte: since },
-      },
-      _sum: { amount: true },
-    });
-    const awardedSoFar = aggregate._sum.amount ?? 0;
-    if (awardedSoFar + amount > maxXpPerUserPerDay) return true;
+  if (quest.type === "WEEKLY") {
+    const day = now.getUTCDay();
+    const offset = day === 0 ? -6 : 1 - day;
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset));
+    return `weekly:${getUtcDateKey(start)}`;
   }
 
-  const maxPerUserPerWeek = toPositiveCap(caps.maxPerUserPerWeek);
-  if (maxPerUserPerWeek && recipientUserId) {
-    const since = new Date();
-    since.setDate(since.getDate() - 7);
-    const count = await client.xpTransaction.count({
-      where: {
-        ...baseFilter,
-        createdAt: { gte: since },
-      },
-    });
-    if (count >= maxPerUserPerWeek) return true;
-  }
+  return "lifetime";
+}
 
-  const maxXpPerUserPerWeek = toPositiveCap(caps.maxXpPerUserPerWeek);
-  if (maxXpPerUserPerWeek && recipientUserId) {
-    const since = new Date();
-    since.setDate(since.getDate() - 7);
-    const aggregate = await client.xpTransaction.aggregate({
-      where: {
-        ...recipientAwardFilter,
-        createdAt: { gte: since },
-      },
-      _sum: { amount: true },
-    });
-    const awardedSoFar = aggregate._sum.amount ?? 0;
-    if (awardedSoFar + amount > maxXpPerUserPerWeek) return true;
-  }
-
-  const maxXpPerPr = toPositiveCap(caps.maxXpPerPR);
-  if (maxXpPerPr) {
-    const aggregate = await client.xpTransaction.aggregate({
-      where: {
-        ...baseFilter,
-        sourceType: event.sourceType,
-        sourceId: event.sourceId,
-      },
-      _sum: { amount: true },
-    });
-    const awardedSoFar = aggregate._sum.amount ?? 0;
-    if (awardedSoFar + amount > maxXpPerPr) return true;
-  }
-
-  return false;
+function getUtcDateKey(date) {
+  const pad2 = (value) => String(value).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 }
 
 async function upsertUserBalance(tx, userId, amount) {
@@ -987,19 +697,6 @@ async function deductUserBalance(tx, userId, amount) {
   });
 }
 
-async function upsertUserFrozenBalance(tx, userId, amount) {
-  await tx.userXpBalance.upsert({
-    where: { userId },
-    create: {
-      userId,
-      frozenXp: amount,
-    },
-    update: {
-      frozenXp: { increment: amount },
-    },
-  });
-}
-
 async function upsertTeamBalance(tx, teamId, amount) {
   await tx.teamXpBalance.upsert({
     where: { teamId },
@@ -1015,19 +712,6 @@ async function upsertTeamBalance(tx, teamId, amount) {
       semesterTeamXp: { increment: amount },
       monthlyTeamXp: { increment: amount },
       weeklyTeamXp: { increment: amount },
-    },
-  });
-}
-
-async function upsertTeamFrozenBalance(tx, teamId, amount) {
-  await tx.teamXpBalance.upsert({
-    where: { teamId },
-    create: {
-      teamId,
-      frozenTeamXp: amount,
-    },
-    update: {
-      frozenTeamXp: { increment: amount },
     },
   });
 }

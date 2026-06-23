@@ -2,19 +2,14 @@ import { AppError } from "../../common/errors/AppError.js";
 import { notify } from "../../common/utils/notify.js";
 import {
   claimQuestRewardTransaction,
-  countMetricForUser,
   equipRewardPurchaseTransaction,
   findOrCreateWallet,
   findQuestProgress,
-  listAdminQuests,
-  listAdminRewards,
   listActiveQuests,
   listCoinTransactions,
   listEquippedRewards,
   listRewardItems,
   purchaseRewardTransaction,
-  upsertAdminQuest,
-  upsertAdminReward,
   upsertQuestProgress,
 } from "./economy.repository.js";
 
@@ -102,26 +97,32 @@ export async function syncQuestProgressForUser(userId, now = new Date()) {
 
   for (const quest of quests) {
     const window = getQuestWindow(quest, now);
-    const [currentValue, existing] = await Promise.all([
-      countMetricForUser(userId, quest.metric, window),
-      findQuestProgress(userId, quest.id, window.key),
-    ]);
+    let progress = await findQuestProgress(userId, quest.id, window.key);
+    let newlyCompleted = false;
 
-    const isComplete = currentValue >= quest.targetValue;
-    const completedAt = isComplete ? existing?.completedAt ?? now : null;
-    const newlyCompleted = isComplete && !existing?.completedAt;
-    const progress = await upsertQuestProgress({
-      userId,
-      quest,
-      windowKey: window.key,
-      currentValue,
-      completedAt,
-    });
+    if (!progress) {
+      progress = await upsertQuestProgress({
+        userId,
+        quest,
+        windowKey: window.key,
+        currentValue: 0,
+        completedAt: null,
+      });
+    } else if (progress.currentValue >= quest.targetValue && !progress.completedAt) {
+      newlyCompleted = true;
+      progress = await upsertQuestProgress({
+        userId,
+        quest,
+        windowKey: window.key,
+        currentValue: progress.currentValue,
+        completedAt: now,
+      });
+    }
 
     if (newlyCompleted) {
       await notify({
         userId,
-        type: "QUEST_COMPLETED",
+        type: "SYSTEM",
         title: "Quest ready to claim",
         message: `${quest.title} is complete. Claim ${quest.coinReward} coins in the Gamification Hub.`,
         actionUrl: "/dashboard/gamification?tab=quests",
@@ -233,19 +234,23 @@ export async function getCoinTransactionsService(actor, query) {
 }
 
 export async function getAdminQuestsService(_actor, query) {
-  const pagination = normalizePagination(query);
-  return listAdminQuests({ ...pagination, status: query.status });
+  void query;
+  throw new AppError("Quest administration is disabled.", 410, "ECONOMY_ADMIN_DISABLED");
 }
 
 export async function saveAdminQuestService(_actor, payload, questId = null) {
-  return upsertAdminQuest({ ...payload, id: questId });
+  void payload;
+  void questId;
+  throw new AppError("Quest administration is disabled.", 410, "ECONOMY_ADMIN_DISABLED");
 }
 
 export async function getAdminRewardsService(_actor, query) {
-  const pagination = normalizePagination(query);
-  return listAdminRewards({ ...pagination, status: query.status });
+  void query;
+  throw new AppError("Reward administration is disabled.", 410, "ECONOMY_ADMIN_DISABLED");
 }
 
 export async function saveAdminRewardService(_actor, payload, rewardItemId = null) {
-  return upsertAdminReward({ ...payload, id: rewardItemId });
+  void payload;
+  void rewardItemId;
+  throw new AppError("Reward administration is disabled.", 410, "ECONOMY_ADMIN_DISABLED");
 }

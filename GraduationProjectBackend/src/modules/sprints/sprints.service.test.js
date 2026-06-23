@@ -180,26 +180,26 @@ test("listSprintsBoardService includes sprint gamification impact", async (t) =>
 
   const board = await listSprintsBoardService({ id: "leader-1", role: "LEADER" });
   assert.equal(board.sprints[0].stats.progress, 100);
-  assert.equal(board.sprints[0].tasks[0].gamificationImpact.estimatedXp, 100);
+  assert.equal(board.sprints[0].tasks[0].gamificationImpact.estimatedXp, 30);
   assert.equal(board.sprints[0].tasks[0].gamificationImpact.effortPoints, 3);
   assert.equal(board.sprints[0].tasks[0].gamificationImpact.eligible, true);
   assert.deepEqual(board.sprints[0].gamificationImpact, {
     eventType: "SPRINT_COMPLETED",
-    baseTeamXp: 120,
-    completionMultiplier: 1.25,
-    estimatedTeamXp: 150,
+    baseTeamXp: 100,
+    completionMultiplier: 1,
+    estimatedTeamXp: 100,
     eligible: true,
   });
 });
 
-test("listSprintsBoardService applies sprint completion XP multiplier thresholds", async (t) => {
+test("listSprintsBoardService applies flat sprint completion XP", async (t) => {
   const baseTask = buildSprint().tasks[0];
   const progressCases = [
-    { id: "sprint-59", progress: 59, multiplier: 0, estimatedTeamXp: 0 },
-    { id: "sprint-60", progress: 60, multiplier: 0.4, estimatedTeamXp: 48 },
-    { id: "sprint-70", progress: 70, multiplier: 0.7, estimatedTeamXp: 84 },
-    { id: "sprint-80", progress: 80, multiplier: 1.0, estimatedTeamXp: 120 },
-    { id: "sprint-90", progress: 90, multiplier: 1.25, estimatedTeamXp: 150 },
+    { id: "sprint-59", progress: 59, multiplier: 1, estimatedTeamXp: 100 },
+    { id: "sprint-60", progress: 60, multiplier: 1, estimatedTeamXp: 100 },
+    { id: "sprint-70", progress: 70, multiplier: 1, estimatedTeamXp: 100 },
+    { id: "sprint-80", progress: 80, multiplier: 1, estimatedTeamXp: 100 },
+    { id: "sprint-90", progress: 90, multiplier: 1, estimatedTeamXp: 100 },
   ];
   const sprints = progressCases.map(({ id, progress }, index) =>
     buildSprint({

@@ -171,17 +171,6 @@ export const getAdminAuditLogsSchema = z.object({
   }),
 });
 
-export const generateLeaderboardSnapshotsSchema = z.object({
-  params: z.object({}).optional().default({}),
-  query: z.object({}).optional().default({}),
-  body: z
-    .object({
-      types: z.array(leaderboardTypeSchema).min(1).max(5).optional(),
-    })
-    .optional()
-    .default({}),
-});
-
 export const processEventsSchema = z.object({
   params: z.object({}).optional().default({}),
   query: z.object({}).optional().default({}),

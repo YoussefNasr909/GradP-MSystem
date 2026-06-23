@@ -155,55 +155,6 @@ export async function listAllBadgeDefinitions() {
 
 // ─── Leaderboards ────────────────────────────────────────────
 
-export async function listLeaderboardSnapshots(type, { page, limit }) {
-  const baseWhere = {
-    leaderboardType: type,
-    scopeType: "GLOBAL",
-    scopeId: null,
-  };
-  const latestSnapshot = await prisma.leaderboardSnapshot.findFirst({
-    where: baseWhere,
-    select: {
-      periodStart: true,
-      periodEnd: true,
-    },
-    orderBy: [{ periodEnd: "desc" }, { generatedAt: "desc" }],
-  });
-
-  if (!latestSnapshot) {
-    return { items: [], total: 0, page, limit, totalPages: 0 };
-  }
-
-  const where = {
-    ...baseWhere,
-    periodStart: latestSnapshot.periodStart,
-    periodEnd: latestSnapshot.periodEnd,
-  };
-
-  const [items, total] = await Promise.all([
-    prisma.leaderboardSnapshot.findMany({
-      where,
-      select: {
-        id: true,
-        rank: true,
-        score: true,
-        breakdown: true,
-        generatedAt: true,
-        userId: true,
-        teamId: true,
-        user: { select: userMiniSelect },
-        team: { select: { id: true, name: true } },
-      },
-      orderBy: { rank: "asc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-    prisma.leaderboardSnapshot.count({ where }),
-  ]);
-
-  return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
-}
-
 /**
  * Balance-derived leaderboard fallback when no snapshots exist.
  * For individual types → sort by UserXpBalance field.
@@ -299,32 +250,6 @@ export async function deriveLeaderboardFromBalances(type, { page, limit }) {
 }
 
 // ─── Rules ───────────────────────────────────────────────────
-
-export async function listActiveRules({ eventType, activeOnly }) {
-  const where = {
-    ...(activeOnly !== false ? { isActive: true } : {}),
-    ...(eventType ? { eventType } : {}),
-  };
-
-  return prisma.gamificationRule.findMany({
-    where,
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-      eventType: true,
-      targetType: true,
-      baseXp: true,
-      conditions: true,
-      multipliers: true,
-      caps: true,
-      version: true,
-      isActive: true,
-    },
-    orderBy: [{ eventType: "asc" }, { code: "asc" }],
-  });
-}
 
 // ─── Admin: Suspicious Cases ─────────────────────────────────
 

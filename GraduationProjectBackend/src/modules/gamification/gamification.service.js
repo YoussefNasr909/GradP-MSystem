@@ -2,11 +2,9 @@ import { AppError } from "../../common/errors/AppError.js";
 import { ROLES } from "../../common/constants/roles.js";
 import { notify } from "../../common/utils/notify.js";
 import * as repo from "./gamification.repository.js";
-import { LEADERBOARD_TYPES, generateLeaderboardSnapshots } from "./gamification.leaderboards.js";
 
 const STAFF_ROLES = new Set([ROLES.TA, ROLES.DOCTOR, ROLES.ADMIN]);
 const RESOLVABLE_CASE_STATUSES = new Set(["OPEN", "UNDER_REVIEW", "ESCALATED"]);
-
 const DEFAULT_USER_BALANCE = {
   lifetimeXp: 0,
   semesterXp: 0,
@@ -259,16 +257,6 @@ async function notifyAdjustmentReview({ request, decision }) {
   }
 }
 
-export function getXpMutationLeaderboardRefreshTypes() {
-  return LEADERBOARD_TYPES;
-}
-
-function refreshLeaderboardsAfterXpMutation(errorLabel) {
-  generateLeaderboardSnapshots({ types: getXpMutationLeaderboardRefreshTypes() }).catch((err) =>
-    console.error(`Failed to regenerate leaderboards after ${errorLabel}:`, err),
-  );
-}
-
 export async function getMyOverviewService(actor) {
   const balance = await repo.findUserXpBalance(actor.id);
   const badges = await repo.listUserBadges(actor.id);
@@ -349,18 +337,8 @@ export async function getTeamHistoryService(actor, teamId, query) {
 
 export async function getLeaderboardsService(_actor, query) {
   const { type, page, limit } = query;
-
-  const snapshots = await repo.listLeaderboardSnapshots(type, { page, limit });
-  if (snapshots.total > 0) {
-    return { type, source: "snapshot", ...snapshots };
-  }
-
   const derived = await repo.deriveLeaderboardFromBalances(type, { page, limit });
   return { type, source: "balance", ...derived };
-}
-
-export async function getRulesService(_actor, query) {
-  return repo.listActiveRules(query);
 }
 
 export async function getAdminCasesService(actor, query) {
@@ -423,8 +401,6 @@ export async function resolveAdminCaseService(actor, caseId, payload) {
     decision: payload.decision,
     resolvedCase: resolutionResult.case,
   });
-
-  refreshLeaderboardsAfterXpMutation("case resolution");
 
   return sanitizeCasesForRole([resolutionResult.case], actor.role)[0];
 }
@@ -504,8 +480,6 @@ export async function reviewAdminAdjustmentService(actor, adjustmentId, payload)
     decision: payload.decision,
   });
 
-  refreshLeaderboardsAfterXpMutation("adjustment review");
-
   return result.request;
 }
 
@@ -518,18 +492,6 @@ export async function getAdminAuditLogsService(actor, query) {
     );
   }
   return repo.listAuditLogs(query);
-}
-
-export async function generateAdminLeaderboardSnapshotsService(actor, payload = {}) {
-  if (actor.role !== ROLES.ADMIN) {
-    throw new AppError(
-      "Only administrators can generate leaderboard snapshots.",
-      403,
-      "GAMIFICATION_LEADERBOARD_SNAPSHOT_DENIED",
-    );
-  }
-
-  return generateLeaderboardSnapshots({ types: payload.types });
 }
 
 function assertStaffRole(actor, actionLabel) {
