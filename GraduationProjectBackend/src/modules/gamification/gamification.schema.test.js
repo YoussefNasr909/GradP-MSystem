@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAdminAdjustmentSchema,
-  generateLeaderboardSnapshotsSchema,
   resolveAdminCaseSchema,
   reviewAdminAdjustmentSchema,
 } from "./gamification.schema.js";
@@ -94,12 +93,4 @@ test("reviewAdminAdjustmentSchema accepts approve and reject decisions", () => {
 
   assert.equal(parsed.params.adjustmentId, "adjustment-1");
   assert.equal(parsed.body.decision, "APPROVE");
-});
-
-test("generateLeaderboardSnapshotsSchema accepts a leaderboard type subset", () => {
-  const parsed = generateLeaderboardSnapshotsSchema.parse({
-    body: { types: ["INDIVIDUAL_WEEKLY", "TEAM_SEMESTER"] },
-  });
-
-  assert.deepEqual(parsed.body.types, ["INDIVIDUAL_WEEKLY", "TEAM_SEMESTER"]);
 });

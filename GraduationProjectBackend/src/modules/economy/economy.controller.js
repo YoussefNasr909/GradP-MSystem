@@ -1,15 +1,11 @@
 import {
   claimQuestService,
   equipRewardService,
-  getAdminQuestsService,
-  getAdminRewardsService,
   getCoinTransactionsService,
   getEconomyOverviewService,
   getMyQuestsService,
   getRewardsService,
   purchaseRewardService,
-  saveAdminQuestService,
-  saveAdminRewardService,
 } from "./economy.service.js";
 
 export async function getEconomyOverview(req, res) {
@@ -48,35 +44,5 @@ export async function equipReward(req, res) {
 
 export async function getCoinTransactions(req, res) {
   const result = await getCoinTransactionsService(req.user, req.validated.query);
-  res.json({ ok: true, data: result });
-}
-
-export async function getAdminQuests(req, res) {
-  const result = await getAdminQuestsService(req.user, req.validated.query);
-  res.json({ ok: true, data: result });
-}
-
-export async function createAdminQuest(req, res) {
-  const result = await saveAdminQuestService(req.user, req.validated.body);
-  res.status(201).json({ ok: true, data: result });
-}
-
-export async function updateAdminQuest(req, res) {
-  const result = await saveAdminQuestService(req.user, req.validated.body, req.validated.params.questId);
-  res.json({ ok: true, data: result });
-}
-
-export async function getAdminRewards(req, res) {
-  const result = await getAdminRewardsService(req.user, req.validated.query);
-  res.json({ ok: true, data: result });
-}
-
-export async function createAdminReward(req, res) {
-  const result = await saveAdminRewardService(req.user, req.validated.body);
-  res.status(201).json({ ok: true, data: result });
-}
-
-export async function updateAdminReward(req, res) {
-  const result = await saveAdminRewardService(req.user, req.validated.body, req.validated.params.rewardItemId);
   res.json({ ok: true, data: result });
 }
