@@ -60,6 +60,12 @@ Run one spec:
 npx playwright test e2e/teams.spec.ts --project=chromium
 ```
 
+Run the full graduation lifecycle journey ported from the Abdoninho branch:
+
+```bash
+npm run test:e2e:local -- e2e/graduation-lifecycle.spec.ts --project=chromium --reporter=line
+```
+
 Run one browser project:
 
 ```bash

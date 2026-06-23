@@ -15,6 +15,7 @@ The doctor-facing report is maintained as a standalone HTML file:
 - Chromium auth tests: PASS, 7 passed through the local E2E runner.
 - Chromium team tests: PASS, 8 passed through the local E2E runner.
 - Full Chromium Playwright suite: PASS, 109 passed, 1 skipped, 0 failed.
+- Abdoninho lifecycle coverage port: PASS, 1 focused Chromium test passed after the full-suite run.
 
 ## Main Remaining TODOs
 
@@ -22,5 +23,6 @@ The doctor-facing report is maintained as a standalone HTML file:
 - Add test-mode AI/GitHub/OAuth/calendar provider mocks or sandbox credentials for real external success paths.
 - Clean the 19 existing frontend lint warnings.
 - Add backend persistence for time-tracker sessions only if persistent time reports become a product requirement.
+- Rerun the full Chromium Playwright suite after merging the new `graduation-lifecycle.spec.ts` into the final branch to refresh the aggregate full-suite count.
 
 Open the HTML report for the detailed work summary, commands, coverage matrix, fix log, failed-test stabilization notes, and readiness verdict.
