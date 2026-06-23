@@ -536,7 +536,7 @@ export default function CalendarPage() {
                 transition={{ delay: 0.2, duration: 0.8 }}
               >
                 Experience a unified schedule where meetings and deadlines converge. 
-                Navigate your project's timeline with precision and clarity.
+                Navigate your project&apos;s timeline with precision and clarity.
               </motion.p>
             </div>
 
@@ -1578,7 +1578,7 @@ function EventDetails({
                   </div>
                   {approval.note && (
                     <div className="mt-3 rounded-xl bg-white/[0.02] p-3 text-[11px] font-semibold leading-relaxed text-foreground/60 border border-white/5 italic">
-                      "{approval.note}"
+                      &quot;{approval.note}&quot;
                     </div>
                   )}
                 </div>

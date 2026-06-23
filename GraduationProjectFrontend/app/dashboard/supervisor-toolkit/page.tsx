@@ -1509,7 +1509,7 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
                     className="mt-3 text-xs text-indigo-700/80 dark:text-indigo-400/80 flex items-center gap-1.5 bg-indigo-500/10 px-3 py-2 rounded-lg border border-indigo-500/20 w-fit"
                   >
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    Please select a specific team from the top-right dropdown to enable AI Rubric Auto-Generation. The AI requires the team's unique project proposal context to generate accurate grading criteria.
+                    Please select a specific team from the top-right dropdown to enable AI Rubric Auto-Generation. The AI requires the team&apos;s unique project proposal context to generate accurate grading criteria.
                   </motion.p>
                 )}
               </div>
@@ -1652,7 +1652,7 @@ function RubricsPanel({ teamId, allTeamIds, userRole }: { teamId: string; allTea
                           <Wand2 className="h-6 w-6 text-indigo-500" />
                         </div>
                         <h4 className="text-sm font-bold text-foreground">Start from a Template</h4>
-                        <p className="text-xs text-muted-foreground mt-1 max-w-[250px] mb-4">Don't want to type from scratch? Import a standard CS department rubric.</p>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-[250px] mb-4">Don&apos;t want to type from scratch? Import a standard CS department rubric.</p>
                         <Button variant="outline" size="sm" className="rounded-xl border-dashed border-2 border-indigo-200 text-indigo-600 hover:border-indigo-500/50 hover:bg-indigo-50 hover:text-indigo-700 dark:border-indigo-500/30 dark:text-indigo-400 dark:hover:bg-indigo-500/10 dark:hover:text-indigo-300 transition-all" onClick={() => {
                           const existing = templates.find(t => t.deliverableType === editingType)
                           if (existing && existing.rubric.length > 0) setDraft([...existing.rubric])

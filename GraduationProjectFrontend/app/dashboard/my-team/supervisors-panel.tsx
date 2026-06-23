@@ -420,7 +420,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
                           <div className="flex items-center gap-3">
                             <div className={`relative p-0.5 rounded-full bg-gradient-to-br ${rankColors[i]}`}>
                               <Avatar className="h-10 w-10 border-2 border-background">
-                                <AvatarImage src={m.doctor?.avatarUrl} />
+                                <AvatarImage src={m.doctor?.avatarUrl ?? undefined} />
                                 <AvatarFallback className="bg-indigo-50 text-indigo-700 font-bold text-sm">
                                   {m.doctor ? getAvatarInitial(m.doctor) : "?"}
                                 </AvatarFallback>
@@ -453,7 +453,7 @@ export function LeaderSupervisorsTab({ team, requests, onRefresh }: LeaderSuperv
 
                           {/* AI Reasoning */}
                           <p className="text-xs leading-relaxed text-muted-foreground italic flex-1 bg-muted/40 rounded-lg p-2.5 border border-border/40">
-                            "{m.reasoning}"
+                            &quot;{m.reasoning}&quot;
                           </p>
 
                           {/* CTA */}
@@ -847,7 +847,7 @@ export function SupervisorRequestInbox({ currentRole, requests, supervisedTeams,
                   </div>
                   <h3 className="mt-4 text-lg font-bold">Inbox is Clear</h3>
                   <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-                    You don't have any pending supervision requests right now.
+                    You don&apos;t have any pending supervision requests right now.
                   </p>
                 </motion.div>
               )}

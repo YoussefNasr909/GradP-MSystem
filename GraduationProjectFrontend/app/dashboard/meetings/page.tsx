@@ -1457,7 +1457,7 @@ export default function MeetingsPage() {
                           </div>
                           <h4 className="text-xl font-semibold tracking-tight text-foreground/80">Your archive is empty</h4>
                           <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-muted-foreground/50 leading-relaxed">
-                            Completed and cancelled meetings will appear here once they're off your active schedule.
+                            Completed and cancelled meetings will appear here once they&apos;re off your active schedule.
                           </p>
                         </div>
                       ) : (

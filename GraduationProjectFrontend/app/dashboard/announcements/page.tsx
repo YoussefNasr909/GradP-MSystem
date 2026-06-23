@@ -352,7 +352,7 @@ export default function AnnouncementsPage() {
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 text-red-600 shadow-sm ring-1 ring-red-500/20">
                 <AlertCircle className="h-8 w-8" />
               </div>
-              <h4 className="text-xl font-semibold tracking-tight text-red-900 dark:text-red-100">Couldn't load announcements</h4>
+              <h4 className="text-xl font-semibold tracking-tight text-red-900 dark:text-red-100">Couldn&apos;t load announcements</h4>
               <p className="mx-auto mt-2 max-w-[280px] text-sm font-medium text-red-700/60 dark:text-red-300/60 leading-relaxed">
                 There was a technical issue fetching the latest updates. Please try again.
               </p>

@@ -9083,7 +9083,7 @@ function NoRepositoryState({
                     <div>
                       <DialogTitle className="text-2xl font-semibold tracking-tight">Repository setup</DialogTitle>
                       <DialogDescription className="text-base text-muted-foreground">
-                        Configure how GPMS connects to your team's code.
+                        Configure how GPMS connects to your team&apos;s code.
                       </DialogDescription>
                     </div>
                   </div>
@@ -9310,7 +9310,7 @@ function NoRepositoryState({
                         <div className="space-y-1">
                           <p className="font-semibold text-foreground/90">Install GPMS App</p>
                           <p className="text-sm text-muted-foreground leading-relaxed">
-                            The GitHub App must be installed on the repository owner's account first.
+                            The GitHub App must be installed on the repository owner&apos;s account first.
                           </p>
                         </div>
                         <Button 

@@ -16,6 +16,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# test artifacts
+/playwright-report/
+/test-results/
+/blob-report/
+/e2e/.auth/
+
 # env files
 .env*
 

@@ -2,6 +2,7 @@ const backendUrl = process.env.BACKEND_URL ?? "http://localhost:4000";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['pdf-parse', 'officeparser'],
   typescript: {
     ignoreBuildErrors: false,
   },
