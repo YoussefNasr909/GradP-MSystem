@@ -326,7 +326,7 @@ function FormInput({
   className?: string;
 }) {
   return (
-    <div className={`space-y-2 ${className}`.trim()}>
+    <div className={`space-y-2 min-w-0 ${className}`.trim()}>
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
@@ -360,7 +360,7 @@ function FormSelect({
   helperText?: string;
 }) {
   return (
-    <div className={`space-y-2 ${className}`.trim()}>
+    <div className={`space-y-2 min-w-0 ${className}`.trim()}>
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-11">

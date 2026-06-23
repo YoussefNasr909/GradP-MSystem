@@ -829,7 +829,7 @@ export default function AdminPage() {
             if (!open) resetDialogs();
           }}
         >
-          <DialogContent className="max-h-[90vh] overflow-y-auto border-border/60 sm:max-w-2xl">
+          <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden border-border/60 sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Create User</DialogTitle>
               <DialogDescription>
@@ -857,7 +857,7 @@ export default function AdminPage() {
             if (!open) resetDialogs();
           }}
         >
-          <DialogContent className="max-h-[90vh] overflow-y-auto border-border/60 sm:max-w-2xl">
+          <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden border-border/60 sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
               <DialogDescription>
