@@ -1,7 +1,5 @@
 import { apiRequest } from "./http"
 
-// ─── Types ───────────────────────────────────────────────────
-
 export type GamificationBalance = {
   lifetimeXp: number
   semesterXp: number
@@ -37,8 +35,8 @@ export type XpTransaction = {
   reason: string
   sourceType: string
   sourceId: string
-  ruleCode: string
-  baseXp: number
+  ruleCode: string | null
+  baseXp: number | null
   qualityMultiplier: number | null
   timelinessMultiplier: number | null
   evidenceMultiplier: number | null
@@ -95,79 +93,9 @@ export type LeaderboardResult = {
   totalPages: number
 }
 
-export type GamificationRule = {
-  id: string
-  code: string
-  name: string
-  description: string | null
-  eventType: string
-  targetType: string
-  baseXp: number
-  conditions: Record<string, unknown> | null
-  multipliers: Record<string, unknown> | null
-  caps: Record<string, unknown> | null
-  version: number
-  isActive: boolean
-}
-
 export type TeamSummary = {
   teamId: string
   balance: GamificationTeamBalance
-}
-
-export type GamificationCase = {
-  id: string
-  userId: string | null
-  teamId: string | null
-  eventId: string | null
-  transactionId: string | null
-  score: number
-  status: string
-  reason: string
-  signals?: Record<string, unknown> | null
-  resolution: string | null
-  studentVisibleReason: string | null
-  assignedReviewerId: string | null
-  createdAt: string
-  resolvedAt: string | null
-  user?: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string } | null
-  team?: { id: string; name: string } | null
-}
-
-export type GamificationAdjustment = {
-  id: string
-  requestedByUserId: string
-  targetUserId: string | null
-  targetTeamId: string | null
-  amount: number
-  reason: string
-  sourceReference: string | null
-  status: string
-  reviewComment: string | null
-  createdEventId: string | null
-  createdTransactionId: string | null
-  createdAt: string
-  reviewedAt: string | null
-  requestedBy?: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string } | null
-  targetUser?: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string } | null
-  targetTeam?: { id: string; name: string; leaderId: string | null } | null
-  approvedBy?: { id: string; firstName: string; lastName: string; avatarUrl: string | null; role: string } | null
-}
-
-export type PaginatedCases = {
-  items: GamificationCase[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
-}
-
-export type PaginatedAdjustments = {
-  items: GamificationAdjustment[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
 }
 
 export type ProcessEventsResult = {
@@ -179,19 +107,16 @@ export type ProcessEventsResult = {
   reason?: string
 }
 
-// ─── API Client ──────────────────────────────────────────────
-
 function qs(params: Record<string, string | number | undefined>) {
   const sp = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== "") sp.set(k, String(v))
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") sp.set(key, String(value))
   }
-  const s = sp.toString()
-  return s ? `?${s}` : ""
+  const query = sp.toString()
+  return query ? `?${query}` : ""
 }
 
 export const gamificationApi = {
-  // ─── Student / User ──────────────────────────────────────
   getOverview: () =>
     apiRequest<GamificationOverview>("/gamification/me"),
 
@@ -201,64 +126,15 @@ export const gamificationApi = {
   getBadges: () =>
     apiRequest<BadgeInfo[]>("/gamification/me/badges"),
 
-  // ─── Team ────────────────────────────────────────────────
   getTeamSummary: (teamId: string) =>
     apiRequest<TeamSummary>(`/gamification/team/${teamId}`),
 
   getTeamHistory: (teamId: string, params?: { page?: number; limit?: number }) =>
     apiRequest<PaginatedTransactions>(`/gamification/team/${teamId}/history${qs(params ?? {})}`),
 
-  // ─── Leaderboards ────────────────────────────────────────
   getLeaderboards: (params?: { type?: string; page?: number; limit?: number }) =>
     apiRequest<LeaderboardResult>(`/gamification/leaderboards${qs(params ?? {})}`),
 
-  // ─── Rules ───────────────────────────────────────────────
-  getRules: (params?: { eventType?: string; activeOnly?: string }) =>
-    apiRequest<GamificationRule[]>(`/gamification/rules${qs(params ?? {})}`),
-
-  // ─── Admin ───────────────────────────────────────────────
   processEvents: (body?: { retryFailed?: boolean; eventIds?: string[] }) =>
     apiRequest<ProcessEventsResult>("/gamification/admin/process-events", { method: "POST", body: body ?? {} }),
-
-  getCases: (params?: { page?: number; limit?: number; status?: string; teamId?: string; userId?: string }) =>
-    apiRequest<PaginatedCases>(`/gamification/admin/cases${qs(params ?? {})}`),
-
-  resolveCase: (
-    caseId: string,
-    body: { decision: "APPROVE" | "REJECT"; resolution: string; studentVisibleReason?: string },
-  ) =>
-    apiRequest<GamificationCase>(`/gamification/admin/cases/${caseId}/resolve`, {
-      method: "PATCH",
-      body,
-    }),
-
-  getAdjustments: (params?: { page?: number; limit?: number; status?: string }) =>
-    apiRequest<PaginatedAdjustments>(`/gamification/admin/adjustments${qs(params ?? {})}`),
-
-  createAdjustment: (body: {
-    targetUserId?: string
-    targetTeamId?: string
-    amount: number
-    reason: string
-    sourceReference?: string
-  }) =>
-    apiRequest<GamificationAdjustment>("/gamification/admin/adjustments", {
-      method: "POST",
-      body,
-    }),
-
-  reviewAdjustment: (
-    adjustmentId: string,
-    body: { decision: "APPROVE" | "REJECT"; reviewComment?: string },
-  ) =>
-    apiRequest<GamificationAdjustment>(`/gamification/admin/adjustments/${adjustmentId}/review`, {
-      method: "PATCH",
-      body,
-    }),
-
-  generateLeaderboardSnapshots: (body?: { types?: string[] }) =>
-    apiRequest<{ generated: number; types: Array<{ type: string; created: number; periodStart: string; periodEnd: string }> }>(
-      "/gamification/admin/leaderboards/snapshots",
-      { method: "POST", body: body ?? {} },
-    ),
 }

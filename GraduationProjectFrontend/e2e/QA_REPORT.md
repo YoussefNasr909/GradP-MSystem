@@ -24,5 +24,6 @@ The doctor-facing report is maintained as a standalone HTML file:
 - Clean the 19 existing frontend lint warnings.
 - Add backend persistence for time-tracker sessions only if persistent time reports become a product requirement.
 - Rerun the full Chromium Playwright suite after merging the new `graduation-lifecycle.spec.ts` into the final branch to refresh the aggregate full-suite count.
+- Latest main removed the earlier gamification admin cases/adjustments/audit/snapshot dashboard surface; tests now cover the current user/team gamification APIs and remaining admin `process-events` trigger.
 
 Open the HTML report for the detailed work summary, commands, coverage matrix, fix log, failed-test stabilization notes, and readiness verdict.

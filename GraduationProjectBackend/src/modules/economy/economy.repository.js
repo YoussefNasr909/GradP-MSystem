@@ -1,13 +1,4 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../loaders/dbLoader.js";
-
-const MAX_SERIALIZATION_RETRIES = 3;
-
-export const ECONOMY_TRANSACTION_OPTIONS = {
-  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-  maxWait: 10000,
-  timeout: 30000,
-};
 
 export const walletSelect = {
   id: true,
@@ -85,26 +76,6 @@ export const purchaseSelect = {
   rewardItem: { select: rewardItemSelect },
   coinTransaction: { select: coinTransactionSelect },
 };
-
-export async function runSerializable(callback) {
-  let attempt = 0;
-
-  while (attempt < MAX_SERIALIZATION_RETRIES) {
-    try {
-      return await prisma.$transaction(callback, ECONOMY_TRANSACTION_OPTIONS);
-    } catch (error) {
-      if (error?.code === "P2034") {
-        attempt += 1;
-        if (attempt >= MAX_SERIALIZATION_RETRIES) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  return null;
-}
 
 export async function findOrCreateWallet(userId) {
   return prisma.userCoinBalance.upsert({
@@ -195,112 +166,8 @@ export async function listCoinTransactions(userId, { page, limit }) {
   return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
-export async function countMetricForUser(userId, metric, window) {
-  const range = window.start && window.end ? { gte: window.start, lt: window.end } : undefined;
-
-  switch (metric) {
-    case "XP_EARNED":
-      return prisma.xpTransaction.aggregate({
-        where: {
-          userId,
-          recipientType: "USER",
-          status: "AWARDED",
-          direction: "CREDIT",
-          ...(range ? { createdAt: range } : {}),
-        },
-        _sum: { amount: true },
-      }).then((result) => result._sum.amount ?? 0);
-
-    case "TASKS_DONE":
-      return prisma.task.count({
-        where: {
-          assigneeUserId: userId,
-          status: "DONE",
-          ...(range
-            ? {
-                OR: [
-                  { reviewedAt: range },
-                  { reviewedAt: null, updatedAt: range },
-                ],
-              }
-            : {}),
-        },
-      });
-
-    case "SUBMISSIONS_APPROVED":
-      return prisma.submission.count({
-        where: {
-          submittedByUserId: userId,
-          status: "APPROVED",
-          ...(range ? { reviewedAt: range } : {}),
-        },
-      });
-
-    case "PRS_MERGED":
-      return prisma.gamificationEvent.count({
-        where: {
-          eventType: "GITHUB_PR_MERGED",
-          actorUserId: userId,
-          status: "PROCESSED",
-          ...(range ? { occurredAt: range } : {}),
-        },
-      });
-
-    case "REVIEWS_GIVEN":
-      return prisma.gamificationEvent.count({
-        where: {
-          eventType: "GITHUB_PR_REVIEWED",
-          actorUserId: userId,
-          status: "PROCESSED",
-          ...(range ? { occurredAt: range } : {}),
-        },
-      });
-
-    case "SPRINTS_COMPLETED":
-      return countCompletedSprintsForUserTeams(userId, range);
-
-    case "WEEKLY_REPORTS_APPROVED":
-      return prisma.weeklyReport.count({
-        where: {
-          submittedById: userId,
-          status: "APPROVED",
-          ...(range ? { reviewedAt: range } : {}),
-        },
-      });
-
-    case "LOGIN_STREAK":
-    default:
-      return 0;
-  }
-}
-
-async function countCompletedSprintsForUserTeams(userId, range) {
-  const teams = await prisma.team.findMany({
-    where: {
-      OR: [
-        { leaderId: userId },
-        { members: { some: { userId } } },
-      ],
-    },
-    select: { id: true },
-  });
-  const teamIds = teams.map((team) => team.id);
-
-  if (teamIds.length === 0) return 0;
-
-  return prisma.gamificationEvent.count({
-    where: {
-      eventType: "SPRINT_COMPLETED",
-      sourceType: "Sprint",
-      teamId: { in: teamIds },
-      status: "PROCESSED",
-      ...(range ? { occurredAt: range } : {}),
-    },
-  });
-}
-
 export async function claimQuestRewardTransaction({ userId, progressId, now }) {
-  return runSerializable(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const progress = await tx.userQuestProgress.findUnique({
       where: { id: progressId },
       select: progressSelect,
@@ -359,7 +226,7 @@ export async function claimQuestRewardTransaction({ userId, progressId, now }) {
 }
 
 export async function purchaseRewardTransaction({ userId, rewardItemId }) {
-  return runSerializable(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const item = await tx.rewardItem.findUnique({
       where: { id: rewardItemId },
       select: rewardItemSelect,
@@ -433,7 +300,7 @@ export async function purchaseRewardTransaction({ userId, rewardItemId }) {
 }
 
 export async function equipRewardPurchaseTransaction({ userId, purchaseId, equipped }) {
-  return runSerializable(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const purchase = await tx.rewardPurchase.findUnique({
       where: { id: purchaseId },
       select: purchaseSelect,

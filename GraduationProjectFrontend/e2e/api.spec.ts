@@ -143,14 +143,14 @@ test.describe("API module boundaries and hardening", () => {
       await expectApiStatus(request, endpoint, [200, 403, 404], { token: admin.token });
     }
 
-    for (const endpoint of ["/gamification/admin/cases", "/gamification/admin/audit-logs"]) {
-      await expectApiStatus(request, endpoint, [200, 404], { token: admin.token });
-    }
-    await expectApiStatus(request, "/gamification/admin/leaderboards/snapshots", [200, 201, 400, 422], {
+    await expectApiStatus(request, "/gamification/admin/process-events", [200, 400, 422], {
       method: "POST",
       token: admin.token,
-      data: { types: ["INDIVIDUAL_LIFETIME"] },
+      data: { retryFailed: false, eventIds: [] },
     });
+    for (const endpoint of ["/gamification/admin/cases", "/gamification/admin/audit-logs", "/gamification/admin/leaderboards/snapshots"]) {
+      await expectApiStatus(request, endpoint, [200, 201, 404, 405], { token: admin.token });
+    }
   });
 
   test("login/reset-password rate-limit surfaces as success, validation, or 429 without crashing", async ({ request }) => {

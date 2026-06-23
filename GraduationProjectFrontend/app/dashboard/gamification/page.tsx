@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react"
-import Link from "next/link"
 import { motion } from "framer-motion"
 import {
   AlertCircle,
@@ -24,7 +23,6 @@ import {
   RefreshCw,
   Rocket,
   Shield,
-  ShieldAlert,
   ShoppingBag,
   Sparkles,
   Star,
@@ -49,13 +47,12 @@ import {
   useGamificationBadges,
   useGamificationHistory,
   useGamificationOverview,
-  useGamificationRules,
   useLeaderboard,
   useTeamGamificationSummary,
 } from "@/lib/hooks/use-gamification"
 import { useEconomyOverview } from "@/lib/hooks/use-economy"
 import { useMyTeamState } from "@/lib/hooks/use-my-team-state"
-import type { BadgeInfo, GamificationRule, LeaderboardEntry, XpTransaction } from "@/lib/api/gamification"
+import type { BadgeInfo, LeaderboardEntry, XpTransaction } from "@/lib/api/gamification"
 import { economyApi, type CoinTransaction, type QuestProgress, type RewardItem } from "@/lib/api/economy"
 
 type Icon = ComponentType<{ className?: string }>
@@ -69,6 +66,65 @@ const leaderboardOptions = [
   { key: "INDIVIDUAL_LIFETIME", label: "All-time" },
   { key: "TEAM_WEEKLY", label: "Team week" },
   { key: "TEAM_SEMESTER", label: "Team semester" },
+]
+
+const xpEarningCatalog = [
+  {
+    id: "task-approved",
+    name: "Task approved",
+    description: "Approved tasks award 10 XP per story point, or 50 XP when no points are set.",
+    eventType: "TASK_APPROVED",
+    targetType: "User",
+    xpLabel: "10 XP / SP",
+  },
+  {
+    id: "submission-approved",
+    name: "Submission approved",
+    description: "Approved deliverables award team XP.",
+    eventType: "SUBMISSION_APPROVED",
+    targetType: "Team",
+    xpLabel: "+100 XP",
+  },
+  {
+    id: "weekly-report-approved",
+    name: "Weekly report approved",
+    description: "Approved weekly reports award team XP.",
+    eventType: "WEEKLY_REPORT_APPROVED",
+    targetType: "Team",
+    xpLabel: "+50 XP",
+  },
+  {
+    id: "pr-merged",
+    name: "Pull request merged",
+    description: "Merged GitHub pull requests award user XP.",
+    eventType: "GITHUB_PR_MERGED",
+    targetType: "User",
+    xpLabel: "+20 XP",
+  },
+  {
+    id: "pr-reviewed",
+    name: "Pull request reviewed",
+    description: "Submitted GitHub pull request reviews award user XP.",
+    eventType: "GITHUB_PR_REVIEWED",
+    targetType: "User",
+    xpLabel: "+10 XP",
+  },
+  {
+    id: "sprint-completed",
+    name: "Sprint completed",
+    description: "Completed sprints award team XP.",
+    eventType: "SPRINT_COMPLETED",
+    targetType: "Team",
+    xpLabel: "+100 XP",
+  },
+  {
+    id: "stage-advanced",
+    name: "Stage advanced",
+    description: "Advancing the project stage awards team XP.",
+    eventType: "TEAM_STAGE_ADVANCED",
+    targetType: "Team",
+    xpLabel: "+150 XP",
+  },
 ]
 
 const rarityColors: Record<string, string> = {
@@ -155,7 +211,7 @@ function formatCompactSourceLabel(sourceType?: string | null) {
     QUEST: "Quest",
     REWARD_PURCHASE: "Reward",
     XP_AWARD: "XP Award",
-    XP_ADJUSTMENT_REQUEST: "XP Review",
+    XP_ADJUSTMENT_REQUEST: "XP Adjustment",
     MANUAL: "Manual",
     SEED: "Seed",
   }
@@ -319,8 +375,6 @@ export default function GamificationPage() {
   const badges = useGamificationBadges()
   const history = useGamificationHistory(historyPage)
   const leaderboard = useLeaderboard(leaderboardType)
-  const rules = useGamificationRules()
-  const canReviewGamification = ["admin", "doctor", "ta"].includes((currentUser?.role ?? "").toLowerCase())
   const canHaveOwnTeam = ["leader", "member", "student"].includes((currentUser?.role ?? "").toLowerCase())
   const myTeamState = useMyTeamState(canHaveOwnTeam)
   const teamSummary = useTeamGamificationSummary(myTeamState.data?.team?.id ?? null)
@@ -331,8 +385,6 @@ export default function GamificationPage() {
   const weeklyXp = balance?.weeklyXp ?? 0
   const monthlyXp = balance?.monthlyXp ?? 0
   const semesterXp = balance?.semesterXp ?? 0
-  const pendingXp = balance?.pendingXp ?? 0
-  const frozenXp = balance?.frozenXp ?? 0
   const progress = xpProgress(lifetimeXp, level)
   const xpToNext = Math.max(0, xpForLevel(level) - lifetimeXp)
   const coinBalance = economy.data?.wallet.balance ?? 0
@@ -464,14 +516,6 @@ export default function GamificationPage() {
           <p className="text-xs font-semibold uppercase text-muted-foreground">Gamification</p>
           <h1 className="mt-1 text-2xl font-semibold text-foreground sm:text-3xl">Your progress hub</h1>
         </div>
-        {canReviewGamification ? (
-          <Button variant="outline" className="h-10 w-full sm:w-auto" asChild>
-            <Link href="/dashboard/gamification/admin">
-              <ShieldAlert className="mr-2 h-4 w-4" />
-              Review
-            </Link>
-          </Button>
-        ) : null}
       </div>
 
       {overview.error ? (
@@ -488,10 +532,8 @@ export default function GamificationPage() {
           equippedFrame={equippedFrame?.rewardItem.name}
           equippedTheme={equippedTheme?.rewardItem.name}
           equippedTitle={equippedTitle?.rewardItem.name}
-          frozenXp={frozenXp}
           level={level}
           lifetimeXp={lifetimeXp}
-          pendingXp={pendingXp}
           progress={progress}
           weeklyXp={weeklyXp}
           xpToNext={xpToNext}
@@ -735,7 +777,7 @@ export default function GamificationPage() {
         </Card>
 
         <section className="min-w-0 space-y-4">
-          <SectionHeader icon={BookOpen} eyebrow="Details" title="XP, coins, and rules" />
+          <SectionHeader icon={BookOpen} eyebrow="Details" title="XP, coins, and values" />
           <Accordion type="multiple" defaultValue={["history"]} className="min-w-0 overflow-hidden rounded-lg border border-border/70 bg-card shadow-sm">
             <AccordionItem value="history" className="min-w-0 border-border/70 px-3 sm:px-5">
               <AccordionTrigger className="min-w-0 py-3 text-left hover:no-underline sm:py-4 [&>svg]:shrink-0">
@@ -821,17 +863,9 @@ export default function GamificationPage() {
                 </span>
               </AccordionTrigger>
               <AccordionContent>
-                {rules.loading ? (
-                  <InlineLoading label="Loading rules" />
-                ) : rules.error ? (
-                  <ErrorState message={rules.error} onRetry={rules.refetch} />
-                ) : rules.data?.length === 0 ? (
-                  <EmptyState icon={BookOpen} title="No XP rules available" />
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {rules.data?.map((rule) => <RuleCard key={rule.id} rule={rule} />)}
-                  </div>
-                )}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {xpEarningCatalog.map((rule) => <RuleCard key={rule.id} rule={rule} />)}
+                </div>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
@@ -856,10 +890,8 @@ function PlayerHero({
   equippedFrame,
   equippedTheme,
   equippedTitle,
-  frozenXp,
   level,
   lifetimeXp,
-  pendingXp,
   progress,
   weeklyXp,
   xpToNext,
@@ -872,15 +904,12 @@ function PlayerHero({
   equippedFrame?: string
   equippedTheme?: string
   equippedTitle?: string
-  frozenXp: number
   level: number
   lifetimeXp: number
-  pendingXp: number
   progress: number
   weeklyXp: number
   xpToNext: number
 }) {
-  const hasReviewStatus = pendingXp > 0 || frozenXp > 0
   const hasCosmetics = Boolean(equippedTitle || equippedFrame || equippedTheme || equippedBadgeSkin)
 
   return (
@@ -972,12 +1001,6 @@ function PlayerHero({
             <HeroSideStat icon={Coins} label="Wallet" value={`${formatNumber(coinBalance)} coins`} tone="emerald" />
           </div>
         </div>
-        {hasReviewStatus ? (
-          <div className="relative grid gap-2 border-t border-border/70 bg-background/80 p-3 text-sm sm:grid-cols-2">
-            {pendingXp > 0 ? <ReviewStatus tone="pending" label="Pending XP" value={pendingXp} /> : null}
-            {frozenXp > 0 ? <ReviewStatus tone="frozen" label="Frozen XP" value={frozenXp} /> : null}
-          </div>
-        ) : null}
       </div>
     </motion.section>
   )
@@ -1001,25 +1024,6 @@ function HeroSideStat({ icon: Icon, label, value, tone }: { icon: Icon; label: s
           <p className="truncate text-[11px] font-semibold sm:text-sm">{value}</p>
         </div>
       </div>
-    </div>
-  )
-}
-
-function ReviewStatus({ label, value, tone }: { label: string; value: number; tone: "pending" | "frozen" }) {
-  return (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-3 rounded-md border px-3 py-2 shadow-sm",
-        tone === "pending"
-          ? "border-slate-300/70 bg-slate-500/10 text-slate-700 dark:text-slate-300"
-          : "border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-      )}
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        <ShieldAlert className="h-4 w-4 shrink-0" />
-        <span className="truncate text-sm font-medium">{label}</span>
-      </span>
-      <span className="shrink-0 text-sm font-semibold">{formatNumber(value)} XP</span>
     </div>
   )
 }
@@ -1396,7 +1400,7 @@ function CoinTransactionRow({ tx }: { tx: CoinTransaction }) {
   )
 }
 
-function RuleCard({ rule }: { rule: GamificationRule }) {
+function RuleCard({ rule }: { rule: (typeof xpEarningCatalog)[number] }) {
   return (
     <Card className="rounded-lg border-border/70 p-4 shadow-sm transition-all hover:border-primary/25 hover:shadow-md">
       <div className="flex items-start gap-3">
@@ -1410,9 +1414,9 @@ function RuleCard({ rule }: { rule: GamificationRule }) {
             <Badge variant="outline" className="rounded-md text-xs capitalize">
               {rule.eventType.replaceAll("_", " ").toLowerCase()}
             </Badge>
-            <Badge className="rounded-md border-primary/20 bg-primary/10 text-xs text-primary">+{rule.baseXp} XP</Badge>
+            <Badge className="rounded-md border-primary/20 bg-primary/10 text-xs text-primary">{rule.xpLabel}</Badge>
             <Badge variant="outline" className="rounded-md text-xs capitalize">
-              {rule.targetType.toLowerCase()}
+              {rule.targetType}
             </Badge>
           </div>
         </div>

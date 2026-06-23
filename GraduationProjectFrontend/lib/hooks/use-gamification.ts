@@ -7,7 +7,6 @@ import {
   type PaginatedTransactions,
   type BadgeInfo,
   type LeaderboardResult,
-  type GamificationRule,
   type TeamSummary,
 } from "@/lib/api/gamification"
 
@@ -71,10 +70,6 @@ export function useLeaderboard(type = "INDIVIDUAL_WEEKLY", page = 1, limit = 20)
     () => gamificationApi.getLeaderboards({ type, page, limit }),
     [type, page, limit],
   )
-}
-
-export function useGamificationRules() {
-  return useAsync<GamificationRule[]>(() => gamificationApi.getRules())
 }
 
 export function useTeamGamificationSummary(teamId?: string | null) {

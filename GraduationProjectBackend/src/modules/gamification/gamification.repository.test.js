@@ -6,7 +6,6 @@ import {
   buildTeamFrozenResolutionBalanceData,
   buildUserAdjustmentBalanceData,
   buildUserFrozenResolutionBalanceData,
-  listLeaderboardSnapshots,
   reviewAdjustmentRequestTransaction,
   resolveSuspiciousCaseTransaction,
 } from "./gamification.repository.js";
@@ -19,56 +18,6 @@ function assertNoUndefinedValues(value) {
     assertNoUndefinedValues(nestedValue);
   }
 }
-
-test("listLeaderboardSnapshots returns only the latest snapshot period", async (t) => {
-  const calls = [];
-  const latestPeriod = {
-    periodStart: new Date("2026-05-18T00:00:00.000Z"),
-    periodEnd: new Date("2026-05-24T23:59:59.999Z"),
-  };
-
-  const descriptor = Object.getOwnPropertyDescriptor(prisma, "leaderboardSnapshot");
-  Object.defineProperty(prisma, "leaderboardSnapshot", {
-    configurable: true,
-    writable: true,
-    value: {
-      findFirst: async (args) => {
-        calls.push({ method: "findFirst", args });
-        return latestPeriod;
-      },
-      findMany: async (args) => {
-        calls.push({ method: "findMany", args });
-        return [{ id: "snapshot-current", rank: 1, score: 230 }];
-      },
-      count: async (args) => {
-        calls.push({ method: "count", args });
-        return 1;
-      },
-    },
-  });
-  t.after(() => {
-    if (descriptor) Object.defineProperty(prisma, "leaderboardSnapshot", descriptor);
-    else delete prisma.leaderboardSnapshot;
-  });
-
-  const result = await listLeaderboardSnapshots("INDIVIDUAL_WEEKLY", { page: 1, limit: 25 });
-
-  assert.equal(result.total, 1);
-  assert.deepEqual(calls.find((call) => call.method === "findMany").args.where, {
-    leaderboardType: "INDIVIDUAL_WEEKLY",
-    scopeType: "GLOBAL",
-    scopeId: null,
-    periodStart: latestPeriod.periodStart,
-    periodEnd: latestPeriod.periodEnd,
-  });
-  assert.deepEqual(calls.find((call) => call.method === "count").args.where, {
-    leaderboardType: "INDIVIDUAL_WEEKLY",
-    scopeType: "GLOBAL",
-    scopeId: null,
-    periodStart: latestPeriod.periodStart,
-    periodEnd: latestPeriod.periodEnd,
-  });
-});
 
 function createResolutionTx({ suspiciousCase, userBalance = null, teamBalance = null }) {
   const calls = [];

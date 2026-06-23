@@ -109,50 +109,6 @@ export type PaginatedCoinTransactions = {
   totalPages: number
 }
 
-export type PaginatedQuests = {
-  items: Quest[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
-}
-
-export type PaginatedRewards = {
-  items: Omit<RewardItem, "owned" | "purchase">[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
-}
-
-export type SaveQuestPayload = {
-  code: string
-  title: string
-  description: string
-  type: QuestType
-  metric: QuestMetric
-  targetValue: number
-  coinReward: number
-  startsAt?: string | null
-  endsAt?: string | null
-  isActive: boolean
-  sortOrder: number
-  metadata?: Record<string, unknown> | null
-}
-
-export type SaveRewardPayload = {
-  code: string
-  name: string
-  description: string
-  type: RewardItem["type"]
-  cost: number
-  status: RewardItem["status"]
-  inventory?: number | null
-  imageUrl?: string | null
-  sortOrder: number
-  metadata?: Record<string, unknown> | null
-}
-
 export const economyApi = {
   overview: () => apiRequest<EconomyOverview>("/economy/me"),
   quests: () => apiRequest<{ items: QuestProgress[] }>("/economy/quests"),
@@ -179,28 +135,4 @@ export const economyApi = {
     const suffix = query.toString() ? `?${query.toString()}` : ""
     return apiRequest<PaginatedCoinTransactions>(`/economy/transactions${suffix}`)
   },
-  adminQuests: (params: { page?: number; limit?: number; status?: "ACTIVE" | "INACTIVE" | "ALL" } = {}) => {
-    const query = new URLSearchParams()
-    if (params.page) query.set("page", String(params.page))
-    if (params.limit) query.set("limit", String(params.limit))
-    if (params.status) query.set("status", params.status)
-    const suffix = query.toString() ? `?${query.toString()}` : ""
-    return apiRequest<PaginatedQuests>(`/economy/admin/quests${suffix}`)
-  },
-  createQuest: (payload: SaveQuestPayload) =>
-    apiRequest<Quest>("/economy/admin/quests", { method: "POST", body: payload }),
-  updateQuest: (questId: string, payload: SaveQuestPayload) =>
-    apiRequest<Quest>(`/economy/admin/quests/${questId}`, { method: "PATCH", body: payload }),
-  adminRewards: (params: { page?: number; limit?: number; status?: "ACTIVE" | "INACTIVE" | "ARCHIVED" | "ALL" } = {}) => {
-    const query = new URLSearchParams()
-    if (params.page) query.set("page", String(params.page))
-    if (params.limit) query.set("limit", String(params.limit))
-    if (params.status) query.set("status", params.status)
-    const suffix = query.toString() ? `?${query.toString()}` : ""
-    return apiRequest<PaginatedRewards>(`/economy/admin/rewards${suffix}`)
-  },
-  createReward: (payload: SaveRewardPayload) =>
-    apiRequest<Omit<RewardItem, "owned" | "purchase">>("/economy/admin/rewards", { method: "POST", body: payload }),
-  updateReward: (rewardItemId: string, payload: SaveRewardPayload) =>
-    apiRequest<Omit<RewardItem, "owned" | "purchase">>(`/economy/admin/rewards/${rewardItemId}`, { method: "PATCH", body: payload }),
 }

@@ -39,9 +39,9 @@ const ROLE_TONES: Record<UserRole, "primary" | "blue" | "emerald" | "amber" | "r
   admin: "rose",
   doctor: "blue",
   ta: "emerald",
-  support: "slate",
   leader: "violet",
   member: "primary",
+  support: "slate",
 }
 
 function getInitials(name?: string | null) {

@@ -932,7 +932,6 @@ async function main() {
   }
 
   // ─── Gamification: Seed Rules & Badges ───────────────────────
-  await seedGamificationRules();
   await seedBadgeDefinitions();
   await seedGamificationEconomy(users);
 

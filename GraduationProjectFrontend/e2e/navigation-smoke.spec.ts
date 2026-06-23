@@ -39,7 +39,6 @@ const coreDashboardRoutes = [
   "/dashboard/chat",
   "/dashboard/discussions",
   "/dashboard/gamification",
-  "/dashboard/gamification/admin",
   "/dashboard/time-tracker",
   "/dashboard/version-control",
   "/dashboard/github",
