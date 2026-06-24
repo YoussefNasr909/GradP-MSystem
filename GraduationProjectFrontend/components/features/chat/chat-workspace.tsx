@@ -71,6 +71,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
+import { API_BASE_URL } from "@/lib/api/http"
 
 type ChatWorkspaceVariant = "page" | "launcher"
 type ChatItemKind = "direct" | "contact" | "group"
@@ -125,6 +126,15 @@ type SocketAckFailure = {
 function getUserInitial(user: Pick<ApiChatUser, "fullName" | "email"> | null | undefined) {
   const source = user?.fullName || user?.email || "U"
   return source.trim().charAt(0).toUpperCase()
+}
+
+function getAttachmentUrl(fileUrl: string) {
+  if (/^https?:\/\//i.test(fileUrl)) return fileUrl
+
+  const apiOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, "")
+  if (!apiOrigin) return fileUrl
+
+  return `${apiOrigin.replace(/\/+$/, "")}/${fileUrl.replace(/^\/+/, "")}`
 }
 
 function getTextInitial(value: string | null | undefined) {
@@ -2011,21 +2021,21 @@ export function ChatWorkspace({
                                       <div className="mt-1 min-w-0 max-w-full">
                                         {message.fileType?.startsWith("image/") ? (
                                           <a
-                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            href={getAttachmentUrl(message.fileUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="block max-w-full overflow-hidden rounded-xl"
                                           >
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
-                                              src={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                              src={getAttachmentUrl(message.fileUrl)}
                                               alt={message.fileName || "Image"}
                                               className="h-auto max-h-64 max-w-full rounded-xl bg-background/50 object-contain"
                                             />
                                           </a>
                                         ) : (
                                           <a
-                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            href={getAttachmentUrl(message.fileUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className={cn(
@@ -2117,21 +2127,21 @@ export function ChatWorkspace({
                                       <div className="mt-1 min-w-0 max-w-full">
                                         {message.fileType?.startsWith("image/") ? (
                                           <a
-                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            href={getAttachmentUrl(message.fileUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className="block max-w-full overflow-hidden rounded-xl"
                                           >
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img
-                                              src={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                              src={getAttachmentUrl(message.fileUrl)}
                                               alt={message.fileName || "Image"}
                                               className="h-auto max-h-64 max-w-full rounded-xl bg-background/50 object-contain"
                                             />
                                           </a>
                                         ) : (
                                           <a
-                                            href={message.fileUrl.startsWith("http") ? message.fileUrl : `http://localhost:4000${message.fileUrl}`}
+                                            href={getAttachmentUrl(message.fileUrl)}
                                             target="_blank"
                                             rel="noreferrer"
                                             className={cn(
